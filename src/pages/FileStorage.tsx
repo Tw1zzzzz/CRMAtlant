@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FolderOpen, FileText, Upload, Download, Trash2, Search, Plus, Filter, Cloud, File, X, Loader2 } from 'lucide-react';
+import { FolderOpen, FileText, Upload, Download, Trash2, Search, Plus, Filter, Cloud, File, X, Loader2, Check } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,7 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import { COLORS } from "@/styles/theme";
 import fileService from '@/utils/fileService';
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface FileItem {
   _id: string;
@@ -54,9 +55,32 @@ const FileStorage: React.FC = () => {
   const [creatingFolder, setCreatingFolder] = useState<boolean>(false);
   const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
   const [uploadingFile, setUploadingFile] = useState<boolean>(false);
+  const [downloadingFiles, setDownloadingFiles] = useState<boolean>(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  // Запрос разрешения на уведомления
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      // Запрашиваем разрешение на уведомления
+      const requestPermission = async () => {
+        try {
+          const permission = await Notification.requestPermission();
+          console.log('Notification permission:', permission);
+        } catch (error) {
+          console.error('Error requesting notification permission:', error);
+        }
+      };
+      
+      // Запрашиваем разрешение после 2 секунд пребывания на странице
+      const timer = setTimeout(() => {
+        requestPermission();
+      }, 2000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   // Загрузка файлов при изменении папки или поискового запроса
   useEffect(() => {
@@ -89,20 +113,30 @@ const FileStorage: React.FC = () => {
   };
 
   // Обработчик выбора файла или папки
-  const handleItemClick = (id: string) => {
+  const handleItemClick = (id: string, e?: React.MouseEvent) => {
+    // Если клик был на чекбоксе или его родительском контейнере, не открываем файл
+    if (e && (e.target as HTMLElement).closest('.file-checkbox')) {
+      return;
+    }
+    
     const file = files.find(f => f._id === id);
     if (file?.type === 'folder') {
       setCurrentFolderId(file._id);
       setCurrentPath([...currentPath, file.name]);
       setSelectedItems([]);
     } else if (file?.type === 'file') {
-      // Скачивание файла
-      window.open(fileService.getDownloadUrl(file._id), '_blank');
+      // Скачиваем файл вместо открытия
+      fileService.downloadFile(file._id, file.name);
     }
   };
 
   // Обработчик выбора файлов (множественный выбор)
-  const handleSelectItem = (id: string) => {
+  const handleSelectItem = (id: string, e?: React.MouseEvent) => {
+    // Останавливаем всплытие события, чтобы не вызвать handleItemClick
+    if (e) {
+      e.stopPropagation();
+    }
+    
     if (selectedItems.includes(id)) {
       setSelectedItems(selectedItems.filter(item => item !== id));
     } else {
@@ -203,27 +237,52 @@ const FileStorage: React.FC = () => {
     }
   };
 
-  // Обработчик скачивания файла
-  const handleDownload = () => {
-    if (selectedItems.length !== 1) {
+  // Обработчик скачивания файла или файлов
+  const handleDownload = async () => {
+    if (selectedItems.length === 0) {
       toast({
         title: "Информация",
-        description: "Пожалуйста, выберите один файл для скачивания",
+        description: "Пожалуйста, выберите файлы для скачивания",
       });
       return;
     }
 
-    const file = files.find(f => f._id === selectedItems[0]);
+    // Проверяем, есть ли в выбранных элементах папки
+    const selectedFiles = files.filter(file => selectedItems.includes(file._id) && file.type === 'file');
+    const selectedFolders = files.filter(file => selectedItems.includes(file._id) && file.type === 'folder');
     
-    if (!file || file.type === 'folder') {
+    if (selectedFiles.length === 0) {
       toast({
         title: "Информация",
-        description: "Невозможно скачать папку",
+        description: "Невозможно скачать папки. Пожалуйста, выберите файлы.",
       });
       return;
     }
+    
+    if (selectedFolders.length > 0) {
+      toast({
+        title: "Информация",
+        description: `Папки не будут скачаны. Будет скачано файлов: ${selectedFiles.length}`,
+      });
+    }
 
-    window.open(fileService.getDownloadUrl(file._id), '_blank');
+    try {
+      setDownloadingFiles(true);
+      await fileService.downloadMultipleFiles(selectedFiles.map(f => f._id));
+      
+      toast({
+        title: "Успех",
+        description: `Скачивание ${selectedFiles.length > 1 ? 'файлов' : 'файла'} завершено`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Ошибка",
+        description: "Не удалось скачать файлы",
+        variant: "destructive"
+      });
+    } finally {
+      setDownloadingFiles(false);
+    }
   };
 
   // Обработчик удаления файла или папки
@@ -265,6 +324,17 @@ const FileStorage: React.FC = () => {
     }
   };
 
+  // Обработчик выбора всех файлов
+  const handleSelectAll = () => {
+    if (selectedItems.length === files.length) {
+      // Если все файлы уже выбраны - снимаем выделение
+      setSelectedItems([]);
+    } else {
+      // Иначе выбираем все файлы
+      setSelectedItems(files.map(file => file._id));
+    }
+  };
+
   return (
     <div className="container mx-auto py-4">
       <div className="flex flex-col space-y-4">
@@ -276,7 +346,14 @@ const FileStorage: React.FC = () => {
               <Cloud className="h-6 w-6 mr-2" style={{ color: COLORS.primary }} />
               Файловое хранилище
             </h1>
-            <p className="text-sm" style={{ color: COLORS.textColorSecondary }}>Загрузка и управление файлами команды</p>
+            <p className="text-sm" style={{ color: COLORS.textColorSecondary }}>
+              Загрузка и управление файлами команды
+              {selectedItems.length > 0 && (
+                <span className="ml-2 px-2 py-0.5 rounded-full text-xs" style={{ backgroundColor: COLORS.primary, color: COLORS.textColor }}>
+                  Выбрано: {selectedItems.length}
+                </span>
+              )}
+            </p>
           </div>
           
           <div className="flex space-x-2">
@@ -284,7 +361,7 @@ const FileStorage: React.FC = () => {
               size="sm" 
               variant="outline" 
               className="flex items-center" 
-              disabled={selectedItems.length !== 1}
+              disabled={selectedItems.length === 0 || downloadingFiles}
               onClick={handleDownload}
               style={{ 
                 backgroundColor: 'transparent',
@@ -293,8 +370,12 @@ const FileStorage: React.FC = () => {
                 boxShadow: "0 2px 6px 0 rgba(29, 140, 248, 0.2)" 
               }}
             >
-              <Download className="h-4 w-4 mr-1" />
-              Скачать
+              {downloadingFiles ? (
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4 mr-1" />
+              )}
+              {selectedItems.length > 1 ? 'Скачать выбранные' : 'Скачать'}
             </Button>
             <Button 
               size="sm" 
@@ -474,6 +555,22 @@ const FileStorage: React.FC = () => {
                 </TabsTrigger>
               </TabsList>
             </Tabs>
+            
+            {files.length > 0 && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleSelectAll}
+                className="flex items-center"
+                style={{ 
+                  backgroundColor: 'transparent',
+                  borderColor: COLORS.borderColor, 
+                  color: COLORS.primary
+                }}
+              >
+                {selectedItems.length === files.length && files.length > 0 ? 'Снять выбор' : 'Выбрать все'}
+              </Button>
+            )}
           </div>
         </div>
         
@@ -510,7 +607,20 @@ const FileStorage: React.FC = () => {
               viewType === 'list' ? (
                 <div className="divide-y" style={{ borderColor: COLORS.borderColor }}>
                   <div className="grid grid-cols-12 py-2 px-1 font-medium text-sm" style={{ color: COLORS.textColorSecondary }}>
-                    <div className="col-span-5">Название</div>
+                    <div className="col-span-1 flex items-center justify-center">
+                      {files.length > 0 && (
+                        <Checkbox 
+                          checked={files.length > 0 && selectedItems.length === files.length}
+                          onCheckedChange={handleSelectAll}
+                          className="h-4 w-4"
+                          style={{
+                            borderColor: files.length > 0 && selectedItems.length === files.length ? COLORS.primary : COLORS.borderColor,
+                            backgroundColor: files.length > 0 && selectedItems.length === files.length ? COLORS.primary : 'transparent'
+                          }}
+                        />
+                      )}
+                    </div>
+                    <div className="col-span-4">Название</div>
                     <div className="col-span-2">Размер</div>
                     <div className="col-span-3">Дата изменения</div>
                     <div className="col-span-2">Владелец</div>
@@ -525,13 +635,24 @@ const FileStorage: React.FC = () => {
                         className={`grid grid-cols-12 py-2 px-1 rounded-md cursor-pointer transition-colors ${
                           selectedItems.includes(file._id) ? 'bg-blue-900/30' : ''
                         } hover:bg-opacity-10 hover:bg-primary`}
-                        onClick={() => handleItemClick(file._id)}
+                        onClick={(e) => handleItemClick(file._id, e)}
                         onContextMenu={(e) => {
                           e.preventDefault();
-                          handleSelectItem(file._id);
+                          handleSelectItem(file._id, e);
                         }}
                       >
-                        <div className="col-span-5 flex items-center">
+                        <div className="col-span-1 flex items-center justify-center file-checkbox" onClick={(e) => e.stopPropagation()}>
+                          <Checkbox 
+                            checked={selectedItems.includes(file._id)}
+                            onCheckedChange={() => handleSelectItem(file._id)}
+                            className="h-4 w-4"
+                            style={{
+                              borderColor: selectedItems.includes(file._id) ? COLORS.primary : COLORS.borderColor,
+                              backgroundColor: selectedItems.includes(file._id) ? COLORS.primary : 'transparent'
+                            }}
+                          />
+                        </div>
+                        <div className="col-span-4 flex items-center">
                           {file.type === 'folder' ? (
                             <FolderOpen className="h-5 w-5 mr-2" style={{ color: COLORS.primary }} />
                           ) : (
@@ -562,29 +683,43 @@ const FileStorage: React.FC = () => {
                     files.map((file) => (
                       <div
                         key={file._id}
-                        style={{ 
-                          backgroundColor: selectedItems.includes(file._id) ? 'rgba(29, 140, 248, 0.2)' : 'transparent'
-                        }}
-                        className={`flex flex-col items-center p-3 rounded-lg cursor-pointer transition-colors ${
-                          selectedItems.includes(file._id) ? 'bg-blue-900/30' : ''
-                        } hover:bg-opacity-10 hover:bg-primary`}
-                        onClick={() => handleItemClick(file._id)}
-                        onContextMenu={(e) => {
-                          e.preventDefault();
-                          handleSelectItem(file._id);
-                        }}
+                        className="relative"
                       >
-                        {file.type === 'folder' ? (
-                          <FolderOpen className="h-12 w-12 mb-2" style={{ color: COLORS.primary }} />
-                        ) : (
-                          <FileText className="h-12 w-12 mb-2" style={{ color: COLORS.textColorSecondary }} />
-                        )}
-                        <span className="text-sm font-medium text-center break-all" style={{ color: COLORS.textColor }}>
-                          {file.name}
-                        </span>
-                        <span className="text-xs mt-1" style={{ color: COLORS.textColorSecondary }}>
-                          {file.readableSize || '-'}
-                        </span>
+                        <div 
+                          className="absolute top-2 left-2 z-10 file-checkbox" 
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Checkbox 
+                            checked={selectedItems.includes(file._id)}
+                            onCheckedChange={() => handleSelectItem(file._id)}
+                            className="h-4 w-4"
+                            style={{
+                              borderColor: selectedItems.includes(file._id) ? COLORS.primary : COLORS.borderColor,
+                              backgroundColor: selectedItems.includes(file._id) ? COLORS.primary : 'transparent'
+                            }}
+                          />
+                        </div>
+                        <div
+                          style={{ 
+                            backgroundColor: selectedItems.includes(file._id) ? 'rgba(29, 140, 248, 0.2)' : 'transparent'
+                          }}
+                          className={`flex flex-col items-center p-3 rounded-lg cursor-pointer transition-colors ${
+                            selectedItems.includes(file._id) ? 'bg-blue-900/30' : ''
+                          } hover:bg-opacity-10 hover:bg-primary`}
+                          onClick={(e) => handleItemClick(file._id, e)}
+                        >
+                          {file.type === 'folder' ? (
+                            <FolderOpen className="h-12 w-12 mb-2" style={{ color: COLORS.primary }} />
+                          ) : (
+                            <FileText className="h-12 w-12 mb-2" style={{ color: COLORS.textColorSecondary }} />
+                          )}
+                          <span className="text-sm font-medium text-center break-all" style={{ color: COLORS.textColor }}>
+                            {file.name}
+                          </span>
+                          <span className="text-xs mt-1" style={{ color: COLORS.textColorSecondary }}>
+                            {file.readableSize || '-'}
+                          </span>
+                        </div>
                       </div>
                     ))
                   ) : (

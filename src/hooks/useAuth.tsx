@@ -1,158 +1,345 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { User } from "@/types";
+/**
+ * Хук для управления аутентификацией
+ */
+
+import { 
+  createContext, 
+  useContext, 
+  useState, 
+  useEffect, 
+  useCallback,
+  ReactNode,
+  useMemo
+} from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { makeAuthRequest, handleApiError } from "@/utils/apiUtils";
+import { User, LoginDto, CreateUserDto, AsyncState } from "@/types";
+import { authService, AuthResult } from "@/services/auth.service";
 import ROUTES from "@/lib/routes";
 
-// Задаем базовый URL для API
-const baseUrl = process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5000';
-
-// Типы для аутентификации
+/**
+ * Тип контекста аутентификации
+ */
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   error: string | null;
-  login: (email: string, password: string) => Promise<{ success: boolean; user?: User | null; error?: string }>;
-  register: (name: string, email: string, password: string, role?: string) => Promise<{ success: boolean; user?: User | null; error?: string }>;
+  login: (credentials: LoginDto) => Promise<AuthResult>;
+  register: (userData: CreateUserDto) => Promise<AuthResult>;
   logout: () => void;
   deleteAccount: () => Promise<void>;
+  updateAvatar: (file: File) => Promise<AuthResult>;
+  refreshUser: () => Promise<void>;
 }
 
-interface AuthResponse {
-  token: string;
-  user: User;
-}
+/**
+ * Значение контекста по умолчанию
+ */
+const defaultContextValue: AuthContextType = {
+  user: null,
+  loading: true,
+  error: null,
+  login: async () => ({ success: false, error: 'Context not initialized' }),
+  register: async () => ({ success: false, error: 'Context not initialized' }),
+  logout: () => {},
+  deleteAccount: async () => {},
+  updateAvatar: async () => ({ success: false, error: 'Context not initialized' }),
+  refreshUser: async () => {}
+};
 
 // Создание контекста
-const AuthContext = createContext<AuthContextType | null>(null);
+const AuthContext = createContext<AuthContextType>(defaultContextValue);
 
+/**
+ * Провайдер аутентификации
+ */
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
   
-  // Проверка сессии пользователя
-  useEffect(() => {
-    const checkUserSession = async () => {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        setUser(null);
-        setLoading(false);
-        return;
-      }
-      
-      try {
-        const userData = await makeAuthRequest<User>('get', '/auth/me');
-        setUser(userData);
-      } catch (error: any) {
-        localStorage.removeItem("token");
-        setUser(null);
-        
-        if (error.response?.status === 401) {
-          toast.error("Сессия истекла. Пожалуйста, войдите снова.");
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    checkUserSession();
+  // Состояние аутентификации
+  const [authState, setAuthState] = useState<AsyncState<User>>({
+    data: null,
+    loading: true,
+    error: null
+  });
+
+  /**
+   * Инициализация сессии пользователя при загрузке
+   */
+  const initializeAuth = useCallback(async () => {
+    try {
+      const user = await authService.getCurrentUser();
+      setAuthState({
+        data: user,
+        loading: false,
+        error: null
+      });
+    } catch (error) {
+      setAuthState({
+        data: null,
+        loading: false,
+        error: error instanceof Error ? error.message : 'Ошибка инициализации'
+      });
+    }
   }, []);
 
-  // Функция входа
-  const login = async (email: string, password: string) => {
-    setLoading(true);
-    setError(null);
+  /**
+   * Обновление данных пользователя
+   */
+  const refreshUser = useCallback(async () => {
+    if (!authState.data) return;
     
     try {
-      const response = await makeAuthRequest<AuthResponse>('post', '/auth/login', { email, password });
-      
-      localStorage.setItem('token', response.token);
-      setUser(response.user);
-      
-      toast.success(`Добро пожаловать, ${response.user.name}!`);
-      return { success: true, user: response.user };
-    } catch (error: any) {
-      const errorMsg = handleApiError(error, 'Ошибка при входе');
-      setError(errorMsg);
-      toast.error(errorMsg);
-      
-      return { success: false, error: errorMsg };
-    } finally {
-      setLoading(false);
+      const user = await authService.getCurrentUser();
+      setAuthState(prev => ({
+        ...prev,
+        data: user
+      }));
+    } catch (error) {
+      console.error('Ошибка обновления данных пользователя:', error);
     }
-  };
+  }, [authState.data]);
 
-  // Функция регистрации
-  const register = async (name: string, email: string, password: string, role: string = 'player') => {
-    setLoading(true);
-    setError(null);
+  /**
+   * Вход в систему
+   */
+  const login = useCallback(async (credentials: LoginDto): Promise<AuthResult> => {
+    setAuthState(prev => ({ ...prev, loading: true, error: null }));
     
     try {
-      const response = await makeAuthRequest<AuthResponse>('post', '/auth/register', { 
-        name, email, password, role 
+      const result = await authService.login(credentials);
+      
+      if (result.success && result.user) {
+        setAuthState({
+          data: result.user,
+          loading: false,
+          error: null
+        });
+        
+        toast.success(`Добро пожаловать, ${result.user.name}!`);
+        
+        // Навигация на главную страницу после успешного входа
+        navigate(ROUTES.DASHBOARD);
+      } else {
+        setAuthState(prev => ({
+          ...prev,
+          loading: false,
+          error: result.error || 'Ошибка входа'
+        }));
+        
+        toast.error(result.error || 'Ошибка входа');
+      }
+      
+      return result;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Неизвестная ошибка';
+      setAuthState(prev => ({
+        ...prev,
+        loading: false,
+        error: errorMessage
+      }));
+      
+      toast.error(errorMessage);
+      return { success: false, error: errorMessage };
+    }
+  }, [navigate]);
+
+  /**
+   * Регистрация нового пользователя
+   */
+  const register = useCallback(async (userData: CreateUserDto): Promise<AuthResult> => {
+    setAuthState(prev => ({ ...prev, loading: true, error: null }));
+    
+    try {
+      const result = await authService.register(userData);
+      
+      if (result.success && result.user) {
+        setAuthState({
+          data: result.user,
+          loading: false,
+          error: null
+        });
+        
+        toast.success(`Аккаунт успешно создан! Добро пожаловать, ${result.user.name}!`);
+        
+        // Навигация на главную страницу после успешной регистрации
+        navigate(ROUTES.DASHBOARD);
+      } else {
+        setAuthState(prev => ({
+          ...prev,
+          loading: false,
+          error: result.error || 'Ошибка регистрации'
+        }));
+        
+        toast.error(result.error || 'Ошибка регистрации');
+      }
+      
+      return result;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Неизвестная ошибка';
+      setAuthState(prev => ({
+        ...prev,
+        loading: false,
+        error: errorMessage
+      }));
+      
+      toast.error(errorMessage);
+      return { success: false, error: errorMessage };
+    }
+  }, [navigate]);
+
+  /**
+   * Выход из системы
+   */
+  const logout = useCallback(() => {
+    authService.logout();
+    setAuthState({
+      data: null,
+      loading: false,
+      error: null
+    });
+    
+    toast.success("Вы вышли из системы");
+    navigate(ROUTES.WELCOME);
+  }, [navigate]);
+
+  /**
+   * Удаление аккаунта
+   */
+  const deleteAccount = useCallback(async () => {
+    setAuthState(prev => ({ ...prev, loading: true }));
+    
+    try {
+      await authService.deleteAccount();
+      setAuthState({
+        data: null,
+        loading: false,
+        error: null
       });
       
-      localStorage.setItem('token', response.token);
-      setUser(response.user);
-      
-      toast.success(`Аккаунт успешно создан! Добро пожаловать, ${response.user.name}!`);
-      return { success: true, user: response.user };
-    } catch (error: any) {
-      const errorMsg = handleApiError(error, 'Ошибка при регистрации');
-      setError(errorMsg);
-      toast.error(errorMsg);
-      
-      return { success: false, error: errorMsg };
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Функция выхода
-  const logout = () => {
-    localStorage.removeItem("token");
-    setUser(null);
-    toast.success("Вы вышли из системы");
-  };
-
-  // Функция удаления аккаунта
-  const deleteAccount = async () => {
-    try {
-      setLoading(true);
-      await makeAuthRequest('delete', '/auth/me');
-      logout();
       toast.success("Аккаунт успешно удален");
-    } catch (error: any) {
-      const errorMsg = handleApiError(error, 'Ошибка удаления аккаунта');
-      toast.error(errorMsg);
+      navigate(ROUTES.WELCOME);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Ошибка удаления аккаунта';
+      setAuthState(prev => ({
+        ...prev,
+        loading: false,
+        error: errorMessage
+      }));
+      
+      toast.error(errorMessage);
       throw error;
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [navigate]);
 
-  const value = {
-    user,
-    loading,
-    error,
+  /**
+   * Обновление аватара пользователя
+   */
+  const updateAvatar = useCallback(async (file: File): Promise<AuthResult> => {
+    if (!authState.data) {
+      return { success: false, error: 'Пользователь не авторизован' };
+    }
+    
+    setAuthState(prev => ({ ...prev, loading: true }));
+    
+    try {
+      const result = await authService.updateAvatar(file);
+      
+      if (result.success) {
+        // Обновляем данные пользователя
+        if (result.user) {
+          setAuthState({
+            data: {
+              ...result.user,
+              _updateTimestamp: Date.now() // Для инвалидации кэша изображений
+            },
+            loading: false,
+            error: null
+          });
+        } else {
+          // Если сервер не вернул обновленного пользователя, запрашиваем его
+          await refreshUser();
+        }
+        
+        toast.success('Аватар успешно обновлен');
+      } else {
+        setAuthState(prev => ({
+          ...prev,
+          loading: false
+        }));
+        
+        toast.error(result.error || 'Ошибка обновления аватара');
+      }
+      
+      return result;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Неизвестная ошибка';
+      setAuthState(prev => ({
+        ...prev,
+        loading: false
+      }));
+      
+      toast.error(errorMessage);
+      return { success: false, error: errorMessage };
+    }
+  }, [authState.data, refreshUser]);
+
+  // Инициализация при монтировании
+  useEffect(() => {
+    initializeAuth();
+  }, [initializeAuth]);
+
+  // Обработка изменений в localStorage (синхронизация между вкладками)
+  useEffect(() => {
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === 'token') {
+        if (!event.newValue) {
+          // Токен был удален в другой вкладке
+          setAuthState({
+            data: null,
+            loading: false,
+            error: null
+          });
+        } else {
+          // Токен был обновлен в другой вкладке
+          initializeAuth();
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [initializeAuth]);
+
+  // Мемоизация значения контекста
+  const contextValue = useMemo<AuthContextType>(() => ({
+    user: authState.data,
+    loading: authState.loading,
+    error: authState.error,
     login,
     register,
     logout,
-    deleteAccount
-  };
+    deleteAccount,
+    updateAvatar,
+    refreshUser
+  }), [authState, login, register, logout, deleteAccount, updateAvatar, refreshUser]);
 
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );
 };
 
-export const useAuth = () => {
+/**
+ * Хук для использования контекста аутентификации
+ */
+export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider");
+  
+  if (context === defaultContextValue) {
+    throw new Error("useAuth должен использоваться внутри AuthProvider");
   }
+  
   return context;
 };

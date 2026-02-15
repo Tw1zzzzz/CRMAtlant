@@ -12,10 +12,13 @@ export const getTopPlayers = async (req: Request, res: Response) => {
     console.log(`Fetching top players for period: ${period}, limit: ${limit}`);
     
     // Получаем рейтинги игроков с информацией о пользователе
-    const players = await PlayerRating.find()
+    let players = await PlayerRating.find()
       .populate('userId', 'name avatar')
       .sort({ rating: -1 })
       .limit(limit);
+    
+    // Фильтруем записи, где userId не был найден (пользователь удален)
+    players = players.filter(player => player.userId && (player.userId as any)?._id);
       
     const formattedPlayers = players.map((player, index) => ({
       rank: index + 1,

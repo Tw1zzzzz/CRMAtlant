@@ -1,11 +1,15 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { useNavigate } from "react-router-dom";
+import { Camera, Upload } from "lucide-react";
+import UserAvatar from "@/components/UserAvatar";
+
+
 
 /**
  * Интерфейс состояния профиля
@@ -13,6 +17,8 @@ import { useNavigate } from "react-router-dom";
 interface ProfileState {
   isDeleting: boolean;
   isDialogOpen: boolean;
+  isUploadingAvatar: boolean;
+  lastAvatarUpdate: number;
 }
 
 /**
@@ -20,14 +26,19 @@ interface ProfileState {
  * Отображает данные профиля и предоставляет возможность удаления аккаунта
  */
 const Profile: React.FC = () => {
-  const { user, deleteAccount } = useAuth();
+  const { user, deleteAccount, updateAvatar } = useAuth();
   const navigate = useNavigate();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Объединение связанных состояний в один объект
   const [state, setState] = useState<ProfileState>({
     isDeleting: false,
-    isDialogOpen: false
+    isDialogOpen: false,
+    isUploadingAvatar: false,
+    lastAvatarUpdate: 0
   });
+
+
 
   /**
    * Обработчик для изменения состояния диалога
@@ -51,9 +62,87 @@ const Profile: React.FC = () => {
       console.error("Ошибка при удалении аккаунта:", error);
     } finally {
       // Сбрасываем состояния независимо от результата
-      setState({ isDeleting: false, isDialogOpen: false });
+      setState(prevState => ({ 
+        ...prevState, 
+        isDeleting: false, 
+        isDialogOpen: false 
+      }));
     }
   };
+
+  /**
+   * Открывает диалог выбора файла
+   */
+  const handleAvatarClick = (): void => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  /**
+   * Обработчик загрузки аватара
+   */
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Проверка типа файла
+    if (!file.type.startsWith('image/')) {
+      alert('Пожалуйста, выберите изображение');
+      return;
+    }
+
+    // Проверка размера файла (макс. 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Файл слишком большой. Максимальный размер - 5MB');
+      return;
+    }
+
+    setState(prevState => ({ ...prevState, isUploadingAvatar: true }));
+    
+    try {
+      console.log('Отправляем запрос на загрузку аватара...');
+      const result = await updateAvatar(file);
+      
+      if (result.success) {
+        console.log('Аватар успешно загружен:', result.avatar);
+        
+        // Принудительно обновляем состояние компонента
+        setState(prevState => ({ 
+          ...prevState, 
+          isUploadingAvatar: false,
+          // Добавляем временную метку, чтобы принудительно обновить UI
+          lastAvatarUpdate: Date.now() 
+        }));
+        
+        // Добавляем небольшую задержку перед проверкой 
+        setTimeout(() => {
+          // Делаем GET-запрос для проверки статуса аватара
+          fetch('/api/auth/avatar/check')
+            .then(res => res.json())
+            .then(data => {
+              console.log('Проверка аватара:', data);
+            })
+            .catch(err => {
+              console.error('Ошибка при проверке аватара:', err);
+            });
+        }, 500);
+      } else {
+        console.error('Ошибка при загрузке аватара:', result.error);
+        setState(prevState => ({ ...prevState, isUploadingAvatar: false }));
+      }
+    } catch (error) {
+      console.error("Ошибка при загрузке аватара:", error);
+      setState(prevState => ({ ...prevState, isUploadingAvatar: false }));
+    } finally {
+      // Очищаем поле ввода для возможности повторной загрузки того же файла
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+
 
   /**
    * Компонент для неавторизованных пользователей
@@ -81,7 +170,7 @@ const Profile: React.FC = () => {
     return <UnauthenticatedView />;
   }
 
-  const { isDeleting, isDialogOpen } = state;
+  const { isDeleting, isDialogOpen, isUploadingAvatar, lastAvatarUpdate } = state;
 
   return (
     <div className="container mx-auto py-6">
@@ -96,7 +185,49 @@ const Profile: React.FC = () => {
               Ваши персональные данные
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-6">
+            {/* Аватар пользователя */}
+            <div className="flex flex-col items-center mb-6">
+              <div className="relative group">
+                <UserAvatar 
+                  user={user} 
+                  size="xl" 
+                  className="cursor-pointer"
+                  onClick={handleAvatarClick}
+                  key={`profile-avatar-${lastAvatarUpdate}`}
+                  forceUpdate={true}
+                />
+                <div 
+                  className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                  onClick={handleAvatarClick}
+                >
+                  <Camera className="text-white" size={24} />
+                </div>
+                {isUploadingAvatar && (
+                  <div className="absolute inset-0 bg-black bg-opacity-70 rounded-full flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-white"></div>
+                  </div>
+                )}
+              </div>
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                accept="image/*"
+                onChange={handleAvatarChange}
+              />
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="mt-2 text-xs flex items-center gap-1"
+                onClick={handleAvatarClick}
+                disabled={isUploadingAvatar}
+              >
+                <Upload size={14} />
+                Изменить аватар
+              </Button>
+            </div>
+
             <div className="space-y-2">
               <Label>Имя</Label>
               <div className="p-2 bg-muted rounded">{user.name}</div>
@@ -111,6 +242,8 @@ const Profile: React.FC = () => {
                 {user.role === "player" ? "Игрок" : "Стафф"}
               </div>
             </div>
+
+
           </CardContent>
           <CardFooter>
             {/* Диалог подтверждения удаления аккаунта */}

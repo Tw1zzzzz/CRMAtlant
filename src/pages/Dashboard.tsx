@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend, PieChart, Pie, Cell } from "recharts";
-import { MoodEntry as MoodEntryType, TestEntry, StatsData, WeeklyData } from "@/types";
+import { MoodEntry as GlobalMoodEntry, TestEntry, StatsData, WeeklyData } from "@/types";
 import { getMoodEntries, getTestEntries } from "@/utils/storage";
 import { formatDate, formatTimeOfDay } from "@/utils/dateUtils";
 import { useAuth } from "@/hooks/useAuth";
@@ -20,6 +20,9 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { COLORS, COMPONENT_STYLES } from "@/styles/theme";
 import { BalanceWheelChart } from "@/components/BalanceWheelChart";
+import { useNavigate } from "react-router-dom";
+import ROUTES from "@/lib/routes";
+import StaffPrivilegeUpgrade from "@/components/StaffPrivilegeUpgrade";
 
 // Обновим тип MoodEntry
 type MoodEntry = {
@@ -50,6 +53,7 @@ type RecentStats = {
 const Dashboard = () => {
   const { user } = useAuth();
   const isStaff = user?.role === "staff";
+  const navigate = useNavigate();
   
   const [moodEntries, setMoodEntries] = useState<MoodEntry[]>([]);
   const [testEntries, setTestEntries] = useState<TestEntry[]>([]);
@@ -138,8 +142,8 @@ const Dashboard = () => {
             console.log(`[Dashboard] Обработано ${loadedTestEntries.length} записей о тестах из API`);
             
             // Устанавливаем данные в состояние
-    setMoodEntries(loadedMoodEntries);
-    setTestEntries(loadedTestEntries);
+                setMoodEntries(loadedMoodEntries as MoodEntry[]);
+            setTestEntries(loadedTestEntries);
     
             // Обрабатываем данные для графиков
             const recentStats = processRecentStats(loadedMoodEntries);
@@ -390,6 +394,12 @@ const Dashboard = () => {
     return { mood: moodByDay, energy: energyByDay };
   };
 
+  // Обработчик для кнопки "Смотреть все"
+  const handleViewAllUpdates = () => {
+    // Перенаправляем на страницу истории активности
+    navigate(ROUTES.ACTIVITY_HISTORY);
+  };
+
   // Обработка состояния загрузки
   if (loading) {
     return (
@@ -425,6 +435,17 @@ const Dashboard = () => {
             : "Ваша персональная статистика и отслеживание прогресса"}
         </p>
       </div>
+
+      {/* Компонент для повышения привилегий staff пользователей */}
+      {isStaff && (
+        <StaffPrivilegeUpgrade 
+          onUpgradeSuccess={() => {
+            // Обновляем данные после получения привилегий
+            window.location.reload();
+          }}
+          className="mb-6"
+        />
+      )}
 
       <Tabs defaultValue="overview" className="space-y-4" style={{ color: COLORS.textColor }}>
         <TabsList className="grid w-full grid-cols-4 p-1" style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor }}>
@@ -843,8 +864,13 @@ const Dashboard = () => {
                 </ScrollArea>
               </CardContent>
               <CardFooter>
-                <Button variant="outline" className="w-full" size="sm" 
-                        style={{ borderColor: COLORS.borderColor, color: COLORS.primary }}>
+                <Button 
+                  variant="outline" 
+                  className="w-full" 
+                  size="sm" 
+                  style={{ borderColor: COLORS.borderColor, color: COLORS.primary }}
+                  onClick={handleViewAllUpdates}
+                >
                   Смотреть все
                   <ChevronRight className="ml-auto h-4 w-4" />
                 </Button>

@@ -78,7 +78,7 @@ const Register: React.FC = () => {
     setFormState(prevState => ({ ...prevState, isLoading: true }));
     
     try {
-      const result = await register(name, email, password, role);
+      const result = await register({ name, email, password, role });
       
       if (result.success) {
         toast.success("Регистрация прошла успешно");

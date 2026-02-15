@@ -1,16 +1,16 @@
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
-import { ChevronLeft, ChevronRight, Calendar, Plus, Trash2, User, TrendingUp } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar, Plus, Trash2, User, TrendingUp, Smile, Activity, CheckCheck, MessageSquare } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { MoodEntry, User as UserType } from "@/types";
 import { moodRepository } from "@/lib/dataRepository";
-import { 
+import {
   createMoodEntry, 
   getMyMoodEntries, 
   getAllPlayersMoodStats, 
@@ -27,14 +27,13 @@ import { formatDate, formatTimeOfDay, getTimeOfDay, getCurrentWeekRange, getWeek
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as TooltipRecharts, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { COLORS, COMPONENT_STYLES } from "@/styles/theme";
-import { TooltipProps } from 'recharts';
-import { Smile } from "lucide-react";
 import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import axios from "axios";
 
 // Расширяем интерфейс MoodEntry
 interface MoodEntryWithTimeOfDay extends MoodEntry {
   id: string;
+  _id?: string; // Добавляем поле _id, так как оно может приходить с сервера
   date: string;
   mood: number;
   energy: number;
@@ -80,6 +79,62 @@ interface CustomTooltipProps {
   active?: boolean;
   payload?: any[];
   label?: string;
+}
+
+// Добавляем вспомогательную функцию для извлечения ID из объекта игрока
+const extractPlayerId = (playerId: any): string => {
+  // Логгируем входные данные для отладки
+  console.log('extractPlayerId получил:', typeof playerId, playerId);
+  
+  // Случай 1: Объект игрока
+  if (typeof playerId === 'object' && playerId !== null) {
+    // Если объект содержит ObjectId, извлекаем из него строку
+    if (playerId._id && typeof playerId._id === 'object' && playerId._id.toString) {
+      return playerId._id.toString();
+    }
+    // Иначе ищем ID в других свойствах объекта
+    const id = playerId._id || playerId.userId || playerId.id;
+    if (id) return id;
+  }
+  
+  // Случай 2: Строка, которая может содержать объект
+  if (typeof playerId === 'string') {
+    // Пытаемся найти ID в формате MongoDB ObjectId
+    // Например: new ObjectId("67e857c1c92acc6a7c9bfe5e")
+    const objectIdMatch = playerId.match(/ObjectId\(['"]([0-9a-fA-F]{24})['"]\)/);
+    if (objectIdMatch && objectIdMatch[1]) {
+      console.log('Извлечено ID из ObjectId строки:', objectIdMatch[1]);
+      return objectIdMatch[1];
+    }
+    
+    // Пытаемся найти ID в формате JSON с _id полем
+    const jsonIdMatch = playerId.match(/_id['":\s]+(['"])([0-9a-fA-F]{24})(['"])/);
+    if (jsonIdMatch && jsonIdMatch[2]) {
+      console.log('Извлечено ID из JSON строки:', jsonIdMatch[2]);
+      return jsonIdMatch[2];
+    }
+    
+    // Если строка сама является валидным MongoDB ObjectId
+    if (/^[0-9a-fA-F]{24}$/.test(playerId)) {
+      return playerId;
+    }
+    
+    // Попытка разобрать JSON
+    try {
+      if (playerId.includes('{') && playerId.includes('}')) {
+        const jsonObj = JSON.parse(playerId.replace(/ObjectId\(['"]([0-9a-fA-F]{24})['"]\)/g, '"$1"'));
+        if (jsonObj && jsonObj._id) {
+          console.log('Извлечено ID из разобранного JSON:', jsonObj._id);
+          return jsonObj._id;
+        }
+      }
+    } catch (error) {
+      console.error('Ошибка при разборе JSON строки:', error);
+    }
+  }
+  
+  // Возвращаем исходное значение, если не удалось извлечь ID
+  return playerId;
 }
 
 const MoodTracker = () => {
@@ -143,11 +198,14 @@ const MoodTracker = () => {
       try {
         const savedPlayerId = sessionStorage.getItem('selectedPlayerId');
         if (savedPlayerId) {
-          setSelectedPlayerId(savedPlayerId);
-          loadPlayerEntriesForDate(savedPlayerId, selectedChartDate);
+          // Извлекаем ID из возможного объекта или строки объекта
+          const actualPlayerId = extractPlayerId(savedPlayerId);
+          setSelectedPlayerId(actualPlayerId);
+          loadPlayerEntriesForDate(actualPlayerId, selectedChartDate);
         }
       } catch (e) {
         // Игнорируем ошибки sessionStorage
+        console.error('Ошибка при восстановлении ID игрока из sessionStorage:', e);
       }
     } else {
       // Игроки видят свои записи
@@ -213,7 +271,7 @@ const MoodTracker = () => {
   };
   
   // Загрузка записей игрока для конкретной даты
-  const loadPlayerEntriesForDate = async (playerId: string, date: Date) => {
+  const loadPlayerEntriesForDate = async (playerId: string | any, date: Date) => {
     if (user?.role !== "staff") return;
     
     try {
@@ -223,8 +281,11 @@ const MoodTracker = () => {
       setPlayerEntries([]);
       setChartData([]);
       
+      // Проверяем, передан ли объект вместо ID
+      let actualPlayerId = extractPlayerId(playerId);
+      
       // Проверка на валидность ID
-      if (!playerId || playerId === 'undefined' || playerId === 'null') {
+      if (!actualPlayerId || actualPlayerId === 'undefined' || actualPlayerId === 'null') {
         toast({
           title: "Ошибка загрузки",
           description: "Некорректный идентификатор игрока.",
@@ -239,7 +300,7 @@ const MoodTracker = () => {
         const apiDateFormat = date.toISOString().split('T')[0];
         
         // Используем API с фильтрацией по дате на сервере
-        const response = await getPlayerMoodByDate(playerId, apiDateFormat);
+        const response = await getPlayerMoodByDate(actualPlayerId, apiDateFormat);
         
         const playerEntries = response.data.map((entry: any) => ({
           ...entry,
@@ -248,18 +309,18 @@ const MoodTracker = () => {
         }));
         
         setPlayerEntries(playerEntries as MoodEntryWithTimeOfDay[]);
-        setSelectedPlayerId(playerId);
+        setSelectedPlayerId(actualPlayerId);
         
         // Загружаем данные для графика через API с фильтрацией по дате
         try {
-          const chartResponse = await getPlayerMoodChartDataByDate(playerId, apiDateFormat);
+          const chartResponse = await getPlayerMoodChartDataByDate(actualPlayerId, apiDateFormat);
           setChartData(chartResponse.data);
         } catch (chartError) {
-          console.error(`Ошибка при загрузке данных для графика игрока ${playerId}:`, chartError);
+          console.error(`Ошибка при загрузке данных для графика игрока ${actualPlayerId}:`, chartError);
           
           // Fallback: используем обычный API без фильтрации если API с фильтрацией недоступно
           try {
-            const fallbackChartResponse = await getPlayerMoodChartData(playerId);
+            const fallbackChartResponse = await getPlayerMoodChartData(actualPlayerId);
             
             // Фильтруем данные на клиентской стороне если необходимо
             const filteredChartData = fallbackChartResponse.data.filter((item: any) => {
@@ -270,7 +331,7 @@ const MoodTracker = () => {
             
             setChartData(filteredChartData.length > 0 ? filteredChartData : fallbackChartResponse.data);
           } catch (fallbackError) {
-            console.error(`Ошибка при загрузке данных для графика игрока (резервный метод) ${playerId}:`, fallbackError);
+            console.error(`Ошибка при загрузке данных для графика игрока (резервный метод) ${actualPlayerId}:`, fallbackError);
             
             // Если все API недоступны, создаем график из доступных данных
             if (playerEntries.length > 0) {
@@ -285,11 +346,11 @@ const MoodTracker = () => {
           }
         }
       } catch (error: any) {
-        console.error(`Ошибка при загрузке записей игрока ${playerId}:`, error);
+        console.error(`Ошибка при загрузке записей игрока ${actualPlayerId}:`, error);
         
         // Fallback: используем обычный API если API с фильтрацией недоступно
         try {
-          const fallbackResponse = await getPlayerMoodEntries(playerId);
+          const fallbackResponse = await getPlayerMoodEntries(actualPlayerId);
           
           // Фильтруем записи по дате на стороне клиента
           const apiDateFormat = date.toISOString().split('T')[0];
@@ -305,7 +366,7 @@ const MoodTracker = () => {
             }));
           
           setPlayerEntries(filteredEntries as MoodEntryWithTimeOfDay[]);
-          setSelectedPlayerId(playerId);
+          setSelectedPlayerId(actualPlayerId);
           
           // Генерируем данные для графика из доступных записей
           if (filteredEntries.length > 0) {
@@ -319,7 +380,7 @@ const MoodTracker = () => {
             });
           }
         } catch (fallbackError) {
-          console.error(`Ошибка при загрузке записей игрока (резервный метод) ${playerId}:`, fallbackError);
+          console.error(`Ошибка при загрузке записей игрока (резервный метод) ${actualPlayerId}:`, fallbackError);
           
           let errorMessage = "Не удалось загрузить записи игрока.";
           if (error.response) {
@@ -348,9 +409,16 @@ const MoodTracker = () => {
 
       // Сохраняем ID игрока в sessionStorage для восстановления при перезагрузке
       try {
-        sessionStorage.setItem('selectedPlayerId', playerId);
+        // Проверяем, что это строковое значение ID
+        if (typeof actualPlayerId === 'string' && /^[0-9a-fA-F]{24}$/.test(actualPlayerId)) {
+          sessionStorage.setItem('selectedPlayerId', actualPlayerId);
+          console.log('ID игрока сохранен в sessionStorage:', actualPlayerId);
+        } else {
+          console.error('Попытка сохранить некорректный ID в sessionStorage:', actualPlayerId);
+        }
       } catch (e) {
         // Игнорируем ошибки sessionStorage
+        console.error('Ошибка при сохранении ID в sessionStorage:', e);
       }
 
     } catch (error) {
@@ -366,9 +434,13 @@ const MoodTracker = () => {
   };
   
   // Модифицируем существующий метод loadPlayerEntries, чтобы он учитывал выбранную дату
-  const loadPlayerEntries = async (playerId: string) => {
+  const loadPlayerEntries = async (playerId: string | any) => {
     // Показываем индикатор загрузки
     setIsLoadingPlayerData(true);
+    
+    // Проверяем, передан ли объект вместо ID
+    let actualPlayerId = extractPlayerId(playerId);
+    console.log('Извлечено ID игрока для загрузки записей:', actualPlayerId);
     
     // Сброс предыдущих уведомлений
     try {
@@ -387,7 +459,7 @@ const MoodTracker = () => {
     }
     
     // Используем новый метод с выбранной датой
-    await loadPlayerEntriesForDate(playerId, selectedChartDate);
+    await loadPlayerEntriesForDate(actualPlayerId, selectedChartDate);
     
     // После загрузки прокручиваем к секции с записями
     setTimeout(() => {
@@ -828,7 +900,7 @@ const MoodTracker = () => {
   };
 
   // Обновляем компонент для отображения мини-графика в карточке игрока, чтобы он использовал реальные данные
-  const PlayerActivityMiniChart = ({ playerId }: { playerId: string }) => {
+  const PlayerActivityMiniChart = ({ playerId }: { playerId: string | any }) => {
     const [activityData, setActivityData] = useState<{ date: string; time: string; mood: number; energy: number; timeOfDay?: string }[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const { toast } = useToast();
@@ -839,8 +911,12 @@ const MoodTracker = () => {
         try {
           setIsLoading(true);
           
+          // Проверяем, передан ли объект вместо ID
+          let actualPlayerId = extractPlayerId(playerId);
+          console.log('ID игрока для загрузки данных активности:', actualPlayerId);
+          
           // Используем API для получения данных активности
-          const response = await getPlayerActivityData(playerId);
+          const response = await getPlayerActivityData(actualPlayerId);
           
           // Преобразуем данные в нужный формат с разделением на настроение и энергию
           if (response.data && Array.isArray(response.data) && response.data.length > 0) {
@@ -1055,6 +1131,44 @@ const MoodTracker = () => {
     );
   };
 
+  // Вспомогательная функция для устранения дубликатов записей
+  const getUniqueEntriesByTimeOfDay = (entries: MoodEntryWithTimeOfDay[], timeOfDay: "morning" | "afternoon" | "evening") => {
+    // Объект для отслеживания уникальных ID записей
+    const uniqueIDs = new Set<string>();
+    // Объект для отслеживания уникальных комбинаций дата+время суток (чтобы избежать дубликатов)
+    const uniqueDateTimeCombinations = new Set<string>();
+    
+    // Фильтруем записи
+    return entries
+      .filter(entry => entry.timeOfDay === timeOfDay)
+      .filter(entry => {
+        // Формируем уникальный ключ для комбинации дата+время
+        const dateStr = typeof entry.date === 'string' 
+          ? new Date(entry.date).toISOString().split('T')[0] 
+          : (entry.date as any).toISOString().split('T')[0];
+        const key = `${dateStr}_${entry.timeOfDay}`;
+        
+        // Получаем ID записи или генерируем его
+        const entryId = entry.id || entry._id || `${dateStr}_${entry.timeOfDay}_${entry.mood}_${entry.energy}`;
+        
+        // Проверка, не встречалась ли уже эта комбинация или ID
+        if (!uniqueDateTimeCombinations.has(key) && !uniqueIDs.has(entryId)) {
+          uniqueDateTimeCombinations.add(key);
+          uniqueIDs.add(entryId);
+          return true;
+        }
+        
+        return false;
+      });
+  };
+
+  // Вспомогательная функция для получения среднего значения
+  const getAverageValue = (entries: MoodEntryWithTimeOfDay[], field: 'mood' | 'energy'): string => {
+    if (!entries || entries.length === 0) return "-";
+    const sum = entries.reduce((acc, entry) => acc + entry[field], 0);
+    return (sum / entries.length).toFixed(1);
+  };
+
   return (
     <div className="space-y-4" style={containerStyle}>
       {renderTitle()}
@@ -1145,7 +1259,12 @@ const MoodTracker = () => {
                       <Button 
                         variant="default"
                         style={{ backgroundColor: COLORS.primary, color: "white" }}
-                        onClick={() => loadPlayerEntries(player.userId)}
+                        onClick={() => {
+                          // Гарантируем, что передаём только ID игрока, а не весь объект
+                          const playerId = extractPlayerId(player.userId);
+                          console.log('Клик на "Смотреть записи", передаём ID:', playerId);
+                          loadPlayerEntries(playerId);
+                        }}
                         className="w-full"
                       >
                         Смотреть записи
@@ -1169,21 +1288,30 @@ const MoodTracker = () => {
           {selectedPlayerId && (
             <div className="space-y-4 mt-8" ref={playerEntriesRef}>
               <div className="flex justify-between items-center">
-                <h3 className="text-2xl font-bold" style={titleStyle}>
-                  Записи игрока
-                </h3>
+                <div>
+                  <h3 className="text-2xl font-bold" style={titleStyle}>
+                    Записи игрока
+                  </h3>
+                  <p className="text-sm mt-1" style={descriptionStyle}>
+                    {playerStats.find(p => p.userId === selectedPlayerId)?.name || "Игрок"} - 
+                    {playerStats.find(p => p.userId === selectedPlayerId)?.entries || 0} записей всего
+                  </p>
+                </div>
                 <Button 
                   variant="outline" 
                   style={{ color: COLORS.primary, borderColor: COLORS.primary }}
                   onClick={() => {
+                    console.log('Очистка выбранного игрока');
                     setSelectedPlayerId(null);
                     setPlayerEntries([]);
                     setChartData([]);
                     // Удаляем ID игрока из sessionStorage
                     try {
                       sessionStorage.removeItem('selectedPlayerId');
+                      console.log('ID игрока удален из sessionStorage');
                     } catch (e) {
                       // Игнорируем ошибки sessionStorage
+                      console.error('Ошибка при удалении ID из sessionStorage:', e);
                     }
                   }}
                 >
@@ -1246,6 +1374,389 @@ const MoodTracker = () => {
                             />
                           </LineChart>
                         </ResponsiveContainer>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  
+                  {/* Детальные записи игрока по времени суток */}
+                  <Card style={cardStyle} className="mt-4">
+                    <CardHeader>
+                      <CardTitle style={titleStyle}>
+                        Записи за {formatDate(selectedChartDate, "d MMMM yyyy")}
+                      </CardTitle>
+                      <CardDescription style={descriptionStyle}>
+                        Детальные записи игрока с комментариями
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {/* Сводная информация о настроении и энергии */}
+                      {playerEntries.length > 0 && (
+                        <div className="mb-6 p-4 rounded-lg" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}>
+                          <h4 className="text-lg font-semibold mb-2" style={{ color: COLORS.textColor }}>
+                            Сводка за день
+                          </h4>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                              <p className="text-sm font-medium" style={{ color: COLORS.textColorSecondary }}>Утро</p>
+                              {getUniqueEntriesByTimeOfDay(playerEntries, "morning").length > 0 ? (
+                                <div className="mt-1">
+                                  <div className="flex items-center justify-between">
+                                    <span style={{ color: COLORS.textColor }}>Настроение:</span>
+                                    <span className="font-medium" style={{ color: COLORS.chartColors[0] }}>
+                                      {getAverageValue(getUniqueEntriesByTimeOfDay(playerEntries, "morning"), "mood")}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <span style={{ color: COLORS.textColor }}>Энергия:</span>
+                                    <span className="font-medium" style={{ color: COLORS.chartColors[1] }}>
+                                      {getAverageValue(getUniqueEntriesByTimeOfDay(playerEntries, "morning"), "energy")}
+                                    </span>
+                                  </div>
+                                </div>
+                              ) : (
+                                <p className="mt-1 italic" style={{ color: COLORS.textColorSecondary }}>Нет данных</p>
+                              )}
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium" style={{ color: COLORS.textColorSecondary }}>День</p>
+                              {getUniqueEntriesByTimeOfDay(playerEntries, "afternoon").length > 0 ? (
+                                <div className="mt-1">
+                                  <div className="flex items-center justify-between">
+                                    <span style={{ color: COLORS.textColor }}>Настроение:</span>
+                                    <span className="font-medium" style={{ color: COLORS.chartColors[0] }}>
+                                      {getAverageValue(getUniqueEntriesByTimeOfDay(playerEntries, "afternoon"), "mood")}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <span style={{ color: COLORS.textColor }}>Энергия:</span>
+                                    <span className="font-medium" style={{ color: COLORS.chartColors[1] }}>
+                                      {getAverageValue(getUniqueEntriesByTimeOfDay(playerEntries, "afternoon"), "energy")}
+                                    </span>
+                                  </div>
+                                </div>
+                              ) : (
+                                <p className="mt-1 italic" style={{ color: COLORS.textColorSecondary }}>Нет данных</p>
+                              )}
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium" style={{ color: COLORS.textColorSecondary }}>Вечер</p>
+                              {getUniqueEntriesByTimeOfDay(playerEntries, "evening").length > 0 ? (
+                                <div className="mt-1">
+                                  <div className="flex items-center justify-between">
+                                    <span style={{ color: COLORS.textColor }}>Настроение:</span>
+                                    <span className="font-medium" style={{ color: COLORS.chartColors[0] }}>
+                                      {getAverageValue(getUniqueEntriesByTimeOfDay(playerEntries, "evening"), "mood")}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <span style={{ color: COLORS.textColor }}>Энергия:</span>
+                                    <span className="font-medium" style={{ color: COLORS.chartColors[1] }}>
+                                      {getAverageValue(getUniqueEntriesByTimeOfDay(playerEntries, "evening"), "energy")}
+                                    </span>
+                                  </div>
+                                </div>
+                              ) : (
+                                <p className="mt-1 italic" style={{ color: COLORS.textColorSecondary }}>Нет данных</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    
+                      <div className="space-y-4">
+                        {/* Утренние записи */}
+                        <div className="mb-8">
+                          <h3 className="text-lg font-semibold mb-2" style={{ color: COLORS.textColor }}>Утро</h3>
+                          <div className="space-y-2">
+                            {getUniqueEntriesByTimeOfDay(playerEntries, "morning")
+                              .map(entry => (
+                                <div
+                                  key={entry.id || entry._id}
+                                  className="flex items-start justify-between p-3 rounded-md"
+                                  style={{ 
+                                    backgroundColor: 'rgba(22, 25, 37, 0.7)', 
+                                    borderLeft: `4px solid ${COLORS.chartColors[0]}`,
+                                    boxShadow: "0 1px 3px rgba(0,0,0,0.3)"
+                                  }}
+                                >
+                                  <div className="w-full">
+                                    <div className="flex justify-between items-center mb-2">
+                                      <div className="text-sm font-medium" style={{ color: COLORS.textColorSecondary }}>
+                                        {formatDate(new Date(entry.date), "d MMMM")} (Утро)
+                                      </div>
+                                      <div className="text-xs px-2 py-1 rounded" style={{ backgroundColor: 'rgba(0,0,0,0.2)', color: COLORS.textColorSecondary }}>
+                                        ID: {entry.id?.substring(0, 8) || entry._id?.substring(0, 8) || "N/A"}
+                                      </div>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 gap-4 mb-2">
+                                      <div>
+                                        <div className="text-sm mb-1" style={{ color: COLORS.textColorSecondary }}>Настроение</div>
+                                        <div className="flex items-center">
+                                          <div className="text-xl font-bold mr-2" style={{ color: COLORS.chartColors[0] }}>
+                                            {entry.mood}/10
+                                          </div>
+                                          <div className="flex-1 h-2 bg-gray-700 rounded-full overflow-hidden">
+                                            <div 
+                                              className="h-full rounded-full" 
+                                              style={{ 
+                                                width: `${entry.mood * 10}%`, 
+                                                backgroundColor: COLORS.chartColors[0] 
+                                              }}
+                                            ></div>
+                                          </div>
+                                          {entry.mood >= 7 ? (
+                                            <Smile className="h-5 w-5 ml-2" style={{ color: COLORS.chartColors[0] }} />
+                                          ) : entry.mood >= 4 ? (
+                                            <Smile className="h-5 w-5 ml-2" style={{ color: COLORS.chartColors[0], opacity: 0.6 }} />
+                                          ) : (
+                                            <Smile className="h-5 w-5 ml-2" style={{ color: COLORS.chartColors[0], opacity: 0.3 }} />
+                                          )}
+                                        </div>
+                                      </div>
+                                      <div>
+                                        <div className="text-sm mb-1" style={{ color: COLORS.textColorSecondary }}>Энергия</div>
+                                        <div className="flex items-center">
+                                          <div className="text-xl font-bold mr-2" style={{ color: COLORS.chartColors[1] }}>
+                                            {entry.energy}/10
+                                          </div>
+                                          <div className="flex-1 h-2 bg-gray-700 rounded-full overflow-hidden">
+                                            <div 
+                                              className="h-full rounded-full" 
+                                              style={{ 
+                                                width: `${entry.energy * 10}%`, 
+                                                backgroundColor: COLORS.chartColors[1]
+                                              }}
+                                            ></div>
+                                          </div>
+                                          {entry.energy >= 7 ? (
+                                            <TrendingUp className="h-5 w-5 ml-2" style={{ color: COLORS.chartColors[1] }} />
+                                          ) : entry.energy >= 4 ? (
+                                            <TrendingUp className="h-5 w-5 ml-2" style={{ color: COLORS.chartColors[1], opacity: 0.6 }} />
+                                          ) : (
+                                            <TrendingUp className="h-5 w-5 ml-2" style={{ color: COLORS.chartColors[1], opacity: 0.3 }} />
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                    
+                                    {entry.comment && (
+                                      <div className="mt-2 p-2 rounded" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}>
+                                        <div className="text-sm font-medium mb-1 flex items-center" style={{ color: COLORS.textColor }}>
+                                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                                          Комментарий:
+                                        </div>
+                                        <div className="text-sm" style={{ color: COLORS.textColor }}>
+                                          {entry.comment}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            {getUniqueEntriesByTimeOfDay(playerEntries, "morning").length === 0 && (
+                              <div className="text-center py-3" style={{ color: COLORS.textColorSecondary }}>
+                                Нет записей на утро
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Дневные записи */}
+                        <div className="mb-8">
+                          <h3 className="text-lg font-semibold mb-2" style={{ color: COLORS.textColor }}>День</h3>
+                          <div className="space-y-2">
+                            {getUniqueEntriesByTimeOfDay(playerEntries, "afternoon")
+                              .map(entry => (
+                                <div
+                                  key={entry.id || entry._id}
+                                  className="flex items-start justify-between p-3 rounded-md"
+                                  style={{ 
+                                    backgroundColor: 'rgba(22, 25, 37, 0.7)', 
+                                    borderLeft: `4px solid ${COLORS.chartColors[1]}`,
+                                    boxShadow: "0 1px 3px rgba(0,0,0,0.3)"
+                                  }}
+                                >
+                                  <div className="w-full">
+                                    <div className="flex justify-between items-center mb-2">
+                                      <div className="text-sm font-medium" style={{ color: COLORS.textColorSecondary }}>
+                                        {formatDate(new Date(entry.date), "d MMMM")} (День)
+                                      </div>
+                                      <div className="text-xs px-2 py-1 rounded" style={{ backgroundColor: 'rgba(0,0,0,0.2)', color: COLORS.textColorSecondary }}>
+                                        ID: {entry.id?.substring(0, 8) || entry._id?.substring(0, 8) || "N/A"}
+                                      </div>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 gap-4 mb-2">
+                                      <div>
+                                        <div className="text-sm mb-1" style={{ color: COLORS.textColorSecondary }}>Настроение</div>
+                                        <div className="flex items-center">
+                                          <div className="text-xl font-bold mr-2" style={{ color: COLORS.chartColors[0] }}>
+                                            {entry.mood}/10
+                                          </div>
+                                          <div className="flex-1 h-2 bg-gray-700 rounded-full overflow-hidden">
+                                            <div 
+                                              className="h-full rounded-full" 
+                                              style={{ 
+                                                width: `${entry.mood * 10}%`, 
+                                                backgroundColor: COLORS.chartColors[0] 
+                                              }}
+                                            ></div>
+                                          </div>
+                                          {entry.mood >= 7 ? (
+                                            <Smile className="h-5 w-5 ml-2" style={{ color: COLORS.chartColors[0] }} />
+                                          ) : entry.mood >= 4 ? (
+                                            <Smile className="h-5 w-5 ml-2" style={{ color: COLORS.chartColors[0], opacity: 0.6 }} />
+                                          ) : (
+                                            <Smile className="h-5 w-5 ml-2" style={{ color: COLORS.chartColors[0], opacity: 0.3 }} />
+                                          )}
+                                        </div>
+                                      </div>
+                                      <div>
+                                        <div className="text-sm mb-1" style={{ color: COLORS.textColorSecondary }}>Энергия</div>
+                                        <div className="flex items-center">
+                                          <div className="text-xl font-bold mr-2" style={{ color: COLORS.chartColors[1] }}>
+                                            {entry.energy}/10
+                                          </div>
+                                          <div className="flex-1 h-2 bg-gray-700 rounded-full overflow-hidden">
+                                            <div 
+                                              className="h-full rounded-full" 
+                                              style={{ 
+                                                width: `${entry.energy * 10}%`, 
+                                                backgroundColor: COLORS.chartColors[1]
+                                              }}
+                                            ></div>
+                                          </div>
+                                          {entry.energy >= 7 ? (
+                                            <TrendingUp className="h-5 w-5 ml-2" style={{ color: COLORS.chartColors[1] }} />
+                                          ) : entry.energy >= 4 ? (
+                                            <TrendingUp className="h-5 w-5 ml-2" style={{ color: COLORS.chartColors[1], opacity: 0.6 }} />
+                                          ) : (
+                                            <TrendingUp className="h-5 w-5 ml-2" style={{ color: COLORS.chartColors[1], opacity: 0.3 }} />
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                    
+                                    {entry.comment && (
+                                      <div className="mt-2 p-2 rounded" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}>
+                                        <div className="text-sm font-medium mb-1 flex items-center" style={{ color: COLORS.textColor }}>
+                                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                                          Комментарий:
+                                        </div>
+                                        <div className="text-sm" style={{ color: COLORS.textColor }}>
+                                          {entry.comment}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            {getUniqueEntriesByTimeOfDay(playerEntries, "afternoon").length === 0 && (
+                              <div className="text-center py-3" style={{ color: COLORS.textColorSecondary }}>
+                                Нет записей на день
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Вечерние записи */}
+                        <div>
+                          <h3 className="text-lg font-semibold mb-2" style={{ color: COLORS.textColor }}>Вечер</h3>
+                          <div className="space-y-2">
+                            {getUniqueEntriesByTimeOfDay(playerEntries, "evening")
+                              .map(entry => (
+                                <div
+                                  key={entry.id || entry._id}
+                                  className="flex items-start justify-between p-3 rounded-md"
+                                  style={{ 
+                                    backgroundColor: 'rgba(22, 25, 37, 0.7)', 
+                                    borderLeft: `4px solid #9c59b6`,
+                                    boxShadow: "0 1px 3px rgba(0,0,0,0.3)"
+                                  }}
+                                >
+                                  <div className="w-full">
+                                    <div className="flex justify-between items-center mb-2">
+                                      <div className="text-sm font-medium" style={{ color: COLORS.textColorSecondary }}>
+                                        {formatDate(new Date(entry.date), "d MMMM")} (Вечер)
+                                      </div>
+                                      <div className="text-xs px-2 py-1 rounded" style={{ backgroundColor: 'rgba(0,0,0,0.2)', color: COLORS.textColorSecondary }}>
+                                        ID: {entry.id?.substring(0, 8) || entry._id?.substring(0, 8) || "N/A"}
+                                      </div>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 gap-4 mb-2">
+                                      <div>
+                                        <div className="text-sm mb-1" style={{ color: COLORS.textColorSecondary }}>Настроение</div>
+                                        <div className="flex items-center">
+                                          <div className="text-xl font-bold mr-2" style={{ color: COLORS.chartColors[0] }}>
+                                            {entry.mood}/10
+                                          </div>
+                                          <div className="flex-1 h-2 bg-gray-700 rounded-full overflow-hidden">
+                                            <div 
+                                              className="h-full rounded-full" 
+                                              style={{ 
+                                                width: `${entry.mood * 10}%`, 
+                                                backgroundColor: COLORS.chartColors[0] 
+                                              }}
+                                            ></div>
+                                          </div>
+                                          {entry.mood >= 7 ? (
+                                            <Smile className="h-5 w-5 ml-2" style={{ color: COLORS.chartColors[0] }} />
+                                          ) : entry.mood >= 4 ? (
+                                            <Smile className="h-5 w-5 ml-2" style={{ color: COLORS.chartColors[0], opacity: 0.6 }} />
+                                          ) : (
+                                            <Smile className="h-5 w-5 ml-2" style={{ color: COLORS.chartColors[0], opacity: 0.3 }} />
+                                          )}
+                                        </div>
+                                      </div>
+                                      <div>
+                                        <div className="text-sm mb-1" style={{ color: COLORS.textColorSecondary }}>Энергия</div>
+                                        <div className="flex items-center">
+                                          <div className="text-xl font-bold mr-2" style={{ color: COLORS.chartColors[1] }}>
+                                            {entry.energy}/10
+                                          </div>
+                                          <div className="flex-1 h-2 bg-gray-700 rounded-full overflow-hidden">
+                                            <div 
+                                              className="h-full rounded-full" 
+                                              style={{ 
+                                                width: `${entry.energy * 10}%`, 
+                                                backgroundColor: COLORS.chartColors[1]
+                                              }}
+                                            ></div>
+                                          </div>
+                                          {entry.energy >= 7 ? (
+                                            <TrendingUp className="h-5 w-5 ml-2" style={{ color: COLORS.chartColors[1] }} />
+                                          ) : entry.energy >= 4 ? (
+                                            <TrendingUp className="h-5 w-5 ml-2" style={{ color: COLORS.chartColors[1], opacity: 0.6 }} />
+                                          ) : (
+                                            <TrendingUp className="h-5 w-5 ml-2" style={{ color: COLORS.chartColors[1], opacity: 0.3 }} />
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                    
+                                    {entry.comment && (
+                                      <div className="mt-2 p-2 rounded" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}>
+                                        <div className="text-sm font-medium mb-1 flex items-center" style={{ color: COLORS.textColor }}>
+                                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                                          Комментарий:
+                                        </div>
+                                        <div className="text-sm" style={{ color: COLORS.textColor }}>
+                                          {entry.comment}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            {getUniqueEntriesByTimeOfDay(playerEntries, "evening").length === 0 && (
+                              <div className="text-center py-3" style={{ color: COLORS.textColorSecondary }}>
+                                Нет записей на вечер
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>

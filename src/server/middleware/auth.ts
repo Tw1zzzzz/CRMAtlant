@@ -65,6 +65,46 @@ export const isStaff = (req: any, res: any, next: any) => {
   }
 };
 
+// Middleware для проверки привилегированного доступа сотрудника (наличие ключа привилегий)
+export const hasPrivilegeKey = (req: any, res: any, next: any) => {
+  try {
+    if (req.user && req.user.role === 'staff') {
+      // Получаем корректный ключ привилегий из переменных окружения или используем fallback значение
+      const validPrivilegeKey = process.env.STAFF_PRIVILEGE_KEY || 'ADMIN_ACCESS_2024_SECURE_KEY_xyz789';
+      
+      console.log('[AUTH] Проверка привилегий: ключ из env загружен:', !!process.env.STAFF_PRIVILEGE_KEY);
+      
+      // Проверка наличия настроенного ключа привилегий на сервере
+      if (!validPrivilegeKey) {
+        console.error('[AUTH] Ошибка конфигурации: STAFF_PRIVILEGE_KEY не задан и fallback недоступен');
+        return res.status(500).json({ 
+          message: 'Ошибка конфигурации сервера: система привилегий не настроена', 
+        });
+      }
+      
+      // Проверяем привилегии пользователя
+      if (req.user.privilegeKey && req.user.privilegeKey === validPrivilegeKey) {
+        console.log(`[AUTH] Привилегированный доступ для сотрудника (${req.user.name}) разрешен`);
+        next();
+      } else {
+        console.log(`[AUTH] Доступ запрещен: неверный ключ привилегий или его отсутствие`);
+        return res.status(403).json({ 
+          message: 'Нет доступа для редактирования состава участников. Требуется действительный ключ привилегий.',
+          requiresPrivilegeKey: true
+        });
+      }
+    } else {
+      console.log(`[AUTH] Доступ запрещен: требуется роль 'staff'`);
+      return res.status(403).json({ 
+        message: 'Нет прав доступа для этого действия' 
+      });
+    }
+  } catch (error) {
+    console.error('[AUTH] Ошибка при проверке привилегий:', error);
+    return res.status(500).json({ message: 'Ошибка сервера при проверке привилегий' });
+  }
+};
+
 // Middleware для проверки роли Player
 export const isPlayer = (req: any, res: any, next: any) => {
   if (req.user && req.user.role === 'player') {

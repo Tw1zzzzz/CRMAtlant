@@ -1,13 +1,6 @@
 import { Request, Response } from 'express';
 import faceitService from '../services/faceitService';
-
-// Расширяем интерфейс Request для работы с пользователем
-interface AuthRequest extends Request {
-  user?: {
-    id: string;
-    faceitAccountId?: string;
-  };
-}
+import { AuthRequest } from '../types';
 
 // Константы для конфигурации OAuth
 const FACEIT_CLIENT_ID = process.env.FACEIT_CLIENT_ID || 'YOUR_FACEIT_CLIENT_ID';
@@ -18,7 +11,7 @@ const REDIRECT_URI = process.env.REDIRECT_URI || 'http://localhost:5000/api/face
  * Инициализация OAuth процесса
  * @route GET /api/faceit/oauth/init
  */
-export const initOAuth = (req: Request, res: Response) => {
+export const initOAuth = (req: Request, res: Response): Response | void => {
   try {
     // Проверяем наличие реальных значений для OAuth
     if (FACEIT_CLIENT_ID === 'YOUR_FACEIT_CLIENT_ID' || FACEIT_CLIENT_SECRET === 'YOUR_FACEIT_CLIENT_SECRET') {
@@ -43,7 +36,7 @@ export const initOAuth = (req: Request, res: Response) => {
  * Обработка callback от Faceit OAuth
  * @route GET /api/faceit/oauth/callback
  */
-export const oauthCallback = async (req: AuthRequest, res: Response) => {
+export const oauthCallback = async (req: AuthRequest, res: Response): Promise<Response | void> => {
   try {
     const { code } = req.query;
     
@@ -100,7 +93,7 @@ export const oauthCallback = async (req: AuthRequest, res: Response) => {
  * Импорт матчей пользователя
  * @route POST /api/faceit/import-matches
  */
-export const importMatches = async (req: AuthRequest, res: Response) => {
+export const importMatches = async (req: AuthRequest, res: Response): Promise<Response | void> => {
   try {
     if (!req.user) {
       return res.status(401).json({ message: 'Не авторизован' });
@@ -125,7 +118,7 @@ export const importMatches = async (req: AuthRequest, res: Response) => {
  * Проверка статуса подключения аккаунта Faceit
  * @route GET /api/faceit/status
  */
-export const checkFaceitStatus = async (req: AuthRequest, res: Response) => {
+export const checkFaceitStatus = async (req: AuthRequest, res: Response): Promise<Response | void> => {
   try {
     if (!req.user) {
       return res.status(401).json({ message: 'Не авторизован' });

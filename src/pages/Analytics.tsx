@@ -11,6 +11,11 @@ import { useAuth } from '@/hooks/useAuth';
 // Импортируем функции API и тему
 import { getAnalyticsMoodStats, getAnalyticsTestStats, getAnalyticsBalanceWheelStats } from '@/lib/api';
 import { COLORS, COMPONENT_STYLES } from "@/styles/theme";
+import TeamReports from '@/components/TeamReports';
+import CorrelationAnalysis from '@/components/CorrelationAnalysis';
+import AdvancedAnalytics from '@/components/AdvancedAnalytics';
+import ErrorBoundary from '@/components/ErrorBoundary';
+import Cs2AnalyticsPanel from '@/components/Cs2AnalyticsPanel';
 
 interface PlayerStats {
   id: number;
@@ -94,7 +99,7 @@ interface MapStats {
 }
 
 const Analytics: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'heatmaps' | 'training' | 'detailedStats'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'heatmaps' | 'training' | 'detailedStats' | 'reports' | 'correlations' | 'advanced' | 'cs2'>('overview');
   const [selectedMapType, setSelectedMapType] = useState<'practice' | 'official'>('official');
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [statsView, setStatsView] = useState<'team' | 'personal'>('team');
@@ -530,7 +535,7 @@ const Analytics: React.FC = () => {
             <Tabs 
               defaultValue="overview" 
               value={activeTab} 
-              onValueChange={(value) => setActiveTab(value as 'overview' | 'heatmaps' | 'training' | 'detailedStats')}
+              onValueChange={(value) => setActiveTab(value as 'overview' | 'heatmaps' | 'training' | 'detailedStats' | 'reports' | 'correlations' | 'advanced' | 'cs2')}
               className="w-full sm:w-auto"
             >
               <TabsList className="w-full" style={COMPONENT_STYLES.tabs.list}>
@@ -561,6 +566,34 @@ const Analytics: React.FC = () => {
                   style={{ color: COLORS.textColor }}
                 >
                   Детальная статистика
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="reports" 
+                  className="flex-1 data-[state=active]:bg-primary data-[state=active]:text-white"
+                  style={{ color: COLORS.textColor }}
+                >
+                  Отчеты команды
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="correlations" 
+                  className="flex-1 data-[state=active]:bg-primary data-[state=active]:text-white"
+                  style={{ color: COLORS.textColor }}
+                >
+                  Корреляции
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="advanced" 
+                  className="flex-1 data-[state=active]:bg-primary data-[state=active]:text-white"
+                  style={{ color: COLORS.textColor }}
+                >
+                  Advanced
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="cs2" 
+                  className="flex-1 data-[state=active]:bg-primary data-[state=active]:text-white"
+                  style={{ color: COLORS.textColor }}
+                >
+                  CS2 (7/30)
                 </TabsTrigger>
               </TabsList>
             </Tabs>
@@ -835,6 +868,12 @@ const Analytics: React.FC = () => {
               </Card>
             )}
           </>
+        )}
+
+        {activeTab === 'cs2' && (
+          <ErrorBoundary fallback={<div>Ошибка в CS2 аналитике</div>}>
+            <Cs2AnalyticsPanel />
+          </ErrorBoundary>
         )}
 
         {activeTab === 'heatmaps' && (
@@ -1181,6 +1220,24 @@ const Analytics: React.FC = () => {
               </CardContent>
             </Card>
           </div>
+        )}
+
+        {activeTab === 'reports' && (
+          <ErrorBoundary>
+            <TeamReports />
+          </ErrorBoundary>
+        )}
+
+        {activeTab === 'correlations' && (
+          <ErrorBoundary>
+            <CorrelationAnalysis />
+          </ErrorBoundary>
+        )}
+
+        {activeTab === 'advanced' && (
+          <ErrorBoundary>
+            <AdvancedAnalytics />
+          </ErrorBoundary>
         )}
       </div>
     </div>

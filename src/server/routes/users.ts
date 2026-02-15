@@ -2,7 +2,8 @@ import express from 'express';
 import User from '../models/User';
 import MoodEntry from '../models/MoodEntry';
 import TestEntry from '../models/TestEntry';
-import { protect, isStaff } from '../middleware/auth';
+import PlayerRating from '../models/PlayerRating';
+import { protect, isStaff, hasPrivilegeKey } from '../middleware/auth';
 
 const router = express.Router();
 
@@ -11,7 +12,7 @@ router.get('/players', protect, isStaff, async (_req: any, res) => {
   try {
     console.log('Fetching all players');
     const players = await User.find({ role: 'player' })
-      .select('name email completedTests completedBalanceWheel createdAt')
+      .select('name email role completedTests completedBalanceWheel createdAt')
       .sort({ createdAt: -1 });
 
     console.log(`Found ${players.length} players`);
@@ -63,25 +64,32 @@ router.get('/players/:id/stats', protect, isStaff, async (req: any, res) => {
   }
 });
 
-// Delete player (staff only)
-router.delete('/players/:id', protect, isStaff, async (req: any, res) => {
+// Delete a player (only basic user data)
+router.delete('/players/:id', protect, isStaff, hasPrivilegeKey, async (req: any, res) => {
   try {
-    console.log('Attempting to delete player:', req.params.id);
-    const player = await User.findById(req.params.id);
+    const { id } = req.params;
     
+    if (!id || id === 'undefined' || id === 'null') {
+      return res.status(400).json({ message: 'Некорректный ID игрока' });
+    }
+    
+    console.log(`Attempting to delete player with ID: ${id}`);
+    
+    // Проверяем, существует ли игрок
+    const player = await User.findById(id);
     if (!player) {
-      console.log('Player not found for deletion:', req.params.id);
-      return res.status(404).json({ message: 'Player not found' });
+      return res.status(404).json({ message: 'Игрок не найден' });
     }
-
+    
+    // Проверяем, что удаляемый пользователь имеет роль 'player'
     if (player.role !== 'player') {
-      console.log('Attempted to delete non-player user:', req.params.id);
-      return res.status(400).json({ message: 'Can only delete players' });
+      return res.status(400).json({ message: 'Можно удалять только игроков' });
     }
-
-    await player.deleteOne();
-    console.log('Player deleted successfully:', req.params.id);
-    return res.json({ message: 'Player deleted successfully' });
+    
+    // Удаляем пользователя
+    await User.findByIdAndDelete(id);
+    
+    return res.json({ message: 'Игрок успешно удален' });
   } catch (error) {
     console.error('Error deleting player:', error);
     return res.status(500).json({ message: 'Server error' });
@@ -117,103 +125,149 @@ router.patch('/players/:id/status', protect, isStaff, async (req: any, res) => {
   }
 });
 
-// Удаление игрока (только для персонала)
-router.delete('/players/:id', protect, isStaff, async (req, res) => {
+// Cascade delete a player and all related data
+router.delete('/players/:id/complete', protect, isStaff, hasPrivilegeKey, async (req, res) => {
   try {
-    const playerId = req.params.id;
-    console.log(`Attempting to delete player: ${playerId}`);
+    const { id } = req.params;
     
-    const deletedPlayer = await User.findByIdAndDelete(playerId);
-    
-    if (!deletedPlayer) {
-      return res.status(404).json({ success: false, message: 'Игрок не найден' });
+    if (!id || id === 'undefined' || id === 'null') {
+      return res.status(400).json({ message: 'Некорректный ID игрока' });
     }
     
-    console.log(`Player deleted successfully: ${playerId}`);
-    res.json({ success: true, message: 'Игрок успешно удален' });
+    console.log(`[CASCADE DELETE] Attempting to delete player with ID: ${id} and all related data`);
+    
+    // Проверяем, существует ли игрок
+    const player = await User.findById(id);
+    if (!player) {
+      return res.status(404).json({ message: 'Игрок не найден' });
+    }
+    
+    // Проверяем, что удаляемый пользователь имеет роль 'player'
+    if (player.role !== 'player') {
+      return res.status(400).json({ message: 'Можно удалять только игроков' });
+    }
+    
+    // Удаляем все связанные данные
+    console.log(`[CASCADE DELETE] Deleting mood entries for player: ${id}`);
+    await MoodEntry.deleteMany({ userId: id });
+    
+    console.log(`[CASCADE DELETE] Deleting test entries for player: ${id}`);
+    await TestEntry.deleteMany({ userId: id });
+    
+    console.log(`[CASCADE DELETE] Deleting player ratings for player: ${id}`);
+    await PlayerRating.deleteMany({ userId: id });
+    
+    // Удаляем пользователя
+    console.log(`[CASCADE DELETE] Deleting player: ${id}`);
+    await User.findByIdAndDelete(id);
+    
+    return res.json({ 
+      message: 'Игрок и все связанные данные успешно удалены',
+      deletedPlayerId: id,
+      success: true
+    });
   } catch (error) {
-    console.error('Error deleting player:', error);
-    res.status(500).json({ success: false, message: 'Ошибка сервера при удалении игрока' });
+    console.error('[CASCADE DELETE] Error deleting player and related data:', error);
+    return res.status(500).json({ 
+      message: 'Ошибка при удалении игрока и связанных данных',
+      error: error.message
+    });
   }
 });
 
-// Полное каскадное удаление игрока и всех его данных (только для персонала)
-router.delete('/players/:id/complete', protect, isStaff, async (req, res) => {
+// Update privilege key (staff only)
+router.post('/update-privilege-key', protect, isStaff, async (req: any, res) => {
   try {
-    const playerId = req.params.id;
-    console.log(`Attempting complete cascade deletion of player: ${playerId}`);
+    console.log('Updating privilege key for staff user:', req.user._id);
+    const { privilegeKey } = req.body;
 
-    // 1. Находим игрока перед удалением
-    const player = await User.findById(playerId);
-    if (!player) {
-      return res.status(404).json({ success: false, message: 'Игрок не найден' });
+    // Проверяем, что пользователь может обновлять только свой ключ привилегий
+    const userId = req.user._id;
+    
+    // Получаем корректный ключ из переменных окружения или используем fallback значение
+    const validPrivilegeKey = process.env.STAFF_PRIVILEGE_KEY || 'ADMIN_ACCESS_2024_SECURE_KEY_xyz789';
+    
+    // Детальное логирование для диагностики
+    console.log('[PRIVILEGE DEBUG] NODE_ENV:', process.env.NODE_ENV);
+    console.log('[PRIVILEGE DEBUG] STAFF_PRIVILEGE_KEY загружен из env:', !!process.env.STAFF_PRIVILEGE_KEY);
+    console.log('[PRIVILEGE DEBUG] Используемый ключ (первые 10 символов):', validPrivilegeKey.substring(0, 10) + '...');
+    console.log('[PRIVILEGE DEBUG] Все env переменные (STAFF_*):', Object.keys(process.env).filter(key => key.includes('STAFF')));
+    
+    if (!validPrivilegeKey) {
+      console.error('[PRIVILEGE ERROR] STAFF_PRIVILEGE_KEY not configured and no fallback available');
+      return res.status(500).json({ 
+        message: 'Ошибка конфигурации сервера: ключ привилегий не настроен',
+        success: false 
+      });
     }
 
-    // Собираем базовую информацию для логов
-    const playerInfo = {
-      id: player._id,
-      name: player.name,
-      email: player.email,
-    };
+    // Проверяем введенный ключ привилегий
+    const isKeyValid = privilegeKey === validPrivilegeKey;
     
-    // 2. Удаляем все связанные данные (асинхронно и параллельно)
-    try {
-      // Загружаем все необходимые модели
-      const MoodEntry = require('../models/MoodEntry');
-      const TestEntry = require('../models/TestEntry');
-      const BalanceWheel = require('../models/BalanceWheel');
-      const PlayerRating = require('../models/PlayerRating');
-      const AnalyticsMetric = require('../models/AnalyticsMetric');
-      
-      // Создаем массив промисов для параллельного выполнения
-      const deletePromises = [
-        // Удаление записей о настроении
-        MoodEntry.deleteMany({ userId: playerId }).then(result => 
-          console.log(`Deleted ${result.deletedCount} mood entries for player ${playerInfo.name}`)),
-        
-        // Удаление записей о тестах
-        TestEntry.deleteMany({ userId: playerId }).then(result => 
-          console.log(`Deleted ${result.deletedCount} test entries for player ${playerInfo.name}`)),
-        
-        // Удаление данных колеса баланса
-        BalanceWheel.deleteMany({ userId: playerId }).then(result => 
-          console.log(`Deleted ${result.deletedCount} balance wheel entries for player ${playerInfo.name}`)),
-        
-        // Удаление из рейтингов
-        PlayerRating.deleteMany({ playerId }).then(result => 
-          console.log(`Deleted ${result.deletedCount} rating entries for player ${playerInfo.name}`)),
-        
-        // Удаление метрик аналитики
-        AnalyticsMetric.deleteMany({ userId: playerId }).then(result => 
-          console.log(`Deleted ${result.deletedCount} analytics metrics for player ${playerInfo.name}`)),
-      ];
-      
-      // Ждем завершения всех операций удаления
-      await Promise.all(deletePromises);
-      console.log(`All related data deleted for player ${playerInfo.name} (${playerId})`);
-      
-    } catch (dataError) {
-      console.error('Error deleting related data:', dataError);
-      // Продолжаем процесс даже если не удалось удалить некоторые связанные данные
+    console.log(`[PRIVILEGE] Попытка обновления ключа для ${req.user.name}`);
+    console.log(`[PRIVILEGE] Введенный ключ: ${privilegeKey}`);
+    console.log(`[PRIVILEGE] Валидный ключ: ${validPrivilegeKey}`);
+    console.log(`[PRIVILEGE] Ключ валиден: ${isKeyValid}`);
+    
+    // Обновляем ключ привилегий только если он валидный
+    if (isKeyValid) {
+      const updatedUser = await User.findByIdAndUpdate(
+        userId,
+        { privilegeKey },
+        { new: true }
+      ).select('-password');
+
+      if (!updatedUser) {
+        return res.status(404).json({ 
+          message: 'Пользователь не найден',
+          success: false 
+        });
+      }
+
+      console.log('Privilege key updated successfully');
+      return res.json({
+        success: true,
+        message: 'Ключ привилегий успешно обновлен',
+        user: {
+          id: updatedUser._id,
+          name: updatedUser.name,
+          email: updatedUser.email,
+          role: updatedUser.role,
+          privilegeKey: updatedUser.privilegeKey,
+          avatar: updatedUser.avatar,
+          createdAt: updatedUser.createdAt
+        }
+      });
+    } else {
+      // Если ключ неверный, возвращаем ошибку
+      return res.status(400).json({
+        success: false,
+        message: 'Неверный ключ привилегий'
+      });
     }
-    
-    // 3. Удаляем самого игрока
-    const deletedPlayer = await User.findByIdAndDelete(playerId);
-    
-    console.log(`Player completely deleted with all related data: ${playerInfo.name} (${playerId})`);
-    res.json({ 
-      success: true, 
-      message: 'Игрок и все связанные данные успешно удалены',
-      player: playerInfo 
-    });
-    
   } catch (error) {
-    console.error('Error performing complete player deletion:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Ошибка сервера при каскадном удалении игрока',
-      error: error.message 
+    console.error('Error updating privilege key:', error);
+    return res.status(500).json({ 
+      message: 'Server error',
+      success: false 
     });
+  }
+});
+
+// Check if staff has privilege key
+router.get('/check-privilege', protect, isStaff, async (req: any, res) => {
+  try {
+    const hasPrivilege = req.user && req.user.privilegeKey && req.user.privilegeKey.trim() !== '';
+    
+    return res.json({
+      hasPrivilege,
+      message: hasPrivilege 
+        ? 'У вас есть доступ к редактированию состава участников' 
+        : 'У вас нет доступа к редактированию состава участников'
+    });
+  } catch (error) {
+    console.error('Error checking privilege key:', error);
+    return res.status(500).json({ message: 'Server error' });
   }
 });
 

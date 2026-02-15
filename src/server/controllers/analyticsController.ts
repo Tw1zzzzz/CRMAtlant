@@ -1,19 +1,12 @@
 import { Request, Response } from 'express';
 import analyticsService from '../services/analyticsService';
-
-// Расширяем интерфейс Request для работы с пользователем
-interface AuthRequest extends Request {
-  user?: {
-    id: string;
-    faceitAccountId?: string;
-  };
-}
+import { AuthRequest } from '../types';
 
 /**
  * Получает статистику пользователя
  * @route GET /api/analytics/stats
  */
-export const getUserStats = async (req: AuthRequest, res: Response) => {
+export const getUserStats = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     if (!req.user) {
       return res.status(401).json({ message: 'Не авторизован' });
@@ -44,7 +37,7 @@ export const getUserStats = async (req: AuthRequest, res: Response) => {
  * Сохраняет метрики пользователя
  * @route POST /api/analytics/metrics
  */
-export const saveMetrics = async (req: AuthRequest, res: Response) => {
+export const saveMetrics = async (req: AuthRequest, res: Response): Promise<Response | void> => {
   try {
     if (!req.user) {
       return res.status(401).json({ message: 'Не авторизован' });
@@ -75,7 +68,7 @@ export const saveMetrics = async (req: AuthRequest, res: Response) => {
  * Получает метрики пользователя
  * @route GET /api/analytics/metrics
  */
-export const getMetrics = async (req: AuthRequest, res: Response) => {
+export const getMetrics = async (req: AuthRequest, res: Response): Promise<Response | void> => {
   try {
     if (!req.user) {
       return res.status(401).json({ message: 'Не авторизован' });
@@ -97,7 +90,7 @@ export const getMetrics = async (req: AuthRequest, res: Response) => {
  * Получает последние матчи пользователя
  * @route GET /api/analytics/matches
  */
-export const getRecentMatches = async (req: AuthRequest, res: Response) => {
+export const getRecentMatches = async (req: AuthRequest, res: Response): Promise<Response | void> => {
   try {
     if (!req.user) {
       return res.status(401).json({ message: 'Не авторизован' });
@@ -125,7 +118,7 @@ export const getRecentMatches = async (req: AuthRequest, res: Response) => {
  * Ручной запуск обновления кэша аналитики
  * @route POST /api/analytics/refresh-cache
  */
-export const refreshCache = async (req: Request, res: Response) => {
+export const refreshCache = async (req: Request, res: Response): Promise<Response | void> => {
   try {
     // Запускаем обновление кэша в фоновом режиме
     analyticsService.updateAnalyticsCache()

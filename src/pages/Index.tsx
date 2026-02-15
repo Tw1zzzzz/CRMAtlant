@@ -100,7 +100,7 @@ const Index: React.FC = () => {
     
     try {
       setLoading(true);
-      await login(email, password);
+      await login({ email, password });
     } catch (error) {
       console.error('Ошибка входа:', error);
       toast.error("Не удалось выполнить вход. Проверьте данные и попробуйте снова.");
@@ -124,7 +124,7 @@ const Index: React.FC = () => {
     
     try {
       setLoading(true);
-      await register(email, password, name, role);
+      await register({ name, email, password, role });
     } catch (error) {
       console.error('Ошибка регистрации:', error);
       toast.error("Не удалось зарегистрироваться. Попробуйте позже или обратитесь в поддержку.");

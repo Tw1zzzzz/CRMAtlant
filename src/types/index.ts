@@ -1,68 +1,26 @@
-export interface MoodEntry {
-  id: string;
-  date: string;
-  mood: number;
-  energy: number;
-  notes?: string;
-}
+/**
+ * Центральный файл для экспорта всех типов приложения
+ */
 
-export interface TestEntry {
-  id: string;
-  date: string;
-  type: string;
-  score: number;
-  notes?: string;
-}
+// Реэкспорт типов пользователя
+export * from './user.types';
 
-export interface StatsData {
-  date: string;
-  mood: number;
-  energy: number;
-}
+// Реэкспорт типов настроения и тестов
+export * from './mood.types';
 
-export interface WeeklyData {
-  date?: string;
-  week?: string;
-  mood?: number;
-  energy?: number;
-  moodAvg?: number;
-  energyAvg?: number;
-  testsCompleted?: number;
-}
+// Реэкспорт типов колеса баланса
+export * from './balance-wheel.types';
 
-export interface User {
-  id: string;
-  email: string;
-  name: string;
-  role: "player" | "staff";
-  completedTests?: boolean;
-  completedBalanceWheel?: boolean;
-  createdAt?: string;
-  photoUrl?: string;
-}
+// Реэкспорт типов статистики
+export * from './statistics.types';
 
-export interface BalanceWheel {
-  id: string;
-  userId: string;
-  playerName?: string;
-  date: Date;
-  physical: number;
-  emotional: number;
-  intellectual: number;
-  spiritual: number;
-  occupational: number;
-  social: number;
-  environmental: number;
-  financial: number;
-}
+// Дополнительные общие типы
+export type Nullable<T> = T | null;
+export type Optional<T> = T | undefined;
+export type AsyncState<T> = {
+  data: T | null;
+  loading: boolean;
+  error: string | null;
+};
 
-export interface BalanceWheelData {
-  physical: number;
-  emotional: number;
-  intellectual: number;
-  spiritual: number;
-  occupational: number;
-  social: number;
-  environmental: number;
-  financial: number;
-}
+

@@ -2,7 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import { 
   BarChart2, Calendar, Home, ListTodo, 
   User, Users, LogOut, CircleDot, 
-  Trophy, BarChart, FolderOpen, LineChart 
+  Trophy, BarChart, FolderOpen, LineChart, Clock, CreditCard, UserPlus, TrendingUp, Upload 
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
@@ -54,9 +54,9 @@ const getNavItems = (role: UserRole): NavItem[] => {
       icon: <BarChart className="h-5 w-5" />,
     },
     {
-      title: "Новая аналитика",
-      href: ROUTES.NEW_ANALYTICS,
-      icon: <LineChart className="h-5 w-5" />,
+      title: "Корреляционный анализ",
+      href: "/correlation-analysis",
+      icon: <TrendingUp className="h-5 w-5" />,
     },
   ];
 
@@ -93,11 +93,36 @@ const getNavItems = (role: UserRole): NavItem[] => {
 
   // Элементы только для персонала
   if (role === "staff") {
-    baseItems.push({
-      title: "Управление игроками",
-      href: "/players",
-      icon: <Users className="h-5 w-5" />,
-    });
+    baseItems.push(
+      // Временно скрыта вкладка История из-за технических проблем с отображением данных
+      /* 
+      {
+        title: "История",
+        href: "/history",
+        icon: <Clock className="h-5 w-5" />,
+      },
+      */
+      {
+        title: "Управление игроками",
+        href: "/players",
+        icon: <Users className="h-5 w-5" />,
+      },
+      {
+        title: "Управление персоналом",
+        href: "/staff-roster",
+        icon: <UserPlus className="h-5 w-5" />,
+      },
+      {
+        title: "Карточки игроков",
+        href: "/player-card",
+        icon: <CreditCard className="h-5 w-5 text-primary" />,
+      },
+      {
+        title: "Импорт CS2 Excel",
+        href: ROUTES.CS2_EXCEL_IMPORT,
+        icon: <Upload className="h-5 w-5" />,
+      }
+    );
   }
 
   // Профиль для всех аутентифицированных пользователей
@@ -205,32 +230,8 @@ const Sidebar: React.FC = () => {
               Tracker
             </h2>
             <span className="text-xs px-1.5 py-0.5 rounded-md border" style={styles.badge}>
-              beta
+              beta v_1.02
             </span>
-          </div>
-          
-          <div className="mt-2 flex items-center">
-            <div 
-              style={{
-                background: `linear-gradient(90deg, ${COLORS.primary}15, ${COLORS.primary}10)`,
-                border: `1px solid ${COLORS.primary}30`,
-                borderLeft: `2px solid ${COLORS.primary}`,
-                borderRadius: '3px',
-                padding: '3px 8px',
-                maxWidth: 'fit-content',
-                boxShadow: `0 1px 2px ${COLORS.primary}10`
-              }}
-            >
-              <code style={{ 
-                fontSize: '10px', 
-                color: COLORS.primary,
-                letterSpacing: '0.05em',
-                opacity: 0.95,
-                fontWeight: '500'
-              }}>
-                &lt;/&gt; by_Twizz_project
-              </code>
-            </div>
           </div>
         </div>
       </div>

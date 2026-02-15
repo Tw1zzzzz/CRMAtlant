@@ -1,7 +1,57 @@
-// Импортируем app из server.ts
+// Загрузка переменных окружения в самом начале
+import dotenv from 'dotenv';
+import path from 'path';
+import fs from 'fs';
+
+// Загружаем .env файл из корня проекта
+const envPath = path.resolve(__dirname, '../../.env');
+console.log('[INDEX] Загрузка .env из:', envPath);
+
+// Проверяем существование файла
+if (fs.existsSync(envPath)) {
+  console.log('[INDEX] .env файл найден');
+  
+  // Читаем содержимое файла для отладки (без утечки секретов)
+  const envContent = fs.readFileSync(envPath, 'utf8');
+  const masked = envContent
+    .replace(/^(JWT_SECRET|FACEIT_API_KEY|FACEIT_CLIENT_SECRET|STAFF_PRIVILEGE_KEY)\s*=\s*.*$/gmi, '$1=***');
+  console.log('[INDEX] Содержимое .env файла (masked):');
+  console.log(masked);
+  
+  // Загружаем переменные окружения
+  const envResult = dotenv.config({ path: envPath });
+  if (envResult.error) {
+    console.error('[INDEX] Ошибка загрузки .env файла:', envResult.error);
+  } else {
+    console.log('[INDEX] .env файл загружен успешно');
+  }
+} else {
+  console.error('[INDEX] .env файл не найден по пути:', envPath);
+}
+
+// Проверяем все переменные окружения после загрузки
+console.log('[INDEX] Проверка переменных окружения:');
+console.log('[INDEX] NODE_ENV:', process.env.NODE_ENV);
+console.log('[INDEX] PORT:', process.env.PORT);
+console.log('[INDEX] MONGODB_URI:', process.env.MONGODB_URI ? 'установлен' : 'не установлен');
+console.log('[INDEX] JWT_SECRET:', process.env.JWT_SECRET ? 'установлен' : 'не установлен');
+console.log('[INDEX] STAFF_PRIVILEGE_KEY:', process.env.STAFF_PRIVILEGE_KEY ? 'установлен' : 'НЕ УСТАНОВЛЕН');
+
+if (!process.env.STAFF_PRIVILEGE_KEY) {
+  console.error('[INDEX] КРИТИЧЕСКАЯ ОШИБКА: STAFF_PRIVILEGE_KEY не загружен!');
+}
+
+// Импортируем app из server.ts ПОСЛЕ загрузки env
 import app from './server';
 import mongoose from 'mongoose';
 import faceitSync from './services/faceitSync';
+import express from 'express';
+import cors from 'cors';
+import cron from 'node-cron';
+
+// Импортируем модели
+import PlayerRating from './models/PlayerRating';
+import User from './models/User';
 
 // Определяем порт
 const PORT = process.env.PORT || 5000;
@@ -19,6 +69,9 @@ mongoose.connection.once('open', () => {
     .catch(err => {
       console.error('❌ Ошибка при получении списка коллекций:', err);
     });
+
+  // Настройка расписаний (cron jobs)
+  setupScheduledJobs();
 });
 
 // Слушаем ошибки подключения к MongoDB
@@ -68,9 +121,73 @@ const findAvailablePort = async (startPort: number, endPort: number = startPort 
   throw new Error(`Не удалось найти свободный порт в диапазоне ${startPort}-${endPort}`);
 };
 
+// Функция для проверки директорий загрузки и очистки кэша
+function checkUploadsDirectories() {
+  try {
+    // Директории для загрузок
+    const uploadDir = path.join(__dirname, '../../uploads');
+    const avatarDir = path.join(uploadDir, 'avatars');
+    
+    console.log('📂 Проверка директорий для загрузки файлов:');
+    console.log(`- Директория загрузок: ${uploadDir}`);
+    console.log(`- Директория аватаров: ${avatarDir}`);
+    
+    // Проверяем/создаем директории
+    if (!fs.existsSync(uploadDir)) {
+      try {
+        fs.mkdirSync(uploadDir, { recursive: true });
+        console.log(`✅ Создана директория для загрузки: ${uploadDir}`);
+      } catch (err) {
+        console.error(`❌ Ошибка при создании директории uploads:`, err);
+      }
+    }
+    
+    if (!fs.existsSync(avatarDir)) {
+      try {
+        fs.mkdirSync(avatarDir, { recursive: true });
+        console.log(`✅ Создана директория для аватаров: ${avatarDir}`);
+      } catch (err) {
+        console.error(`❌ Ошибка при создании директории avatars:`, err);
+      }
+    }
+    
+    console.log(`📁 Статус директорий: uploads=${fs.existsSync(uploadDir)}, avatars=${fs.existsSync(avatarDir)}`);
+    
+    // Проверка прав доступа к директориям
+    try {
+      console.log('🔍 Проверка прав доступа к директориям...');
+      
+      // Создаем и удаляем тестовый файл в директории аватаров
+      const testFile = path.join(avatarDir, `test-${Date.now()}.txt`);
+      console.log(`📄 Создаем тестовый файл: ${testFile}`);
+      
+      fs.writeFileSync(testFile, 'test-content', { encoding: 'utf8' });
+      console.log(`✅ Тестовый файл создан успешно`);
+      
+      const fileExists = fs.existsSync(testFile);
+      console.log(`📄 Тестовый файл существует: ${fileExists}`);
+      
+      const fileContent = fs.readFileSync(testFile, { encoding: 'utf8' });
+      console.log(`📄 Содержимое тестового файла: "${fileContent}"`);
+      
+      fs.unlinkSync(testFile);
+      console.log(`✅ Тестовый файл удален успешно`);
+      
+      console.log('✅ Проверка прав доступа: запись и удаление работают');
+    } catch (err) {
+      console.error('❌ Ошибка проверки прав доступа:', err);
+    }
+  } catch (err) {
+    console.error('❌ Ошибка при проверке директорий загрузки:', err);
+  }
+}
+
 // Запускаем сервер
 const startServer = async () => {
   try {
+    // Проверяем директории для загрузок
+    checkUploadsDirectories();
+    
     // Ищем свободный порт, начиная с 5000
     const availablePort = await findAvailablePort(Number(PORT));
     console.log(`Найден свободный порт: ${availablePort}`);
@@ -110,6 +227,33 @@ const startServer = async () => {
     process.exit(1);
   }
 };
+
+// Настройка расписаний (cron jobs)
+function setupScheduledJobs() {
+  // Очистка записей рейтинга без связанных пользователей (каждый день в 3:00)
+  cron.schedule('0 3 * * *', async () => {
+    try {
+      console.log('Cleaning up orphaned player rating records...');
+      const ratings = await PlayerRating.find();
+      
+      let removedCount = 0;
+      
+      for (const rating of ratings) {
+        const user = await User.findById(rating.userId);
+        if (!user) {
+          await PlayerRating.deleteOne({ _id: rating._id });
+          removedCount++;
+        }
+      }
+      
+      console.log(`Cleanup completed. Removed ${removedCount} orphaned rating records.`);
+    } catch (error) {
+      console.error('Error during cleanup job:', error);
+    }
+  });
+  
+  console.log('Scheduled jobs setup completed');
+}
 
 // Запускаем сервер
 startServer(); 

@@ -40,6 +40,7 @@ import {
 import { COLORS } from '../theme';
 import { useAuth } from '../hooks/useAuth';
 import axios from 'axios';
+import UserAvatar from '@/components/UserAvatar';
 
 interface Player {
   rank: number;
@@ -57,6 +58,16 @@ interface Stats {
   activePlayers: number;
   averageRating: number;
   monthlyTournaments: number;
+}
+
+// Создаем тип пользователя для UserAvatar, чтобы избежать ошибок типизации
+interface PlayerUser {
+  id: string;
+  name: string;
+  avatar?: string;
+  email: string;
+  role: 'player';
+  _updateTimestamp?: number;
 }
 
 const TopPlayers: React.FC = () => {
@@ -397,6 +408,16 @@ interface PlayersTableProps {
 }
 
 const PlayersTable: React.FC<PlayersTableProps> = ({ players, isStaff, onEditClick }) => {
+  // Преобразуем игрока в пользователя для UserAvatar
+  const playerToUser = (player: Player): PlayerUser => ({
+    id: player.id,
+    name: player.name,
+    avatar: player.avatar,
+    email: '',
+    role: 'player',
+    _updateTimestamp: Date.now()
+  });
+
   return (
     <TableContainer component={Paper} variant="outlined" sx={{ 
       boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
@@ -462,20 +483,21 @@ const PlayersTable: React.FC<PlayersTableProps> = ({ players, isStaff, onEditCli
                 
                 <TableCell>
                   <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <Avatar 
-                      src={player.avatar} 
-                      alt={player.name}
-                      sx={{ 
-                        width: 40, 
-                        height: 40, 
-                        mr: 1.5,
-                        fontSize: '1rem',
-                        border: player.rank <= 3 ? 
-                          `2px solid ${player.rank === 1 ? 'gold' : player.rank === 2 ? 'silver' : '#cd7f32'}` : 'none'
-                      }}
-                    >
-                      {!player.avatar && player.name.charAt(0)}
-                    </Avatar>
+                    <Box sx={{ 
+                      mr: 1.5,
+                      border: player.rank <= 3 ? 
+                        `2px solid ${player.rank === 1 ? 'gold' : player.rank === 2 ? 'silver' : '#cd7f32'}` : 'none',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '2px'
+                    }}>
+                      <UserAvatar 
+                        user={playerToUser(player)}
+                        size="md"
+                      />
+                    </Box>
                     <Typography variant="body1" sx={{ 
                       fontWeight: player.rank <= 3 ? 500 : 'normal'
                     }}>

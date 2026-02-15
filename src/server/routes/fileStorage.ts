@@ -6,6 +6,7 @@ import {
   uploadFile, 
   downloadFile, 
   deleteFile,
+  getFileById,
   upload
 } from '../controllers/fileController';
 
@@ -16,6 +17,9 @@ router.use(protect);
 
 // Получение списка файлов и папок
 router.get('/', getFiles);
+
+// Получение информации о конкретном файле
+router.get('/:fileId', getFileById);
 
 // Создание новой папки
 router.post('/folder', createFolder);

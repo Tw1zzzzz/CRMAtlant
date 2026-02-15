@@ -19,6 +19,7 @@ import { fileToDataUrl, validateImageFile } from "@/utils/fileUtils";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { COLORS, COMPONENT_STYLES } from "@/styles/theme";
+import axios from "axios";
 
 const predefinedTests = [
   {
@@ -41,13 +42,47 @@ const TestTracker = () => {
   const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
   const [editingTest, setEditingTest] = useState<TestEntry | null>(null);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<"daily" | "weekly">("daily");
+  const [activeTab, setActiveTab] = useState<"daily" | "weekly" | "questionnaire">("daily");
   const [isStaffView, setIsStaffView] = useState(false);
   const [isAddingEntry, setIsAddingEntry] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+
+  // Опросник (новая логика тестов)
+  const [qDate, setQDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [qMood, setQMood] = useState<string>("");
+  const [qEnergy, setQEnergy] = useState<string>("");
+  const [qSleep, setQSleep] = useState<string>("");
+  const [qScreen, setQScreen] = useState<string>("");
+  const [qSubmitting, setQSubmitting] = useState<boolean>(false);
   
   const isStaff = user?.role === "staff";
   const canEdit = user?.role === "player";
+
+  const baseUrl = process.env.NODE_ENV === "production" ? window.location.origin : "http://localhost:5000";
+
+  const submitQuestionnaire = async () => {
+    try {
+      setQSubmitting(true);
+      const token = localStorage.getItem("token");
+      await axios.post(
+        `${baseUrl}/api/questionnaires/daily`,
+        {
+          date: qDate,
+          mood: qMood ? Number(qMood) : undefined,
+          energy: qEnergy ? Number(qEnergy) : undefined,
+          sleepHours: qSleep ? Number(qSleep) : undefined,
+          screenTimeHours: qScreen ? Number(qScreen) : undefined
+        },
+        { headers: token ? { Authorization: `Bearer ${token}` } : undefined }
+      );
+      toast({ title: "Сохранено", description: "Данные опросника сохранены" });
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || e?.message || "Ошибка сохранения";
+      toast({ title: "Ошибка", description: msg, variant: "destructive" });
+    } finally {
+      setQSubmitting(false);
+    }
+  };
   
   useEffect(() => {
     loadEntries();
@@ -242,7 +277,7 @@ const TestTracker = () => {
             <Tabs 
               defaultValue="daily" 
               value={activeTab}
-              onValueChange={(value) => setActiveTab(value as "daily" | "weekly")}
+              onValueChange={(value) => setActiveTab(value as "daily" | "weekly" | "questionnaire")}
             >
               <TabsList className="mb-4" style={COMPONENT_STYLES.tabs.list}>
                 <TabsTrigger 
@@ -262,6 +297,15 @@ const TestTracker = () => {
                   }}
                 >
                   Еженедельные тесты
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="questionnaire"
+                  style={{ 
+                    color: activeTab === 'questionnaire' ? COLORS.textColor : COLORS.textColorSecondary, 
+                    backgroundColor: activeTab === 'questionnaire' ? COLORS.primary : 'transparent'
+                  }}
+                >
+                  Опросник
                 </TabsTrigger>
               </TabsList>
               <TabsContent value="daily">
@@ -584,6 +628,72 @@ const TestTracker = () => {
                       ))}
                   </div>
                 )}
+              </TabsContent>
+
+              <TabsContent value="questionnaire">
+                <Card style={COMPONENT_STYLES.card}>
+                  <CardHeader>
+                    <CardTitle style={COMPONENT_STYLES.text.title}>Ежедневный опросник</CardTitle>
+                    <CardDescription style={COMPONENT_STYLES.text.description}>
+                      Настроение, энергия, сон и экранное время (всё переводим в цифру)
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <Label style={{ color: COLORS.textColor }}>Дата</Label>
+                      <Input
+                        type="date"
+                        value={qDate}
+                        onChange={(e) => setQDate(e.target.value)}
+                        style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label style={{ color: COLORS.textColor }}>Настроение (1-10)</Label>
+                        <Input
+                          value={qMood}
+                          onChange={(e) => setQMood(e.target.value)}
+                          inputMode="numeric"
+                          style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label style={{ color: COLORS.textColor }}>Энергия (1-10)</Label>
+                        <Input
+                          value={qEnergy}
+                          onChange={(e) => setQEnergy(e.target.value)}
+                          inputMode="numeric"
+                          style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label style={{ color: COLORS.textColor }}>Сон (часы)</Label>
+                        <Input
+                          value={qSleep}
+                          onChange={(e) => setQSleep(e.target.value)}
+                          inputMode="decimal"
+                          style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label style={{ color: COLORS.textColor }}>Экранное время (часы)</Label>
+                        <Input
+                          value={qScreen}
+                          onChange={(e) => setQScreen(e.target.value)}
+                          inputMode="decimal"
+                          style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
+                        />
+                      </div>
+                    </div>
+                  </CardContent>
+                  <CardFooter>
+                    <Button onClick={submitQuestionnaire} disabled={qSubmitting}>
+                      {qSubmitting ? "Сохранение..." : "Сохранить"}
+                    </Button>
+                  </CardFooter>
+                </Card>
               </TabsContent>
             </Tabs>
           </CardContent>

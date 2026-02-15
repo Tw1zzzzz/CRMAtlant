@@ -6,8 +6,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { User } from "@/types";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import { getPlayers, deletePlayerComplete as apiDeletePlayer } from "@/lib/api";
+import { getPlayers, deletePlayerComplete as apiDeletePlayer, checkStaffPrivilege } from "@/lib/api";
 import { COLORS } from "@/styles/theme";
+import { Key } from "lucide-react";
 
 // Проверка валидности ID
 const isValidId = (id: any): boolean => {
@@ -52,7 +53,29 @@ const PlayersManagement = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deleteProgress, setDeleteProgress] = useState(0);
+  const [hasPrivilege, setHasPrivilege] = useState<boolean | null>(null);
+  const [checkingPrivilege, setCheckingPrivilege] = useState(true);
   const navigate = useNavigate();
+
+  // Проверка наличия ключа привилегий
+  const checkPrivilege = async () => {
+    try {
+      setCheckingPrivilege(true);
+      const response = await checkStaffPrivilege();
+      setHasPrivilege(response.data.hasPrivilege);
+    } catch (error) {
+      console.error('Ошибка при проверке привилегий:', error);
+      setHasPrivilege(false);
+    } finally {
+      setCheckingPrivilege(false);
+    }
+  };
+
+  useEffect(() => {
+    if (user?.role === "staff") {
+      checkPrivilege();
+    }
+  }, [user]);
 
   // Загрузка списка игроков
   const loadPlayers = async () => {
@@ -85,8 +108,10 @@ const PlayersManagement = () => {
   };
 
   useEffect(() => {
-    loadPlayers();
-  }, []);
+    if (hasPrivilege) {
+      loadPlayers();
+    }
+  }, [hasPrivilege]);
 
   const handleDeletePlayer = async () => {
     if (!selectedPlayer) {
@@ -180,6 +205,54 @@ const PlayersManagement = () => {
     );
   }
 
+  // Показываем сообщение о необходимости ключа привилегий
+  if (checkingPrivilege) {
+    return (
+      <div className="container mx-auto py-4">
+        <h1 className="text-2xl font-bold mb-4" style={{ color: COLORS.textColor }}>Управление игроками</h1>
+        <Card style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor }}>
+          <CardContent className="py-8">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary mx-auto mb-4"></div>
+              <p style={{ color: COLORS.textColor }}>Проверка прав доступа...</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Если нет ключа привилегий
+  if (!hasPrivilege) {
+    return (
+      <div className="container mx-auto py-4">
+        <h1 className="text-2xl font-bold mb-4" style={{ color: COLORS.textColor }}>Управление игроками</h1>
+        <Card style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor }}>
+          <CardHeader>
+            <CardTitle style={{ color: COLORS.textColor }}>Доступ ограничен</CardTitle>
+            <CardDescription style={{ color: COLORS.textColorSecondary }}>
+              Для управления составом участников требуется ключ привилегий
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="py-4">
+            <div className="flex flex-col items-center gap-4 py-6">
+              <Key size={48} className="text-muted-foreground" />
+              <p className="text-center" style={{ color: COLORS.textColor }}>
+                Для получения доступа к управлению игроками необходимо добавить ключ привилегий в вашем профиле.
+              </p>
+              <Button 
+                onClick={() => navigate("/profile")}
+                style={{ backgroundColor: COLORS.primary, color: COLORS.textColor }}
+              >
+                Перейти в профиль
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto py-4">
       <h1 className="text-2xl font-bold mb-4" style={{ color: COLORS.textColor }}>Управление игроками</h1>
@@ -217,6 +290,7 @@ const PlayersManagement = () => {
                     <th className="px-3 py-2 text-left" style={{ color: COLORS.textColor }}>Имя</th>
                     <th className="px-3 py-2 text-left" style={{ color: COLORS.textColor }}>Email</th>
                     <th className="px-3 py-2 text-center" style={{ color: COLORS.textColor }}>Статистика</th>
+                    <th className="px-3 py-2 text-center" style={{ color: COLORS.textColor }}>Карточка</th>
                     <th className="px-3 py-2 text-right" style={{ color: COLORS.textColor }}>Действия</th>
                   </tr>
                 </thead>
@@ -248,6 +322,27 @@ const PlayersManagement = () => {
                           Статистика
                         </Button>
                       </td>
+                      <td className="px-3 py-3 text-center">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => {
+                            if (isValidId(player.id)) {
+                              navigate(`/player-card/${player.id}`);
+                            } else {
+                              toast.error("Невозможно открыть карточку: некорректный ID игрока");
+                            }
+                          }}
+                          style={{ 
+                            borderColor: "#6b21a8",
+                            backgroundColor: "transparent", 
+                            color: "#8b5cf6"
+                          }}
+                          disabled={!isValidId(player.id)}
+                        >
+                          Карточка
+                        </Button>
+                      </td>
                       <td className="px-3 py-3 text-right">
                         <Button
                           variant="destructive"
@@ -273,7 +368,7 @@ const PlayersManagement = () => {
 
                   {players.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="px-3 py-4 text-center" style={{ color: COLORS.textColorSecondary }}>
+                      <td colSpan={6} className="px-3 py-4 text-center" style={{ color: COLORS.textColorSecondary }}>
                         Нет доступных игроков
                       </td>
                     </tr>

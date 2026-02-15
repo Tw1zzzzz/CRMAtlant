@@ -296,23 +296,40 @@ router.get('/players/balance-wheel', protect, isStaff, async (_req: any, res) =>
 router.get('/players/:playerId/mood/chart', protect, isStaff, async (req: any, res) => {
   try {
     const { playerId } = req.params;
-    console.log(`Fetching mood chart data for player: ${playerId} (staff only)`);
+    const { date } = req.query; // Добавлена обработка параметра date
+    
+    console.log(`Fetching mood chart data for player: ${playerId}${date ? ` for date: ${date}` : ''}`);
     
     // Проверяем валидность ID
     if (!playerId || playerId === 'undefined' || playerId === 'null') {
-      console.error(`Invalid player ID received for chart data: ${playerId}`);
+      console.error(`Invalid player ID received: ${playerId}`);
       return res.status(400).json({ message: 'Invalid player ID' });
     }
     
     // Проверка на валидный ObjectId для MongoDB
     if (!/^[0-9a-fA-F]{24}$/.test(playerId)) {
-      console.error(`Invalid MongoDB ObjectId format for chart data: ${playerId}`);
+      console.error(`Invalid MongoDB ObjectId format: ${playerId}`);
       return res.status(400).json({ message: 'Invalid player ID format' });
     }
     
     try {
-      // Получаем все записи о настроении игрока
-      const moodEntries = await MoodEntry.find({ userId: playerId }).sort({ date: 1 });
+      // Создаем базовый фильтр для запроса
+      const filter: any = { userId: playerId };
+      
+      // Если указана дата, добавляем фильтр по дате
+      if (date) {
+        const startDate = new Date(date as string);
+        startDate.setHours(0, 0, 0, 0);
+        
+        const endDate = new Date(date as string);
+        endDate.setHours(23, 59, 59, 999);
+        
+        filter.date = { $gte: startDate, $lte: endDate };
+        console.log(`Filtering by date range: ${startDate} to ${endDate}`);
+      }
+      
+      // Получаем все записи о настроении игрока с учетом фильтра
+      const moodEntries = await MoodEntry.find(filter).sort({ date: 1 });
       console.log(`Found ${moodEntries.length} mood entries for player ${playerId}`);
       
       if (moodEntries.length === 0) {
@@ -323,9 +340,9 @@ router.get('/players/:playerId/mood/chart', protect, isStaff, async (req: any, r
       const entriesByDate = new Map();
       
       moodEntries.forEach(entry => {
-        const date = new Date(entry.date);
+        const entryDate = new Date(entry.date);
         // Создаем ключ в формате YYYY-MM-DD для группировки
-        const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        const dateKey = `${entryDate.getFullYear()}-${String(entryDate.getMonth() + 1).padStart(2, '0')}-${String(entryDate.getDate()).padStart(2, '0')}`;
         
         if (!entriesByDate.has(dateKey)) {
           entriesByDate.set(dateKey, {
@@ -358,18 +375,14 @@ router.get('/players/:playerId/mood/chart', protect, isStaff, async (req: any, r
       // Сортируем по дате от старых к новым
       chartData.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
       
-      console.log(`Processed mood chart data: ${chartData.length} data points`);
       return res.json(chartData);
     } catch (dbError) {
-      console.error(`Database error when processing chart data for player ${playerId}:`, dbError);
-      return res.status(500).json({ message: 'Database error when processing chart data' });
+      console.error(`Database error when fetching chart data for player ${playerId}:`, dbError);
+      return res.status(500).json({ message: 'Database error when fetching chart data' });
     }
   } catch (error) {
     console.error('Error fetching player mood chart data:', error);
-    return res.status(500).json({ 
-      message: 'Error fetching player mood chart data',
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
+    return res.status(500).json({ message: 'Error fetching player mood chart data' });
   }
 });
 

@@ -23,7 +23,7 @@ export const handleApiError = (error: any, defaultMessage: string): string => {
   // Обработка типовых статус-кодов
   switch (error.response.status) {
     case 400: return 'Некорректные данные';
-    case 401: return 'Неверные учетные данные';
+    case 401: return 'Неверные учетные данные или истек токен авторизации';
     case 403: return 'Доступ запрещен';
     case 409: return 'Пользователь с таким email уже существует';
     case 404: return 'Ресурс не найден';
@@ -46,23 +46,32 @@ export const makeAuthRequest = async <T,>(
 ): Promise<T> => {
   const token = localStorage.getItem("token");
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
+    'Accept': 'application/json'
   };
   
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
   
-  const config = {
-    method,
-    url: `${baseUrl}/api${endpoint}`,
-    headers,
-    data,
-    timeout: 10000
-  };
-  
-  const response = await axios(config);
-  return response.data;
+  try {
+    const config = {
+      method,
+      url: `${baseUrl}/api${endpoint}`,
+      headers,
+      data,
+      timeout: 15000
+    };
+    
+    const response = await axios(config);
+    return response.data;
+  } catch (error: any) {
+    // Если токен устарел или недействителен, очищаем его из localStorage
+    if (error.response && error.response.status === 401) {
+      localStorage.removeItem('token');
+    }
+    throw error;
+  }
 };
 
 /**
@@ -81,12 +90,17 @@ export const makeApiRequest = async <T,>(
     method,
     url: `${baseUrl}/api${endpoint}`,
     headers: {
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
     },
     data,
-    timeout: 10000
+    timeout: 15000
   };
   
-  const response = await axios(config);
-  return response.data;
+  try {
+    const response = await axios(config);
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
 }; 

@@ -1,117 +1,132 @@
-import * as React from "react"
-import { ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react"
+import React from 'react';
+import { Button } from '@/components/ui/button';
+import { ChevronLeft, ChevronRight, MoreHorizontal } from 'lucide-react';
+import { COLORS } from '@/styles/theme';
 
-import { cn } from "@/lib/utils"
-import { ButtonProps, buttonVariants } from "@/components/ui/button"
+interface PaginationProps {
+  currentPage: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+  maxVisiblePages?: number;
+}
 
-const Pagination = ({ className, ...props }: React.ComponentProps<"nav">) => (
-  <nav
-    role="navigation"
-    aria-label="pagination"
-    className={cn("mx-auto flex w-full justify-center", className)}
-    {...props}
-  />
-)
-Pagination.displayName = "Pagination"
+export const Pagination: React.FC<PaginationProps> = ({
+  currentPage,
+  totalPages,
+  onPageChange,
+  maxVisiblePages = 5
+}) => {
+  // Если страниц всего одна, не показываем пагинацию
+  if (totalPages <= 1) {
+    return null;
+  }
 
-const PaginationContent = React.forwardRef<
-  HTMLUListElement,
-  React.ComponentProps<"ul">
->(({ className, ...props }, ref) => (
-  <ul
-    ref={ref}
-    className={cn("flex flex-row items-center gap-1", className)}
-    {...props}
-  />
-))
-PaginationContent.displayName = "PaginationContent"
+  // Вычисляем видимые страницы для отображения
+  const getVisiblePages = () => {
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
 
-const PaginationItem = React.forwardRef<
-  HTMLLIElement,
-  React.ComponentProps<"li">
->(({ className, ...props }, ref) => (
-  <li ref={ref} className={cn("", className)} {...props} />
-))
-PaginationItem.displayName = "PaginationItem"
+    // Если достигли конца диапазона, сдвигаем начало
+    if (endPage === totalPages) {
+      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
 
-type PaginationLinkProps = {
-  isActive?: boolean
-} & Pick<ButtonProps, "size"> &
-  React.ComponentProps<"a">
+    // Генерируем массив номеров страниц
+    return Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i);
+  };
 
-const PaginationLink = ({
-  className,
-  isActive,
-  size = "icon",
-  ...props
-}: PaginationLinkProps) => (
-  <a
-    aria-current={isActive ? "page" : undefined}
-    className={cn(
-      buttonVariants({
-        variant: isActive ? "outline" : "ghost",
-        size,
-      }),
-      className
-    )}
-    {...props}
-  />
-)
-PaginationLink.displayName = "PaginationLink"
+  const visiblePages = getVisiblePages();
+  const showStartEllipsis = visiblePages[0] > 1;
+  const showEndEllipsis = visiblePages[visiblePages.length - 1] < totalPages;
 
-const PaginationPrevious = ({
-  className,
-  ...props
-}: React.ComponentProps<typeof PaginationLink>) => (
-  <PaginationLink
-    aria-label="Go to previous page"
-    size="default"
-    className={cn("gap-1 pl-2.5", className)}
-    {...props}
+  return (
+    <div className="flex items-center justify-center space-x-1">
+      {/* Кнопка "Предыдущая страница" */}
+      <Button
+        variant="outline"
+        size="icon"
+        disabled={currentPage === 1}
+        onClick={() => onPageChange(currentPage - 1)}
+        style={{ 
+          borderColor: COLORS.borderColor, 
+          color: currentPage === 1 ? COLORS.textColorSecondary : COLORS.primary
+        }}
   >
     <ChevronLeft className="h-4 w-4" />
-    <span>Previous</span>
-  </PaginationLink>
-)
-PaginationPrevious.displayName = "PaginationPrevious"
+      </Button>
 
-const PaginationNext = ({
-  className,
-  ...props
-}: React.ComponentProps<typeof PaginationLink>) => (
-  <PaginationLink
-    aria-label="Go to next page"
-    size="default"
-    className={cn("gap-1 pr-2.5", className)}
-    {...props}
-  >
-    <span>Next</span>
-    <ChevronRight className="h-4 w-4" />
-  </PaginationLink>
-)
-PaginationNext.displayName = "PaginationNext"
+      {/* Первая страница */}
+      {showStartEllipsis && (
+        <>
+          <Button
+            variant={currentPage === 1 ? "default" : "outline"}
+            size="icon"
+            onClick={() => onPageChange(1)}
+            style={{ 
+              borderColor: COLORS.borderColor,
+              backgroundColor: currentPage === 1 ? COLORS.primary : 'transparent',
+              color: currentPage === 1 ? '#fff' : COLORS.textColor
+            }}
+          >
+            1
+          </Button>
+          <span className="mx-0.5" style={{ color: COLORS.textColorSecondary }}>
+            <MoreHorizontal className="h-4 w-4" />
+          </span>
+        </>
+      )}
 
-const PaginationEllipsis = ({
-  className,
-  ...props
-}: React.ComponentProps<"span">) => (
-  <span
-    aria-hidden
-    className={cn("flex h-9 w-9 items-center justify-center", className)}
-    {...props}
-  >
+      {/* Страницы */}
+      {visiblePages.map(page => (
+        <Button
+          key={page}
+          variant={currentPage === page ? "default" : "outline"}
+          size="icon"
+          onClick={() => onPageChange(page)}
+          style={{ 
+            borderColor: COLORS.borderColor,
+            backgroundColor: currentPage === page ? COLORS.primary : 'transparent',
+            color: currentPage === page ? '#fff' : COLORS.textColor
+          }}
+        >
+          {page}
+        </Button>
+      ))}
+
+      {/* Последняя страница */}
+      {showEndEllipsis && (
+        <>
+          <span className="mx-0.5" style={{ color: COLORS.textColorSecondary }}>
     <MoreHorizontal className="h-4 w-4" />
-    <span className="sr-only">More pages</span>
   </span>
-)
-PaginationEllipsis.displayName = "PaginationEllipsis"
+          <Button
+            variant={currentPage === totalPages ? "default" : "outline"}
+            size="icon"
+            onClick={() => onPageChange(totalPages)}
+            style={{ 
+              borderColor: COLORS.borderColor,
+              backgroundColor: currentPage === totalPages ? COLORS.primary : 'transparent',
+              color: currentPage === totalPages ? '#fff' : COLORS.textColor
+            }}
+          >
+            {totalPages}
+          </Button>
+        </>
+      )}
 
-export {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-}
+      {/* Кнопка "Следующая страница" */}
+      <Button
+        variant="outline"
+        size="icon"
+        disabled={currentPage === totalPages}
+        onClick={() => onPageChange(currentPage + 1)}
+        style={{ 
+          borderColor: COLORS.borderColor, 
+          color: currentPage === totalPages ? COLORS.textColorSecondary : COLORS.primary
+        }}
+      >
+        <ChevronRight className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+};

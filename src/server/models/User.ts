@@ -8,9 +8,11 @@ interface UserDocument extends mongoose.Document {
   role: string;
   avatar?: string;
   faceitAccountId?: mongoose.Types.ObjectId;
+  privilegeKey?: string;
   matchPassword(enteredPassword: string): Promise<boolean>;
   completedTests?: boolean;
   completedBalanceWheel?: boolean;
+  _updateTimestamp?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -53,6 +55,10 @@ const userSchema = new mongoose.Schema(
       ref: 'FaceitAccount',
       default: null
     },
+    privilegeKey: {
+      type: String,
+      default: "",
+    },
     completedTests: {
       type: Boolean,
       default: false,
@@ -60,6 +66,10 @@ const userSchema = new mongoose.Schema(
     completedBalanceWheel: {
       type: Boolean,
       default: false,
+    },
+    _updateTimestamp: {
+      type: Number,
+      default: () => Date.now()
     },
   },
   {
@@ -69,13 +79,22 @@ const userSchema = new mongoose.Schema(
 
 // Хеширование пароля перед сохранением
 userSchema.pre("save", async function (next) {
-  console.log('[User Model] Хеширование пароля при сохранении');
-  if (!this.isModified("password")) {
-    console.log('[User Model] Пароль не был изменен, пропускаем хеширование');
-    return next();
-  }
-
   try {
+    console.log('[User Model] Хеширование пароля при сохранении');
+    
+    // Проверяем, существует ли this и был ли пароль изменен
+    if (!this.isModified("password")) {
+      console.log('[User Model] Пароль не был изменен, пропускаем хеширование');
+      return next();
+    }
+    
+    // Проверка наличия пароля
+    if (!this.password) {
+      console.error('[User Model] Отсутствует пароль для хеширования');
+      return next(new Error('Пароль не указан'));
+    }
+    
+    // Хеширование пароля
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
     console.log('[User Model] Пароль успешно хеширован');
@@ -90,10 +109,13 @@ userSchema.pre("save", async function (next) {
 userSchema.methods.matchPassword = async function (enteredPassword: string): Promise<boolean> {
   try {
     console.log('[User Model] Сравнение паролей');
-    if (!this.password) {
-      console.error('[User Model] Пароль не найден в объекте пользователя');
+    
+    // Проверка наличия пароля
+    if (!this.password || !enteredPassword) {
+      console.error('[User Model] Отсутствует пароль для сравнения');
       return false;
     }
+    
     const isMatch = await bcrypt.compare(enteredPassword, this.password);
     console.log(`[User Model] Результат сравнения паролей: ${isMatch ? 'успешно' : 'не совпадает'}`);
     return isMatch;

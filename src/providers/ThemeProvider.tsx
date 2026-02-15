@@ -11,7 +11,12 @@ type ThemeContextType = {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children, ...restProps }) => {
+  // Отфильтруем все data-* атрибуты, чтобы они не передавались в MUIThemeProvider
+  const filteredProps = Object.fromEntries(
+    Object.entries(restProps).filter(([key]) => !key.startsWith('data-'))
+  );
+
   // По умолчанию используем темную тему из Dashboard
   const [isDarkMode, setIsDarkMode] = useState(true);
 
@@ -29,7 +34,7 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         colors: COLORS
       }}
     >
-      <MUIThemeProvider theme={darkTheme}>
+      <MUIThemeProvider theme={darkTheme} {...filteredProps}>
         <CssBaseline />
         <div style={{ 
           backgroundColor: COLORS.backgroundColor,
