@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CRM Performance Demo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand-wrap">
+          <p class="brand">CRM Performance</p>
+          <span class="badge">demo v1.0</span>
+        </div>
+        <nav>
+          <a class="nav-link active" href="#">Обзор</a>
+          <a class="nav-link" href="#">Настроение и Энергия</a>
+          <a class="nav-link" href="#">Тесты</a>
+          <a class="nav-link" href="#">Статистика</a>
+          <a class="nav-link" href="#">Аналитика</a>
+          <a class="nav-link" href="#">Колесо баланса</a>
+          <a class="nav-link" href="#">Топ игроков</a>
+          <a class="nav-link" href="#">Файловое хранилище</a>
+        </nav>
+      </aside>
+
+      <main class="main-area">
+        <header class="topbar">
+          <div>
+            <h1>Демо-версия CRM Performance</h1>
+            <p>
+              Тестовая витрина интерфейса для покупателей. Показывает ключевые
+              модули и состояние команды.
+            </p>
+          </div>
+          <div class="topbar-actions">
+            <p id="clock">--:--:--</p>
+            <button type="button" class="primary-btn">Запросить полный доступ</button>
+          </div>
+        </header>
+
+        <section class="cards-grid">
+          <article class="card kpi">
+            <p>Активных игроков</p>
+            <strong data-counter="36">0</strong>
+            <span>+4 за неделю</span>
+          </article>
+          <article class="card kpi">
+            <p>Средний mood</p>
+            <strong data-counter="78">0</strong>
+            <span>из 100</span>
+          </article>
+          <article class="card kpi">
+            <p>Средний energy</p>
+            <strong data-counter="73">0</strong>
+            <span>из 100</span>
+          </article>
+          <article class="card kpi">
+            <p>Пройдено тестов</p>
+            <strong data-counter="214">0</strong>
+            <span>за 30 дней</span>
+          </article>
+        </section>
+
+        <section class="panel-grid">
+          <article class="card panel">
+            <div class="panel-head">
+              <h2>График Mood/Energy (7 дней)</h2>
+              <div class="segmented">
+                <button class="seg-btn active" data-period="week" type="button">Неделя</button>
+                <button class="seg-btn" data-period="month" type="button">Месяц</button>
+              </div>
+            </div>
+            <div class="chart" id="chart">
+              <div class="col">
+                <span class="bar mood" style="height: 56%"></span>
+                <span class="bar energy" style="height: 48%"></span>
+                <em>Пн</em>
+              </div>
+              <div class="col">
+                <span class="bar mood" style="height: 61%"></span>
+                <span class="bar energy" style="height: 53%"></span>
+                <em>Вт</em>
+              </div>
+              <div class="col">
+                <span class="bar mood" style="height: 70%"></span>
+                <span class="bar energy" style="height: 62%"></span>
+                <em>Ср</em>
+              </div>
+              <div class="col">
+                <span class="bar mood" style="height: 66%"></span>
+                <span class="bar energy" style="height: 61%"></span>
+                <em>Чт</em>
+              </div>
+              <div class="col">
+                <span class="bar mood" style="height: 80%"></span>
+                <span class="bar energy" style="height: 71%"></span>
+                <em>Пт</em>
+              </div>
+              <div class="col">
+                <span class="bar mood" style="height: 72%"></span>
+                <span class="bar energy" style="height: 67%"></span>
+                <em>Сб</em>
+              </div>
+              <div class="col">
+                <span class="bar mood" style="height: 69%"></span>
+                <span class="bar energy" style="height: 64%"></span>
+                <em>Вс</em>
+              </div>
+            </div>
+            <div class="legend">
+              <span><i class="dot mood"></i>Mood</span>
+              <span><i class="dot energy"></i>Energy</span>
+            </div>
+          </article>
+
+          <article class="card panel">
+            <h2>Топ игроков</h2>
+            <ul class="players">
+              <li>
+                <b>Player_Kirov</b>
+                <span>Баланс 92 / 100</span>
+              </li>
+              <li>
+                <b>PixelStorm</b>
+                <span>Баланс 88 / 100</span>
+              </li>
+              <li>
+                <b>Sn1perAlek</b>
+                <span>Баланс 85 / 100</span>
+              </li>
+              <li>
+                <b>FrostNova</b>
+                <span>Баланс 82 / 100</span>
+              </li>
+            </ul>
+          </article>
+
+          <article class="card panel">
+            <h2>Последняя активность</h2>
+            <ul class="activity">
+              <li><time>09:05</time> Добавлен результат теста от <b>Player_Kirov</b></li>
+              <li><time>09:42</time> Обновлено колесо баланса для <b>PixelStorm</b></li>
+              <li><time>11:18</time> Сформирован отчёт команды за неделю</li>
+              <li><time>12:31</time> Загружен файл в хранилище: <b>scrim_week_7.xlsx</b></li>
+            </ul>
+          </article>
+        </section>
+      </main>
+    </div>
+    <script src="./script.js"></script>
+  </body>
+</html>

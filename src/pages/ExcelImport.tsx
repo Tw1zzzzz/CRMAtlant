@@ -23,7 +23,7 @@ const ExcelImport = () => {
   const [loading, setLoading] = useState(false);
   const [report, setReport] = useState<ImportReport | null>(null);
 
-  const baseUrl = process.env.NODE_ENV === "production" ? window.location.origin : "http://localhost:5000";
+  const baseUrl = process.env.NODE_ENV === "production" ? window.location.origin : "";
 
   const submit = async () => {
     if (!file) {
@@ -139,4 +139,3 @@ const ExcelImport = () => {
 };
 
 export default ExcelImport;
-

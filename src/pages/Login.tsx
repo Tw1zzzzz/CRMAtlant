@@ -58,7 +58,7 @@ const Login: React.FC = () => {
     setFormState(prevState => ({ ...prevState, isLoading: true }));
     
     try {
-      const result = await login(email, password);
+      const result = await login({ email, password });
       
       if (result.success) {
         toast.success("Вход выполнен успешно");

@@ -30,6 +30,7 @@ import gameStatsRoutes from './routes/gameStats';
 import questionnairesRoutes from './routes/questionnaires';
 import excelImportRoutes from './routes/excelImport';
 import cs2AnalyticsRoutes from './routes/cs2Analytics';
+import notificationsRoutes from './routes/notifications';
 import { errorHandler } from './middleware/errorHandler';
 
 // Загрузка переменных окружения с явным указанием пути
@@ -49,6 +50,7 @@ if (envResult.error) {
 
 // Инициализация приложения
 const app = express();
+mongoose.set('bufferTimeoutMS', 3000);
 
 // Middleware
 app.use(cors({
@@ -95,7 +97,10 @@ const connectMongo = async () => {
 
   if (envUri) {
     try {
-      await mongoose.connect(envUri);
+      await mongoose.connect(envUri, {
+        serverSelectionTimeoutMS: 2500,
+        family: 4
+      });
       console.log('Connected to MongoDB');
       return;
     } catch (error) {
@@ -115,6 +120,16 @@ const connectMongo = async () => {
 
 connectMongo().catch((error) => {
   console.error('MongoDB connection error:', error);
+});
+
+app.use('/api', (_req, res, next) => {
+  const readyState = mongoose.connection.readyState;
+  if (readyState === 0 || readyState === 2 || readyState === 3) {
+    return res.status(503).json({
+      message: 'База данных инициализируется, повторите запрос через несколько секунд'
+    });
+  }
+  return next();
 });
 
 // API Маршруты
@@ -140,6 +155,7 @@ app.use('/api/game-stats', gameStatsRoutes);
 app.use('/api/questionnaires', questionnairesRoutes);
 app.use('/api/imports', excelImportRoutes);
 app.use('/api/cs2', cs2AnalyticsRoutes);
+app.use('/api/notifications', notificationsRoutes);
 app.use('/health', healthRoutes);
 
 // Специальный middleware для обработки статических изображений с заголовками против кэширования

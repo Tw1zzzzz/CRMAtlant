@@ -54,7 +54,8 @@ import PlayerRating from './models/PlayerRating';
 import User from './models/User';
 
 // Определяем порт
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
+const HOST = process.env.HOST || '127.0.0.1';
 
 // Запускаем сервер при установлении подключения к MongoDB
 mongoose.connection.once('open', () => {
@@ -94,32 +95,6 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (reason, _promise) => {
   console.error('❌ Необработанное отклонение Promise:', reason);
 });
-
-// Функция для проверки доступности порта
-const isPortAvailable = (port: number): Promise<boolean> => {
-  return new Promise(resolve => {
-    const server = require('net').createServer()
-      .once('error', () => {
-        resolve(false);
-      })
-      .once('listening', () => {
-        server.close();
-        resolve(true);
-      })
-      .listen(port);
-  });
-};
-
-// Поиск свободного порта в диапазоне
-const findAvailablePort = async (startPort: number, endPort: number = startPort + 10): Promise<number> => {
-  for (let port = startPort; port <= endPort; port++) {
-    const isAvailable = await isPortAvailable(port);
-    if (isAvailable) {
-      return port;
-    }
-  }
-  throw new Error(`Не удалось найти свободный порт в диапазоне ${startPort}-${endPort}`);
-};
 
 // Функция для проверки директорий загрузки и очистки кэша
 function checkUploadsDirectories() {
@@ -187,23 +162,36 @@ const startServer = async () => {
   try {
     // Проверяем директории для загрузок
     checkUploadsDirectories();
-    
-    // Ищем свободный порт, начиная с 5000
-    const availablePort = await findAvailablePort(Number(PORT));
-    console.log(`Найден свободный порт: ${availablePort}`);
-    
-    // Обновляем порт в process.env для доступа из других модулей
-    process.env.PORT = String(availablePort);
-    
-    const server = app.listen(availablePort, () => {
-      console.log(`🚀 Сервер запущен на порту: ${availablePort}`);
+
+    const configuredPort = Number(PORT);
+    const listenPort = Number.isFinite(configuredPort) && configuredPort > 0
+      ? configuredPort
+      : 5001;
+
+    const server = app.listen(listenPort, HOST, () => {
+      const address = server.address();
+      const runtimePort =
+        typeof address === 'object' && address !== null ? address.port : listenPort;
+
+      process.env.PORT = String(runtimePort);
+
+      console.log(`🚀 Сервер запущен на порту: ${runtimePort}`);
       console.log(`🌐 Режим: ${process.env.NODE_ENV || 'development'}`);
       console.log(`🔐 JWT секрет: ${process.env.JWT_SECRET ? 'настроен' : 'не настроен - используется значение по умолчанию'}`);
-      console.log(`📡 Адрес API: http://localhost:${availablePort}/api`);
-      console.log(`🩺 Адрес проверки состояния: http://localhost:${availablePort}/health`);
+      console.log(`📡 Адрес API: http://${HOST}:${runtimePort}/api`);
+      console.log(`🩺 Адрес проверки состояния: http://${HOST}:${runtimePort}/health`);
       
       // Инициализация задач синхронизации с Faceit
       faceitSync.initFaceitSync();
+    });
+
+    server.on('error', (error: any) => {
+      if (error?.code === 'EADDRINUSE') {
+        console.error(`❌ Порт ${listenPort} уже занят. Укажите свободный PORT в .env и перезапустите frontend/backend.`);
+      } else {
+        console.error('❌ Ошибка запуска HTTP сервера:', error);
+      }
+      process.exit(1);
     });
 
     // Обработка сигналов завершения

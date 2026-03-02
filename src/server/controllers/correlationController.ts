@@ -10,6 +10,8 @@ import MoodEntry from '../models/MoodEntry';
 import BalanceWheel from '../models/BalanceWheel';
 import ScreenTime from '../models/ScreenTime';
 import GameStats from '../models/GameStats';
+import Match from '../models/Match';
+import User from '../models/User';
 
 /**
  * Получить корреляции между отчетами команды и настроением игроков
@@ -356,38 +358,87 @@ export const getCorrelationStats = async (req: AuthRequest, res: Response): Prom
 export const getMultiMetrics = async (req: AuthRequest, res: Response) => {
   try {
     const { dateFrom, dateTo, playerId, mode = 'team' } = req.query;
+    const analysisMode = mode === 'individual' ? 'individual' : 'team';
     
-    console.log(`[CORRELATION] Запрос мультиметричных данных: ${mode} режим, период: ${dateFrom} - ${dateTo}, игрок: ${playerId || 'все'}`);
+    console.log(`[CORRELATION] Запрос мультиметричных данных: ${analysisMode} режим, период: ${dateFrom} - ${dateTo}, игрок: ${playerId || 'все'}`);
     
-    // Базовый фильтр по датам
+    // Базовый фильтр по датам для дневных метрик
     const dateFilter: any = {};
-    if (dateFrom && dateTo) {
-      dateFilter.date = {
-        $gte: new Date(dateFrom as string),
-        $lte: new Date(dateTo as string)
-      };
+    // Базовый фильтр по датам для матчей (ELO)
+    const matchDateFilter: any = {};
+    if (dateFrom || dateTo) {
+      const dateRange: any = {};
+      if (dateFrom) {
+        dateRange.$gte = new Date(`${dateFrom as string}T00:00:00.000Z`);
+      }
+      if (dateTo) {
+        dateRange.$lte = new Date(`${dateTo as string}T23:59:59.999Z`);
+      }
+      dateFilter.date = dateRange;
+      matchDateFilter.playedAt = dateRange;
     }
     
-    // Фильтр по игроку (если индивидуальный режим)
+    // Фильтр по пользователю
     const userFilter: any = {};
-    if (mode === 'individual' && playerId) {
+    const matchFilter: any = { ...matchDateFilter };
+    if (analysisMode === 'individual' && playerId) {
       userFilter.userId = playerId;
+
+      const player = await User.findById(playerId).select('faceitAccountId').lean();
+      if (player?.faceitAccountId) {
+        matchFilter.faceitAccountId = player.faceitAccountId;
+      } else {
+        matchFilter.faceitAccountId = { $in: [] };
+      }
+    } else if (analysisMode === 'team') {
+      // Для командного режима учитываем только игроков, исключая staff.
+      const players = await User.find({ role: 'player' }).select('_id faceitAccountId').lean();
+      const playerIds = players.map((player: any) => player._id);
+
+      if (!playerIds.length) {
+        return res.json({
+          success: true,
+          data: [],
+          meta: {
+            mode: analysisMode,
+            playerId,
+            dateFrom,
+            dateTo,
+            totalDays: 0,
+            generatedAt: new Date().toISOString()
+          }
+        });
+      }
+
+      userFilter.userId = { $in: playerIds };
+
+      const faceitAccountIds = players
+        .map((player: any) => player.faceitAccountId)
+        .filter((id: any) => Boolean(id));
+
+      if (faceitAccountIds.length) {
+        matchFilter.faceitAccountId = { $in: faceitAccountIds };
+      } else {
+        matchFilter.faceitAccountId = { $in: [] };
+      }
     }
     
     // Объединяем фильтры
     const filter = { ...dateFilter, ...userFilter };
     
     console.log(`[CORRELATION] Фильтр запроса:`, filter);
+    console.log(`[CORRELATION] Фильтр матчей (ELO):`, matchFilter);
     
     // Получаем данные из всех коллекций параллельно
-    const [moodData, balanceData, screenTimeData, gameStatsData] = await Promise.all([
+    const [moodData, balanceData, screenTimeData, gameStatsData, matchData] = await Promise.all([
       MoodEntry.find(filter).sort({ date: 1 }).lean(),
       BalanceWheel.find(filter).sort({ date: 1 }).lean(),
       ScreenTime.find(filter).sort({ date: 1 }).lean(),
-      GameStats.find(filter).sort({ date: 1 }).lean()
+      GameStats.find(filter).sort({ date: 1 }).lean(),
+      Match.find(matchFilter).sort({ playedAt: 1 }).lean()
     ]);
     
-    console.log(`[CORRELATION] Найдено данных: настроение=${moodData.length}, баланс=${balanceData.length}, экранное время=${screenTimeData.length}, игровые показатели=${gameStatsData.length}`);
+    console.log(`[CORRELATION] Найдено данных: настроение=${moodData.length}, баланс=${balanceData.length}, экранное время=${screenTimeData.length}, игровые показатели=${gameStatsData.length}, матчи(ELO)=${matchData.length}`);
     
     // Группируем данные по датам
     const dataByDate = new Map();
@@ -438,6 +489,20 @@ export const getMultiMetrics = async (req: AuthRequest, res: Response) => {
       dayData.kdRatio = (dayData.kdRatio || 0) + entry.kdRatio;
       dayData.gameStatsCount = (dayData.gameStatsCount || 0) + 1;
     });
+
+    // Обрабатываем ELO по матчам (используем eloAfter как актуальный рейтинг после матча)
+    matchData.forEach((entry: any) => {
+      const dateKey = entry.playedAt.toISOString().split('T')[0];
+      if (!dataByDate.has(dateKey)) {
+        dataByDate.set(dateKey, { date: dateKey, count: 0 });
+      }
+      const dayData = dataByDate.get(dateKey);
+      const eloValue = Number.isFinite(entry.eloAfter) ? entry.eloAfter : entry.eloBefore;
+      if (Number.isFinite(eloValue)) {
+        dayData.elo = (dayData.elo || 0) + eloValue;
+        dayData.eloCount = (dayData.eloCount || 0) + 1;
+      }
+    });
     
     // Преобразуем в массив и усредняем значения
     const result = Array.from(dataByDate.values()).map((dayData: any) => ({
@@ -447,7 +512,8 @@ export const getMultiMetrics = async (req: AuthRequest, res: Response) => {
       balanceAvg: dayData.balanceCount ? Number((dayData.balanceAvg / dayData.balanceCount).toFixed(1)) : null,
       screenTime: dayData.screenTimeCount ? Number((dayData.screenTime / dayData.screenTimeCount).toFixed(1)) : null,
       winRate: dayData.gameStatsCount ? Number((dayData.winRate / dayData.gameStatsCount).toFixed(1)) : null,
-      kdRatio: dayData.gameStatsCount ? Number((dayData.kdRatio / dayData.gameStatsCount).toFixed(2)) : null
+      kdRatio: dayData.gameStatsCount ? Number((dayData.kdRatio / dayData.gameStatsCount).toFixed(2)) : null,
+      elo: dayData.eloCount ? Number((dayData.elo / dayData.eloCount).toFixed(0)) : null
     })).sort((a, b) => a.date.localeCompare(b.date));
     
     console.log(`[CORRELATION] Обработано ${result.length} дней данных`);
@@ -456,7 +522,7 @@ export const getMultiMetrics = async (req: AuthRequest, res: Response) => {
       success: true,
       data: result,
       meta: {
-        mode,
+        mode: analysisMode,
         playerId,
         dateFrom,
         dateTo,

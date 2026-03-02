@@ -2,7 +2,7 @@ import axios from 'axios';
 import { handleApiError } from '../apiUtils';
 
 // Базовый URL для API
-const baseUrl = window.location.origin.includes('localhost') ? 'http://localhost:5000' : window.location.origin;
+const baseUrl = '';
 
 /**
  * Получение всех карточек игроков с пагинацией

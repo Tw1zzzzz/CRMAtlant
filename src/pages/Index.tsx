@@ -36,6 +36,7 @@ interface RegisterFormState {
   password: string;
   name: string;
   role: UserRole;
+  faceitUrl: string;
 }
 
 /**
@@ -56,7 +57,8 @@ const Index: React.FC = () => {
     email: "",
     password: "",
     name: "",
-    role: "player"
+    role: "player",
+    faceitUrl: ""
   });
 
   /**
@@ -115,16 +117,21 @@ const Index: React.FC = () => {
   const handleRegister = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
     
-    const { email, password, name, role } = registerForm;
+    const { email, password, name, role, faceitUrl } = registerForm;
     
     if (!email.trim() || !password || !name.trim()) {
       toast.error("Пожалуйста, заполните все поля");
       return;
     }
+
+    if (role === "player" && !faceitUrl.trim()) {
+      toast.error("Для игрока ссылка Faceit обязательна");
+      return;
+    }
     
     try {
       setLoading(true);
-      await register({ name, email, password, role });
+      await register({ name, email, password, role, faceitUrl: faceitUrl.trim() || undefined });
     } catch (error) {
       console.error('Ошибка регистрации:', error);
       toast.error("Не удалось зарегистрироваться. Попробуйте позже или обратитесь в поддержку.");
@@ -139,7 +146,7 @@ const Index: React.FC = () => {
         {/* Левая сторона - приветственный текст */}
         <div className="flex-1 text-center lg:text-left">
           <h1 className="text-4xl lg:text-6xl font-bold text-esports-blue mb-4">
-            1WIN
+            Performance Hub
           </h1>
           <p className="text-xl lg:text-2xl text-esports-darkGray mb-8">
             Отследи свой успех
@@ -276,6 +283,18 @@ const Index: React.FC = () => {
                         </label>
                       </div>
                     </div>
+                    {registerForm.role === "player" && (
+                      <div className="space-y-2">
+                        <Label htmlFor="register-faceit">Ссылка Faceit</Label>
+                        <Input
+                          id="register-faceit"
+                          placeholder="https://www.faceit.com/en/players/your_nickname"
+                          value={registerForm.faceitUrl}
+                          onChange={(e) => updateRegisterField('faceitUrl', e.target.value)}
+                          disabled={loading}
+                        />
+                      </div>
+                    )}
                   </CardContent>
                   <CardFooter>
                     <Button 

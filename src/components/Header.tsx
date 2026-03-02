@@ -3,8 +3,11 @@ import NotificationsPanel from "./NotificationsPanel";
 import SyncStatusIndicator from "./SyncStatusIndicator";
 import { useAuth } from "@/hooks/useAuth";
 import { COLORS } from "@/styles/theme";
-// Импортируем логотипы
-import logoSvg from "@/assets/1win-logo.svg";
+import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Settings, User as UserIcon, LogOut, ChevronDown } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import ROUTES from "@/lib/routes";
 import twizzLogoSvg from "@/assets/twizz-logo.svg";
 // Импортируем CSS для анимации
 import "@/assets/twizz-logo-animation.css";
@@ -12,25 +15,14 @@ import "@/assets/twizz-logo-animation.css";
 import UserAvatar from "./UserAvatar";
 
 const Header = () => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
 
   // Стили для хедера
   const headerStyles = {
     backgroundColor: COLORS.cardBackground,
     borderBottomColor: COLORS.borderColor,
     color: COLORS.textColor
-  };
-
-  // Стиль для логотипа 1win с увеличенным размером
-  const logoStyle = {
-    height: '4.5rem',
-    maxWidth: '220px',
-    objectFit: 'contain' as const,
-    borderRadius: '8px',
-    padding: '4px',
-    background: 'rgba(29, 140, 248, 0.08)',
-    border: '1px solid rgba(0, 0, 0, 0.3)',
-    boxShadow: '0px 0px 3px rgba(0, 0, 0, 0.2)'
   };
 
   // Стиль для логотипа Twizz
@@ -51,11 +43,6 @@ const Header = () => {
       <div className="flex items-center space-x-4">
         <div className="flex items-center gap-4">
           <img 
-            src={logoSvg} 
-            alt="1WIN Logo" 
-            style={logoStyle}
-          />
-          <img 
             src={twizzLogoSvg} 
             alt="Twizz Logo" 
             style={twizzLogoStyle}
@@ -66,8 +53,35 @@ const Header = () => {
       <div className="flex items-center space-x-4">
         {user && <SyncStatusIndicator />}
         <NotificationsPanel />
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Настройки профиля"
+          onClick={() => navigate(ROUTES.PROFILE)}
+        >
+          <Settings className="h-5 w-5" />
+        </Button>
         <Separator orientation="vertical" className="h-8" style={{ backgroundColor: COLORS.borderColor }} />
-        <UserAvatar user={user} size="md" />
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="h-auto px-1 py-1">
+              <div className="flex items-center gap-2">
+                <UserAvatar user={user} size="md" />
+                <ChevronDown className="h-4 w-4" />
+              </div>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => navigate(ROUTES.PROFILE)}>
+              <UserIcon className="mr-2 h-4 w-4" />
+              Профиль
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={logout}>
+              <LogOut className="mr-2 h-4 w-4" />
+              Выйти
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   );

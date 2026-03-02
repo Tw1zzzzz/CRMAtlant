@@ -1,5 +1,20 @@
-import jwt from 'jsonwebtoken';
 import User from '../models/User';
+import { verifyJwt } from '../utils/jwt';
+
+const PRIMARY_JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const LEGACY_JWT_SECRET = 'your-secret-key';
+
+const verifyTokenWithFallback = (token: string): { id: string } => {
+  try {
+    return verifyJwt<{ id: string }>(token, PRIMARY_JWT_SECRET);
+  } catch (error) {
+    // Поддержка старых токенов, выданных до фикса контракта
+    if (PRIMARY_JWT_SECRET !== LEGACY_JWT_SECRET) {
+      return verifyJwt<{ id: string }>(token, LEGACY_JWT_SECRET);
+    }
+    throw error;
+  }
+};
 
 // Middleware для защиты маршрутов
 export const protect = async (req: any, res: any, next: any) => {
@@ -16,7 +31,7 @@ export const protect = async (req: any, res: any, next: any) => {
       console.log(`[AUTH] Токен получен, проверяю...`);
 
       // Верифицируем токен
-      const decoded: any = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+      const decoded = verifyTokenWithFallback(token);
       console.log(`[AUTH] Токен действителен, ID пользователя:`, decoded.id);
 
       // Получаем пользователя из базы, исключая пароль
@@ -31,25 +46,13 @@ export const protect = async (req: any, res: any, next: any) => {
       next();
     } catch (error) {
       console.error('[AUTH] Ошибка проверки токена:', error);
-      return res.status(401).json({ message: 'Недействительный токен' });
+      return res.status(401).json({
+        message: 'Недействительный токен. Выполните вход повторно.',
+        code: 'TOKEN_INVALID'
+      });
     }
   } else {
     console.log('[AUTH] Токен не предоставлен');
-    
-    // Для отладки: проверка, есть ли запрос от тестового фронтенда без авторизации
-    if (process.env.NODE_ENV === 'development' || req.query.debug === 'true') {
-      console.log('[AUTH] Режим разработки: временно разрешаю доступ без токена');
-      
-      // Ищем тестового пользователя с ролью staff
-      const testStaff = await User.findOne({ role: 'staff' }).select('-password');
-      
-      if (testStaff) {
-        console.log(`[AUTH] Используем тестового пользователя: ${testStaff.name}`);
-        req.user = testStaff;
-        return next();
-      }
-    }
-    
     return res.status(401).json({ message: 'Не авторизован, токен отсутствует' });
   }
 };

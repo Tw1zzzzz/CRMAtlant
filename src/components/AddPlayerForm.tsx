@@ -10,7 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 
 // Базовый URL API
-const baseUrl = window.location.origin.includes('localhost') ? 'http://localhost:5000' : window.location.origin;
+const baseUrl = "";
 
 // Отладочная информация об API URL
 console.log('[AddPlayerForm] API URL:', baseUrl);
@@ -247,6 +247,11 @@ const AddPlayerForm: React.FC<AddPlayerFormProps> = ({ onPlayerAdded }) => {
       toast.error("Имя игрока обязательно для заполнения");
       return;
     }
+
+    if (!formData.contacts.faceit.trim()) {
+      toast.error("Ссылка Faceit обязательна для регистрации игрока");
+      return;
+    }
     
     try {
       setIsLoading(true);
@@ -273,7 +278,9 @@ const AddPlayerForm: React.FC<AddPlayerFormProps> = ({ onPlayerAdded }) => {
             name: formData.name,
             email: email,
             password: randomPassword,
-            role: "player" 
+            role: "player",
+            faceitUrl: formData.contacts.faceit.trim(),
+            nickname: formData.contacts.nickname.trim() || formData.name.trim()
           }, 
           {
             headers: {
@@ -303,26 +310,8 @@ const AddPlayerForm: React.FC<AddPlayerFormProps> = ({ onPlayerAdded }) => {
         }
       }
       
-      // 2. Создаем карточку игрока с контактами
+      // 2. Обновляем контакты в автоматически созданной карточке игрока
       try {
-        // Создаем карточку игрока
-        const cardResponse = await axios.post(
-          `${baseUrl}/api/player-cards`,
-          { userId },
-          {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
-        
-        console.log("[AddPlayerForm] Ответ API создания карточки:", cardResponse);
-        
-        if (!cardResponse.data) {
-          throw new Error("Не удалось создать карточку игрока");
-        }
-        
         // Обновляем контакты игрока
         const contactsResponse = await axios.put(
           `${baseUrl}/api/player-cards/${userId}/contacts`,
@@ -342,9 +331,9 @@ const AddPlayerForm: React.FC<AddPlayerFormProps> = ({ onPlayerAdded }) => {
           await updateCommunicationLine(userId);
         }
       } catch (cardError: any) {
-        console.error("[AddPlayerForm] Ошибка при создании/обновлении карточки:", cardError);
+        console.error("[AddPlayerForm] Ошибка при инициализации карточки игрока:", cardError);
         const errorMessage = cardError.response?.data?.message || "Неизвестная ошибка при работе с карточкой";
-        throw new Error("Ошибка при работе с карточкой игрока: " + errorMessage);
+        throw new Error("Ошибка при инициализации карточки игрока: " + errorMessage);
       }
       
       // 3. Загружаем файлы, если они выбраны
@@ -493,6 +482,7 @@ const AddPlayerForm: React.FC<AddPlayerFormProps> = ({ onPlayerAdded }) => {
                 value={formData.contacts.faceit}
                 onChange={handleChange}
                 placeholder="https://www.faceit.com/en/players/"
+                required
                 disabled={isLoading}
                 className="text-lg py-6"
               />

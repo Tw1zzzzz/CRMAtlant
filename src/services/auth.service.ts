@@ -37,6 +37,25 @@ export class AuthService {
     return AuthService.instance;
   }
 
+  private normalizeUser(rawUser: any): User | null {
+    if (!rawUser) {
+      return null;
+    }
+
+    const normalizedRole = rawUser.role === 'staff' ? 'staff' : 'player';
+    const id = String(rawUser.id || rawUser._id || '');
+
+    if (!id) {
+      return null;
+    }
+
+    return {
+      ...rawUser,
+      id,
+      role: normalizedRole
+    } as User;
+  }
+
   /**
    * Вход пользователя в систему
    */
@@ -44,7 +63,8 @@ export class AuthService {
     try {
       const response = await apiClient.post<AuthResponse>('/auth/login', credentials);
       
-      if (!response.token || !response.user) {
+      const normalizedUser = this.normalizeUser(response.user);
+      if (!response.token || !normalizedUser) {
         return {
           success: false,
           error: 'Неверный ответ от сервера'
@@ -56,7 +76,7 @@ export class AuthService {
       
       return {
         success: true,
-        user: response.user
+        user: normalizedUser
       };
     } catch (error) {
       const apiError = error as ApiError;
@@ -74,7 +94,8 @@ export class AuthService {
     try {
       const response = await apiClient.post<AuthResponse>('/auth/register', userData);
       
-      if (!response.token || !response.user) {
+      const normalizedUser = this.normalizeUser(response.user);
+      if (!response.token || !normalizedUser) {
         return {
           success: false,
           error: 'Неверный ответ от сервера'
@@ -86,7 +107,7 @@ export class AuthService {
       
       return {
         success: true,
-        user: response.user
+        user: normalizedUser
       };
     } catch (error) {
       const apiError = error as ApiError;
@@ -108,7 +129,7 @@ export class AuthService {
       }
 
       const user = await apiClient.get<User>('/auth/me');
-      return user;
+      return this.normalizeUser(user);
     } catch (error) {
       // Если произошла ошибка (например, токен недействителен)
       apiClient.removeAuthToken();
@@ -141,9 +162,10 @@ export class AuthService {
         };
       }
 
+      const normalizedUser = this.normalizeUser(response.user);
       return {
         success: true,
-        user: response.user || null
+        user: normalizedUser
       };
     } catch (error) {
       const apiError = error as ApiError;

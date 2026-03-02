@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Базовый URL для API
-const API_URL = process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5000';
+const API_URL = process.env.NODE_ENV === 'production' ? '' : '';
 
 interface FileItem {
   _id: string;

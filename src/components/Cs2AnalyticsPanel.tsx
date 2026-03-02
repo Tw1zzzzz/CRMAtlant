@@ -25,7 +25,7 @@ export default function Cs2AnalyticsPanel() {
   const [loading, setLoading] = useState<boolean>(false);
   const [data, setData] = useState<Cs2Overview | null>(null);
 
-  const baseUrl = process.env.NODE_ENV === "production" ? window.location.origin : "http://localhost:5000";
+  const baseUrl = process.env.NODE_ENV === "production" ? window.location.origin : "";
   const token = useMemo(() => localStorage.getItem("token"), []);
 
   useEffect(() => {
@@ -150,4 +150,3 @@ export default function Cs2AnalyticsPanel() {
     </div>
   );
 }
-

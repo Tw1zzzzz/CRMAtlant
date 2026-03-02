@@ -13,7 +13,7 @@ import { Plus, Link as LinkIcon, Calendar as CalendarIcon, Image, ExternalLink, 
 import { useToast } from "@/hooks/use-toast";
 import { TestEntry } from "@/types";
 import { testRepository } from "@/lib/dataRepository";
-import { createTestEntry, getMyTestEntries } from "@/lib/api";
+import { createTestEntry, deleteTestEntry, getMyTestEntries, getTestsStateImpact } from "@/lib/api";
 import { formatDate, getCurrentWeekRange, getWeekLabel, getPrevWeek, getNextWeek } from "@/utils/dateUtils";
 import { fileToDataUrl, validateImageFile } from "@/utils/fileUtils";
 import { cn } from "@/lib/utils";
@@ -29,6 +29,20 @@ const predefinedTests = [
   }
 ];
 
+type StateImpactSummary = {
+  totals: {
+    entries: number;
+    scoredEntries: number;
+    avgScore: number;
+    avgStateIndex: number;
+  };
+  stateToResult: {
+    fatigue: { low: number; mid: number; high: number };
+    focus: { low: number; mid: number; high: number };
+    stress: { low: number; mid: number; high: number };
+  };
+};
+
 const TestTracker = () => {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -42,7 +56,7 @@ const TestTracker = () => {
   const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
   const [editingTest, setEditingTest] = useState<TestEntry | null>(null);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<"daily" | "weekly" | "questionnaire">("daily");
+  const [activeTab, setActiveTab] = useState<"weekly" | "questionnaire">("questionnaire");
   const [isStaffView, setIsStaffView] = useState(false);
   const [isAddingEntry, setIsAddingEntry] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -51,27 +65,111 @@ const TestTracker = () => {
   const [qDate, setQDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [qMood, setQMood] = useState<string>("");
   const [qEnergy, setQEnergy] = useState<string>("");
+  const [qSleepStart, setQSleepStart] = useState<string>("");
+  const [qSleepEnd, setQSleepEnd] = useState<string>("");
   const [qSleep, setQSleep] = useState<string>("");
   const [qScreen, setQScreen] = useState<string>("");
+  const [qScreenEntertainment, setQScreenEntertainment] = useState<string>("");
+  const [qScreenCommunication, setQScreenCommunication] = useState<string>("");
+  const [qScreenBrowser, setQScreenBrowser] = useState<string>("");
+  const [qScreenStudy, setQScreenStudy] = useState<string>("");
   const [qSubmitting, setQSubmitting] = useState<boolean>(false);
+  const [testType, setTestType] = useState<string>("generic");
+  const [rawScore, setRawScore] = useState<string>("");
+  const [scoreNormalized, setScoreNormalized] = useState<string>("");
+  const [unit, setUnit] = useState<string>("%");
+  const [durationSec, setDurationSec] = useState<string>("");
+  const [attempts, setAttempts] = useState<string>("1");
+  const [fatigue, setFatigue] = useState<string>("");
+  const [focus, setFocus] = useState<string>("");
+  const [stress, setStress] = useState<string>("");
+  const [sleepHours, setSleepHours] = useState<string>("");
+  const [snapshotMood, setSnapshotMood] = useState<string>("");
+  const [snapshotEnergy, setSnapshotEnergy] = useState<string>("");
+  const [matchType, setMatchType] = useState<string>("");
+  const [contextMap, setContextMap] = useState<string>("");
+  const [contextRole, setContextRole] = useState<string>("");
+  const [periodFilter, setPeriodFilter] = useState<string>("30");
+  const [testTypeFilter, setTestTypeFilter] = useState<string>("all");
+  const [contextRoleFilter, setContextRoleFilter] = useState<string>("all");
+  const [stateImpact, setStateImpact] = useState<StateImpactSummary | null>(null);
   
   const isStaff = user?.role === "staff";
   const canEdit = user?.role === "player";
 
-  const baseUrl = process.env.NODE_ENV === "production" ? window.location.origin : "http://localhost:5000";
+  const parseOptionalNumber = (value: string) => {
+    if (!value.trim()) return undefined;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  };
+
+  const parseTimeToMinutes = (value: string) => {
+    const match = value.match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+    if (!match) return null;
+    const hours = Number(match[1]);
+    const minutes = Number(match[2]);
+    return hours * 60 + minutes;
+  };
+
+  const getSleepHoursByRange = (from: string, to: string) => {
+    const fromMinutes = parseTimeToMinutes(from);
+    const toMinutes = parseTimeToMinutes(to);
+    if (fromMinutes === null || toMinutes === null) return undefined;
+    const diffMinutes = toMinutes >= fromMinutes
+      ? toMinutes - fromMinutes
+      : (24 * 60 - fromMinutes) + toMinutes;
+    return Number((diffMinutes / 60).toFixed(2));
+  };
+
+  useEffect(() => {
+    if (!qSleepStart || !qSleepEnd) return;
+    const hours = getSleepHoursByRange(qSleepStart, qSleepEnd);
+    if (hours === undefined) return;
+    setQSleep(String(hours));
+  }, [qSleepStart, qSleepEnd]);
 
   const submitQuestionnaire = async () => {
     try {
       setQSubmitting(true);
       const token = localStorage.getItem("token");
+      const sleepByRange = qSleepStart && qSleepEnd ? getSleepHoursByRange(qSleepStart, qSleepEnd) : undefined;
+      const sleepHours = parseOptionalNumber(qSleep) ?? sleepByRange;
+
+      if ((qSleepStart && !qSleepEnd) || (!qSleepStart && qSleepEnd)) {
+        toast({
+          title: "Проверьте сон",
+          description: "Заполните оба поля времени сна: и 'с', и 'до'.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const entertainment = parseOptionalNumber(qScreenEntertainment);
+      const communication = parseOptionalNumber(qScreenCommunication);
+      const browser = parseOptionalNumber(qScreenBrowser);
+      const study = parseOptionalNumber(qScreenStudy);
+      const hasBreakdown = [entertainment, communication, browser, study].some((v) => v !== undefined);
+      const breakdownSum = (entertainment || 0) + (communication || 0) + (browser || 0) + (study || 0);
+      const totalScreenTime = parseOptionalNumber(qScreen) ?? (hasBreakdown ? Number(breakdownSum.toFixed(2)) : undefined);
+
       await axios.post(
-        `${baseUrl}/api/questionnaires/daily`,
+        "/api/questionnaires/daily",
         {
           date: qDate,
-          mood: qMood ? Number(qMood) : undefined,
-          energy: qEnergy ? Number(qEnergy) : undefined,
-          sleepHours: qSleep ? Number(qSleep) : undefined,
-          screenTimeHours: qScreen ? Number(qScreen) : undefined
+          mood: parseOptionalNumber(qMood),
+          energy: parseOptionalNumber(qEnergy),
+          sleepHours,
+          sleepStartTime: qSleepStart || undefined,
+          sleepEndTime: qSleepEnd || undefined,
+          screenTimeHours: totalScreenTime,
+          screenBreakdown: hasBreakdown
+            ? {
+                entertainment,
+                communication,
+                browser,
+                study
+              }
+            : undefined
         },
         { headers: token ? { Authorization: `Bearer ${token}` } : undefined }
       );
@@ -87,6 +185,33 @@ const TestTracker = () => {
   useEffect(() => {
     loadEntries();
   }, []);
+
+  useEffect(() => {
+    const loadStateImpact = async () => {
+      try {
+        const now = new Date();
+        const days = Number(periodFilter);
+        const fromDate = new Date(now);
+        fromDate.setDate(now.getDate() - days);
+
+        const response = await getTestsStateImpact({
+          from: fromDate.toISOString().slice(0, 10),
+          to: now.toISOString().slice(0, 10),
+          testType: testTypeFilter !== "all" ? testTypeFilter : undefined,
+          role: contextRoleFilter !== "all" ? contextRoleFilter : undefined
+        });
+
+        setStateImpact(response.data);
+      } catch (error) {
+        console.error("Error loading tests state impact:", error);
+        setStateImpact(null);
+      }
+    };
+
+    if (user) {
+      loadStateImpact();
+    }
+  }, [user, periodFilter, testTypeFilter, contextRoleFilter]);
   
   const loadEntries = async () => {
     try {
@@ -98,6 +223,7 @@ const TestTracker = () => {
           const response = await getMyTestEntries();
           const serverEntries = response.data.map((entry: any) => ({
             ...entry,
+            id: entry.id || entry._id,
             date: new Date(entry.date)
           }));
           setEntries(serverEntries);
@@ -144,6 +270,21 @@ const TestTracker = () => {
     setScreenshotUrl("");
     setIsWeeklyTest(false);
     setEditingTest(null);
+    setTestType("generic");
+    setRawScore("");
+    setScoreNormalized("");
+    setUnit("%");
+    setDurationSec("");
+    setAttempts("1");
+    setFatigue("");
+    setFocus("");
+    setStress("");
+    setSleepHours("");
+    setSnapshotMood("");
+    setSnapshotEnergy("");
+    setMatchType("");
+    setContextMap("");
+    setContextRole("");
   };
   
   const handlePrevWeek = () => {
@@ -155,10 +296,10 @@ const TestTracker = () => {
   };
   
   const handleSubmit = async () => {
-    if (!name || !link) {
+    if (!name && !testType) {
       toast({
         title: "Отсутствуют обязательные поля",
-        description: "Заполните название и ссылку на тест",
+        description: "Заполните название теста или тип теста",
         variant: "destructive"
       });
       return;
@@ -169,10 +310,30 @@ const TestTracker = () => {
       
       const newEntry: Omit<TestEntry, "id"> = {
         date: new Date(date),
-          name,
-          link,
+        name,
+        link,
         screenshotUrl: screenshotUrl || undefined,
-        isWeeklyTest
+        isWeeklyTest,
+        testType,
+        rawScore: rawScore ? Number(rawScore) : undefined,
+        scoreNormalized: scoreNormalized ? Number(scoreNormalized) : undefined,
+        unit: unit || undefined,
+        durationSec: durationSec ? Number(durationSec) : undefined,
+        attempts: attempts ? Number(attempts) : 1,
+        stateSnapshot: {
+          fatigue: fatigue ? Number(fatigue) : undefined,
+          focus: focus ? Number(focus) : undefined,
+          stress: stress ? Number(stress) : undefined,
+          sleepHours: sleepHours ? Number(sleepHours) : undefined,
+          mood: snapshotMood ? Number(snapshotMood) : undefined,
+          energy: snapshotEnergy ? Number(snapshotEnergy) : undefined
+        },
+        context: {
+          matchType: matchType || undefined,
+          map: contextMap || undefined,
+          role: contextRole || undefined
+        },
+        measuredAt: new Date(date).toISOString()
       };
       
       // Используем репозиторий для сохранения данных
@@ -212,16 +373,39 @@ const TestTracker = () => {
   
   const handleEdit = (test: TestEntry) => {
     setEditingTest(test);
-    setName(test.name);
-    setLink(test.link);
+    setName(test.name || "");
+    setLink(test.link || "");
     setDate(test.date.toISOString().split('T')[0]);
     setIsWeeklyTest(test.isWeeklyTest);
+    setTestType(test.testType || "generic");
+    setRawScore(test.rawScore !== undefined ? String(test.rawScore) : "");
+    setScoreNormalized(test.scoreNormalized !== undefined ? String(test.scoreNormalized) : "");
+    setUnit(test.unit || "%");
+    setDurationSec(test.durationSec !== undefined ? String(test.durationSec) : "");
+    setAttempts(test.attempts !== undefined ? String(test.attempts) : "1");
+    setFatigue(test.stateSnapshot?.fatigue !== undefined ? String(test.stateSnapshot.fatigue) : "");
+    setFocus(test.stateSnapshot?.focus !== undefined ? String(test.stateSnapshot.focus) : "");
+    setStress(test.stateSnapshot?.stress !== undefined ? String(test.stateSnapshot.stress) : "");
+    setSleepHours(test.stateSnapshot?.sleepHours !== undefined ? String(test.stateSnapshot.sleepHours) : "");
+    setSnapshotMood(test.stateSnapshot?.mood !== undefined ? String(test.stateSnapshot.mood) : "");
+    setSnapshotEnergy(test.stateSnapshot?.energy !== undefined ? String(test.stateSnapshot.energy) : "");
+    setMatchType(test.context?.matchType || "");
+    setContextMap(test.context?.map || "");
+    setContextRole(test.context?.role || "");
     setIsDialogOpen(true);
   };
   
   const handleDelete = async (id: string) => {
     try {
       setIsLoading(true);
+
+      if (user) {
+        try {
+          await deleteTestEntry(id);
+        } catch (error) {
+          console.error("Error deleting test entry on server:", error);
+        }
+      }
       
       // Удаляем запись через репозиторий
       testRepository.delete(id);
@@ -246,17 +430,28 @@ const TestTracker = () => {
     }
   };
   
+  const applyEntryFilters = (items: TestEntry[]) => {
+    const days = Number(periodFilter);
+    const now = new Date();
+    const fromDate = new Date(now);
+    fromDate.setDate(now.getDate() - days);
+
+    return items.filter((test) => {
+      const measuredAt = test.measuredAt ? new Date(test.measuredAt) : new Date(test.date);
+      const inPeriod = measuredAt >= fromDate && measuredAt <= now;
+      const byType = testTypeFilter === "all" || (test.testType || "generic") === testTypeFilter;
+      const byRole = contextRoleFilter === "all" || test.context?.role === contextRoleFilter;
+      return inPeriod && byType && byRole;
+    });
+  };
+
   const getWeekTests = () => {
     const { start, end } = getCurrentWeekRange(currentWeek);
-    
-    return entries.filter((test) => {
+    const weekEntries = entries.filter((test) => {
       const testDate = new Date(test.date);
       return testDate >= start && testDate <= end;
     });
-  };
-  
-  const getDailyTests = () => {
-    return getWeekTests().filter((test) => !test.isWeeklyTest);
+    return applyEntryFilters(weekEntries);
   };
   
   const getWeeklyTests = () => {
@@ -264,31 +459,95 @@ const TestTracker = () => {
   };
 
   return (
-    <div className="container mx-auto py-4">
+    <div className="container mx-auto py-4 performance-page">
       <div className="flex flex-col space-y-6">
-        <Card style={COMPONENT_STYLES.card}>
+        <Card className="performance-hero" style={COMPONENT_STYLES.card}>
           <CardHeader>
-            <CardTitle style={COMPONENT_STYLES.text.title}>Тесты</CardTitle>
-            <CardDescription style={COMPONENT_STYLES.text.description}>
+            <span className="performance-eyebrow">Performance Lab</span>
+            <CardTitle className="performance-title" style={COMPONENT_STYLES.text.title}>Тесты</CardTitle>
+            <CardDescription className="performance-subtitle" style={COMPONENT_STYLES.text.description}>
               Управление результатами тестирования и опросов
             </CardDescription>
           </CardHeader>
           <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+              <div className="space-y-1">
+                <Label style={{ color: COLORS.textColor }}>Период</Label>
+                <select
+                  value={periodFilter}
+                  onChange={(e) => setPeriodFilter(e.target.value)}
+                  className="w-full rounded-md border px-3 py-2 bg-transparent performance-native-select"
+                >
+                  <option value="7">7 дней</option>
+                  <option value="30">30 дней</option>
+                  <option value="90">90 дней</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label style={{ color: COLORS.textColor }}>Тип теста</Label>
+                <select
+                  value={testTypeFilter}
+                  onChange={(e) => setTestTypeFilter(e.target.value)}
+                  className="w-full rounded-md border px-3 py-2 bg-transparent performance-native-select"
+                >
+                  <option value="all">Все</option>
+                  <option value="generic">Generic</option>
+                  <option value="reaction">Reaction</option>
+                  <option value="aim">Aim</option>
+                  <option value="cognitive">Cognitive</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label style={{ color: COLORS.textColor }}>Контекст / роль</Label>
+                <select
+                  value={contextRoleFilter}
+                  onChange={(e) => setContextRoleFilter(e.target.value)}
+                  className="w-full rounded-md border px-3 py-2 bg-transparent performance-native-select"
+                >
+                  <option value="all">Все</option>
+                  <option value="entry">Entry</option>
+                  <option value="support">Support</option>
+                  <option value="awp">AWP</option>
+                  <option value="igl">IGL</option>
+                </select>
+              </div>
+            </div>
+
+            {stateImpact && (
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6">
+                <Card style={COMPONENT_STYLES.card}>
+                  <CardContent className="pt-4">
+                    <p className="text-xs text-muted-foreground">Средний score</p>
+                    <p className="text-2xl font-semibold">{stateImpact.totals.avgScore}</p>
+                  </CardContent>
+                </Card>
+                <Card style={COMPONENT_STYLES.card}>
+                  <CardContent className="pt-4">
+                    <p className="text-xs text-muted-foreground">Индекс состояния</p>
+                    <p className="text-2xl font-semibold">{stateImpact.totals.avgStateIndex}</p>
+                  </CardContent>
+                </Card>
+                <Card style={COMPONENT_STYLES.card}>
+                  <CardContent className="pt-4">
+                    <p className="text-xs text-muted-foreground">Фокус (high)</p>
+                    <p className="text-2xl font-semibold">{stateImpact.stateToResult.focus.high}</p>
+                  </CardContent>
+                </Card>
+                <Card style={COMPONENT_STYLES.card}>
+                  <CardContent className="pt-4">
+                    <p className="text-xs text-muted-foreground">Усталость (high)</p>
+                    <p className="text-2xl font-semibold">{stateImpact.stateToResult.fatigue.high}</p>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
             <Tabs 
-              defaultValue="daily" 
+              defaultValue="questionnaire" 
               value={activeTab}
-              onValueChange={(value) => setActiveTab(value as "daily" | "weekly" | "questionnaire")}
+              onValueChange={(value) => setActiveTab(value as "weekly" | "questionnaire")}
             >
               <TabsList className="mb-4" style={COMPONENT_STYLES.tabs.list}>
-                <TabsTrigger 
-                  value="daily"
-                  style={{ 
-                    color: activeTab === 'daily' ? COLORS.textColor : COLORS.textColorSecondary, 
-                    backgroundColor: activeTab === 'daily' ? COLORS.primary : 'transparent'
-                  }}
-                >
-                  Ежедневные тесты
-                </TabsTrigger>
                 <TabsTrigger 
                   value="weekly"
                   style={{ 
@@ -308,167 +567,6 @@ const TestTracker = () => {
                   Опросник
                 </TabsTrigger>
               </TabsList>
-              <TabsContent value="daily">
-                <div className="mb-6">
-                  <h3 className="text-lg font-medium mb-2" style={{ color: COLORS.textColor }}>Рекомендуемые тесты</h3>
-                  <Card style={COMPONENT_STYLES.card}>
-                    <Table>
-                      <TableHeader>
-                        <TableRow style={{ borderColor: COLORS.borderColor }}>
-                          <TableHead style={{ color: COLORS.textColor }}>Название теста</TableHead>
-                          <TableHead style={{ color: COLORS.textColor }}>Ссылка</TableHead>
-                          <TableHead style={{ color: COLORS.textColor }}>Действия</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {predefinedTests.filter(test => !test.isWeeklyTest).map((test, index) => (
-                          <TableRow key={`daily-${index}`} style={{ borderColor: COLORS.borderColor }}>
-                            <TableCell className="font-medium" style={{ color: COLORS.textColor }}>{test.name}</TableCell>
-                            <TableCell>
-                              <a
-                                href={test.link}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center"
-                                style={{ color: COLORS.primary }}
-                              >
-                                <ExternalLink className="h-4 w-4 mr-1" />
-                                Открыть тест
-                              </a>
-                            </TableCell>
-                            <TableCell>
-                              {!isStaff && (
-                                <Button 
-                                  variant="outline" 
-                                  size="sm"
-                                  style={{ borderColor: COLORS.borderColor, color: COLORS.primary }}
-                                  onClick={() => {
-                                    setName(test.name);
-                                    setLink(test.link);
-                                    setIsWeeklyTest(test.isWeeklyTest);
-                                    setDate(new Date().toISOString().split('T')[0]);
-                                    setIsDialogOpen(true);
-                                  }}
-                                >
-                                  <Plus className="h-4 w-4 mr-1" />
-                                  Добавить результат
-                                </Button>
-                              )}
-                              {isStaff && (
-                                <span className="text-sm" style={{ color: COLORS.textColorSecondary }}>Только для игроков</span>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </Card>
-                </div>
-
-                {getDailyTests().length === 0 ? (
-                  <div className="text-center py-8 rounded-lg" style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor, border: `1px solid ${COLORS.borderColor}` }}>
-                    <Image className="h-12 w-12 mx-auto mb-2" style={{ color: COLORS.textColorSecondary }} />
-                    <p style={{ color: COLORS.textColorSecondary }}>Нет ежедневных тестов на эту неделю</p>
-                    {!isStaff && (
-                      <Button
-                        variant="outline"
-                        className="mt-4"
-                        style={{ borderColor: COLORS.borderColor, color: COLORS.primary }}
-                        onClick={() => {
-                          resetForm();
-                          setIsWeeklyTest(false);
-                          setIsDialogOpen(true);
-                        }}
-                      >
-                        <Plus className="mr-2 h-4 w-4" />
-                        Добавить ежедневный тест
-                      </Button>
-                    )}
-                  </div>
-                ) : (
-                  <div className="rounded-md" style={{ border: `1px solid ${COLORS.borderColor}` }}>
-                    <div className="grid grid-cols-12 p-4 font-medium" style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor }}>
-                      <div className="col-span-3">Дата</div>
-                      <div className="col-span-4">Название теста</div>
-                      <div className="col-span-3">Ссылка / Скриншот</div>
-                      <div className="col-span-2">Действия</div>
-                    </div>
-                    
-                    {getDailyTests()
-                      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                      .map((test) => (
-                        <div
-                          key={test.id}
-                          className="grid grid-cols-12 p-4 items-center"
-                          style={{ borderTop: `1px solid ${COLORS.borderColor}`, color: COLORS.textColor }}
-                        >
-                          <div className="col-span-3 text-sm">
-                            {formatDate(test.date)}
-                          </div>
-                          <div className="col-span-4 font-medium">
-                            {test.name}
-                          </div>
-                          <div className="col-span-3 flex space-x-2">
-                            <a
-                              href={test.link}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center"
-                              style={{ color: COLORS.primary }}
-                            >
-                              <ExternalLink className="h-4 w-4" />
-                            </a>
-                            {test.screenshotUrl && (
-                              <Dialog>
-                                <DialogTrigger asChild>
-                                  <Button variant="ghost" size="icon" style={{ color: COLORS.primary }}>
-                                    <Image className="h-4 w-4" />
-                                  </Button>
-                                </DialogTrigger>
-                                <DialogContent style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor }}>
-                                  <DialogHeader>
-                                    <DialogTitle style={{ color: COLORS.textColor }}>Скриншот теста: {test.name}</DialogTitle>
-                                  </DialogHeader>
-                                  <img
-                                    src={test.screenshotUrl}
-                                    alt={test.name}
-                                    className="w-full h-auto rounded-md"
-                                  />
-                                </DialogContent>
-                              </Dialog>
-                            )}
-                          </div>
-                          <div className="col-span-2 flex space-x-2">
-                            {!isStaff && (
-                              <>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  style={{ color: COLORS.primary }}
-                                  onClick={() => handleEdit(test)}
-                                >
-                                  <Edit className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  style={{ color: COLORS.danger }}
-                                  onClick={() => handleDelete(test.id)}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </>
-                            )}
-                            {isStaff && (
-                              <span className="text-sm" style={{ color: COLORS.textColorSecondary }}>Просмотр</span>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                )}
-              </TabsContent>
-              
               <TabsContent value="weekly">
                 <div className="mb-6">
                   <h3 className="text-lg font-medium mb-2" style={{ color: COLORS.textColor }}>Рекомендуемые еженедельные тесты</h3>
@@ -635,7 +733,7 @@ const TestTracker = () => {
                   <CardHeader>
                     <CardTitle style={COMPONENT_STYLES.text.title}>Ежедневный опросник</CardTitle>
                     <CardDescription style={COMPONENT_STYLES.text.description}>
-                      Настроение, энергия, сон и экранное время (всё переводим в цифру)
+                      Настроение, энергия, диапазон сна и детализация экранного времени
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
@@ -669,20 +767,74 @@ const TestTracker = () => {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label style={{ color: COLORS.textColor }}>Сон (часы)</Label>
+                        <Label style={{ color: COLORS.textColor }}>Сон: с</Label>
                         <Input
-                          value={qSleep}
-                          onChange={(e) => setQSleep(e.target.value)}
-                          inputMode="decimal"
+                          type="time"
+                          value={qSleepStart}
+                          onChange={(e) => setQSleepStart(e.target.value)}
                           style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label style={{ color: COLORS.textColor }}>Экранное время (часы)</Label>
+                        <Label style={{ color: COLORS.textColor }}>Сон: до</Label>
+                        <Input
+                          type="time"
+                          value={qSleepEnd}
+                          onChange={(e) => setQSleepEnd(e.target.value)}
+                          style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label style={{ color: COLORS.textColor }}>Сон (часы, авто/ручной)</Label>
+                        <Input
+                          value={qSleep}
+                          onChange={(e) => setQSleep(e.target.value)}
+                          inputMode="decimal"
+                          placeholder="Например: 7.5"
+                          style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label style={{ color: COLORS.textColor }}>Экранное время (часы, общее)</Label>
                         <Input
                           value={qScreen}
                           onChange={(e) => setQScreen(e.target.value)}
                           inputMode="decimal"
+                          placeholder="Можно оставить пустым, если заполнена детализация"
+                          style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 pt-2">
+                      <Label style={{ color: COLORS.textColor }}>Экранное время: на что ушло время (часы)</Label>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Input
+                          value={qScreenEntertainment}
+                          onChange={(e) => setQScreenEntertainment(e.target.value)}
+                          inputMode="decimal"
+                          placeholder="Развлечения (игры, видео)"
+                          style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
+                        />
+                        <Input
+                          value={qScreenCommunication}
+                          onChange={(e) => setQScreenCommunication(e.target.value)}
+                          inputMode="decimal"
+                          placeholder="Общение (мессенджеры, соцсети)"
+                          style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
+                        />
+                        <Input
+                          value={qScreenBrowser}
+                          onChange={(e) => setQScreenBrowser(e.target.value)}
+                          inputMode="decimal"
+                          placeholder="Браузер"
+                          style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
+                        />
+                        <Input
+                          value={qScreenStudy}
+                          onChange={(e) => setQScreenStudy(e.target.value)}
+                          inputMode="decimal"
+                          placeholder="Учёба / работа"
                           style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
                         />
                       </div>
@@ -766,6 +918,122 @@ const TestTracker = () => {
                   {isWeeklyTest ? "Еженедельный" : "Ежедневный"}
                 </Label>
               </div>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="testType" className="text-right" style={{ color: COLORS.textColor }}>
+                Тип теста
+              </Label>
+              <Input
+                id="testType"
+                value={testType}
+                onChange={(e) => setTestType(e.target.value)}
+                className="col-span-3"
+                style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                placeholder="Raw score"
+                value={rawScore}
+                onChange={(e) => setRawScore(e.target.value)}
+                inputMode="decimal"
+                style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
+              />
+              <Input
+                placeholder="Score normalized (0-100)"
+                value={scoreNormalized}
+                onChange={(e) => setScoreNormalized(e.target.value)}
+                inputMode="decimal"
+                style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <Input
+                placeholder="Unit (%)"
+                value={unit}
+                onChange={(e) => setUnit(e.target.value)}
+                style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
+              />
+              <Input
+                placeholder="Duration sec"
+                value={durationSec}
+                onChange={(e) => setDurationSec(e.target.value)}
+                inputMode="numeric"
+                style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
+              />
+              <Input
+                placeholder="Attempts"
+                value={attempts}
+                onChange={(e) => setAttempts(e.target.value)}
+                inputMode="numeric"
+                style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <Input
+                placeholder="Fatigue (0-10)"
+                value={fatigue}
+                onChange={(e) => setFatigue(e.target.value)}
+                inputMode="decimal"
+                style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
+              />
+              <Input
+                placeholder="Focus (0-10)"
+                value={focus}
+                onChange={(e) => setFocus(e.target.value)}
+                inputMode="decimal"
+                style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
+              />
+              <Input
+                placeholder="Stress (0-10)"
+                value={stress}
+                onChange={(e) => setStress(e.target.value)}
+                inputMode="decimal"
+                style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <Input
+                placeholder="Sleep hours"
+                value={sleepHours}
+                onChange={(e) => setSleepHours(e.target.value)}
+                inputMode="decimal"
+                style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
+              />
+              <Input
+                placeholder="Mood (0-10)"
+                value={snapshotMood}
+                onChange={(e) => setSnapshotMood(e.target.value)}
+                inputMode="decimal"
+                style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
+              />
+              <Input
+                placeholder="Energy (0-10)"
+                value={snapshotEnergy}
+                onChange={(e) => setSnapshotEnergy(e.target.value)}
+                inputMode="decimal"
+                style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <Input
+                placeholder="Match type"
+                value={matchType}
+                onChange={(e) => setMatchType(e.target.value)}
+                style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
+              />
+              <Input
+                placeholder="Map"
+                value={contextMap}
+                onChange={(e) => setContextMap(e.target.value)}
+                style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
+              />
+              <Input
+                placeholder="Role"
+                value={contextRole}
+                onChange={(e) => setContextRole(e.target.value)}
+                style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
+              />
             </div>
           </div>
           <DialogFooter>

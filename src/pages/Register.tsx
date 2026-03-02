@@ -21,6 +21,7 @@ interface RegisterFormState {
   email: string;
   password: string;
   role: UserRole;
+  faceitUrl: string;
   isLoading: boolean;
 }
 
@@ -34,6 +35,7 @@ const Register: React.FC = () => {
     email: "",
     password: "",
     role: "player",
+    faceitUrl: "",
     isLoading: false
   });
   
@@ -66,11 +68,16 @@ const Register: React.FC = () => {
   const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
     
-    const { name, email, password, role } = formState;
+    const { name, email, password, role, faceitUrl } = formState;
     
     // Валидация полей перед отправкой
     if (!name.trim() || !email.trim() || !password) {
       toast.error("Пожалуйста, заполните все поля");
+      return;
+    }
+
+    if (role === "player" && !faceitUrl.trim()) {
+      toast.error("Для игрока ссылка Faceit обязательна");
       return;
     }
     
@@ -78,7 +85,7 @@ const Register: React.FC = () => {
     setFormState(prevState => ({ ...prevState, isLoading: true }));
     
     try {
-      const result = await register({ name, email, password, role });
+      const result = await register({ name, email, password, role, faceitUrl: faceitUrl.trim() || undefined });
       
       if (result.success) {
         toast.success("Регистрация прошла успешно");
@@ -95,7 +102,7 @@ const Register: React.FC = () => {
     }
   };
 
-  const { name, email, password, role, isLoading } = formState;
+  const { name, email, password, role, faceitUrl, isLoading } = formState;
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -166,6 +173,20 @@ const Register: React.FC = () => {
                 </div>
               </RadioGroup>
             </div>
+
+            {role === "player" && (
+              <div className="space-y-2">
+                <Label htmlFor="faceitUrl">Ссылка Faceit</Label>
+                <Input
+                  id="faceitUrl"
+                  value={faceitUrl}
+                  onChange={(e) => updateFormField('faceitUrl', e.target.value)}
+                  required
+                  placeholder="https://www.faceit.com/en/players/your_nickname"
+                  disabled={isLoading}
+                />
+              </div>
+            )}
           </CardContent>
           
           <CardFooter className="flex flex-col gap-4">

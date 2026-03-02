@@ -1,45 +1,9 @@
 import express from 'express';
 import TestEntry from '../models/TestEntry';
 import User from '../models/User';
-import jwt from 'jsonwebtoken';
+import { protect, isStaff } from '../middleware/auth';
 
 const router = express.Router();
-
-// Middleware для проверки аутентификации
-const protect = async (req: any, res: any, next: any) => {
-  let token;
-
-  if (req.headers.authorization?.startsWith('Bearer')) {
-    try {
-      token = req.headers.authorization.split(' ')[1];
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
-      req.user = await User.findById((decoded as any).id).select('-password');
-      if (!req.user) {
-        console.log('User not found for token');
-        return res.status(401).json({ message: 'User not found' });
-      }
-      console.log('Authenticated user:', req.user._id);
-      next();
-    } catch (error) {
-      console.error('Token verification failed:', error);
-      return res.status(401).json({ message: 'Not authorized, token failed' });
-    }
-  } else {
-    console.log('No token provided');
-    return res.status(401).json({ message: 'Not authorized, no token' });
-  }
-};
-
-// Middleware для проверки прав сотрудника
-const isStaff = (req: any, res: any, next: any) => {
-  if (req.user && req.user.role === 'staff') {
-    console.log('Staff access granted for user:', req.user._id);
-    next();
-  } else {
-    console.log('Staff access denied for user:', req.user?._id);
-    return res.status(403).json({ message: 'Not authorized as staff' });
-  }
-};
 
 // Создать новую запись о тесте
 router.post('/', protect, async (req: any, res) => {
@@ -50,16 +14,41 @@ router.post('/', protect, async (req: any, res) => {
       name,
       link,
       screenshotUrl,
-      isWeeklyTest
+      isWeeklyTest,
+      testType,
+      scoreNormalized,
+      rawScore,
+      unit,
+      durationSec,
+      attempts,
+      stateSnapshot,
+      context,
+      measuredAt
     } = req.body;
+
+    const normalizedScore = typeof scoreNormalized === 'number'
+      ? scoreNormalized
+      : typeof rawScore === 'number'
+        ? Math.max(0, Math.min(100, rawScore))
+        : undefined;
 
     const testEntry = await TestEntry.create({
       userId: req.user._id,
       date: date || new Date(),
-      name,
+      name: name || testType || 'Тест',
       link,
       screenshotUrl,
-      isWeeklyTest: isWeeklyTest || false
+      isWeeklyTest: isWeeklyTest || false,
+      testType: testType || 'generic',
+      scoreNormalized: normalizedScore,
+      rawScore,
+      unit,
+      durationSec,
+      attempts: attempts && attempts > 0 ? attempts : 1,
+      stateSnapshot,
+      context,
+      recordedBy: req.user._id,
+      measuredAt: measuredAt || date || new Date()
     });
 
     // Обновляем статус пользователя, что он завершил тест

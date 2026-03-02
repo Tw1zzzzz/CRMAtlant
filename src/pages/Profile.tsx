@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { useNavigate } from "react-router-dom";
 import { Camera, Upload } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
+import StaffPrivilegeUpgrade from "@/components/StaffPrivilegeUpgrade";
 
 
 
@@ -26,7 +27,7 @@ interface ProfileState {
  * Отображает данные профиля и предоставляет возможность удаления аккаунта
  */
 const Profile: React.FC = () => {
-  const { user, deleteAccount, updateAvatar } = useAuth();
+  const { user, deleteAccount, updateAvatar, refreshUser } = useAuth();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -148,8 +149,8 @@ const Profile: React.FC = () => {
    * Компонент для неавторизованных пользователей
    */
   const UnauthenticatedView = () => (
-    <div className="flex items-center justify-center h-full">
-      <Card className="w-full max-w-md">
+    <div className="flex items-center justify-center h-full performance-page">
+      <Card className="w-full max-w-md performance-hero">
         <CardHeader>
           <CardTitle>Требуется авторизация</CardTitle>
           <CardDescription>
@@ -173,12 +174,16 @@ const Profile: React.FC = () => {
   const { isDeleting, isDialogOpen, isUploadingAvatar, lastAvatarUpdate } = state;
 
   return (
-    <div className="container mx-auto py-6">
-      <h1 className="text-3xl font-bold mb-6">Профиль пользователя</h1>
+    <div className="container mx-auto py-6 performance-page">
+      <span className="performance-eyebrow">Identity Center</span>
+      <h1 className="text-3xl font-bold mb-2 performance-title">Профиль пользователя</h1>
+      <p className="text-muted-foreground performance-subtitle mb-6">
+        Управление персональными данными, правами и настройками аккаунта.
+      </p>
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Карточка с информацией о профиле */}
-        <Card>
+        <Card className="performance-hero">
           <CardHeader>
             <CardTitle>Информация о профиле</CardTitle>
             <CardDescription>
@@ -293,6 +298,22 @@ const Profile: React.FC = () => {
             {/* Дополнительная статистика может быть добавлена здесь */}
           </CardContent>
         </Card>
+
+        {user.role === "staff" && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Права и доступ</CardTitle>
+              <CardDescription>
+                Управление привилегиями сотрудника
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <StaffPrivilegeUpgrade
+                onUpgradeSuccess={refreshUser}
+              />
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );

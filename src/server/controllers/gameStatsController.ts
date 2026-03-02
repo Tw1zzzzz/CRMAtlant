@@ -38,7 +38,21 @@ export const createGameStats = async (req: AuthRequest, res: Response) => {
         roundsLost: 0,
         pistolRounds: 0,
         pistolRoundsWon: 0
-      }
+      },
+      // Расширенные аналитические метрики
+      adr = null,
+      kpr = null,
+      deathPerRound = null,
+      avgKr = null,
+      avgKd = null,
+      kast = null,
+      firstKills = null,
+      firstDeaths = null,
+      openingDuelDiff = null,
+      udr = null,
+      avgMultikills = null,
+      clutchesWon = null,
+      avgFlashTime = null
     } = req.body;
 
     if (!req.user?.id) {
@@ -63,6 +77,22 @@ export const createGameStats = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    const advancedMetrics = {
+      adr,
+      kpr,
+      deathPerRound,
+      avgKr,
+      avgKd,
+      kast,
+      firstKills,
+      firstDeaths,
+      openingDuelDiff,
+      udr,
+      avgMultikills,
+      clutchesWon,
+      avgFlashTime
+    };
+
     // Проверка существования записи на эту дату для целевого пользователя
     const existingStats = await GameStats.findOne({
       userId: targetUserId,
@@ -70,8 +100,20 @@ export const createGameStats = async (req: AuthRequest, res: Response) => {
     });
 
     if (existingStats) {
-      return res.status(400).json({ 
-        message: 'Запись игровых показателей на эту дату уже существует для данного пользователя' 
+      Object.assign(existingStats, {
+        kills,
+        deaths,
+        assists,
+        ctSide,
+        tSide,
+        ...advancedMetrics
+      });
+      await existingStats.save();
+      await existingStats.populate('userId', 'name email role');
+
+      return res.status(200).json({
+        message: 'Игровые показатели за дату обновлены',
+        data: existingStats
       });
     }
 
@@ -121,7 +163,8 @@ export const createGameStats = async (req: AuthRequest, res: Response) => {
       deaths,
       assists,
       ctSide,
-      tSide
+      tSide,
+      ...advancedMetrics
     });
 
     await gameStats.save();
@@ -148,15 +191,46 @@ export const getGameStats = async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ message: 'Пользователь не авторизован' });
     }
 
-    const { startDate, endDate, limit = 30, page = 1 } = req.query;
+    const { startDate, endDate, limit = 30, page = 1, mode = 'individual', playerId } = req.query;
+    const effectiveMode = mode === 'team' ? 'team' : 'individual';
+    const query: any = {};
 
-    let query: any = { userId: req.user.id };
+    if (req.user.role === 'staff') {
+      if (effectiveMode === 'team') {
+        const players = await User.find({ role: 'player' }).select('_id').lean();
+        const playerIds = players.map((player: any) => player._id);
+
+        if (!playerIds.length) {
+          return res.json({
+            data: [],
+            pagination: {
+              total: 0,
+              page: Number(page),
+              limit: Number(limit),
+              totalPages: 0
+            },
+            meta: {
+              mode: effectiveMode,
+              playerId: null
+            }
+          });
+        }
+
+        query.userId = { $in: playerIds };
+      } else if (playerId) {
+        query.userId = playerId;
+      } else {
+        query.userId = req.user.id;
+      }
+    } else {
+      query.userId = req.user.id;
+    }
 
     // Фильтр по датам
     if (startDate || endDate) {
       query.date = {};
-      if (startDate) query.date.$gte = new Date(startDate as string);
-      if (endDate) query.date.$lte = new Date(endDate as string);
+      if (startDate) query.date.$gte = new Date(`${startDate as string}T00:00:00.000Z`);
+      if (endDate) query.date.$lte = new Date(`${endDate as string}T23:59:59.999Z`);
     }
 
     const skip = (Number(page) - 1) * Number(limit);
@@ -165,7 +239,7 @@ export const getGameStats = async (req: AuthRequest, res: Response) => {
       .sort({ date: -1 })
       .limit(Number(limit))
       .skip(skip)
-      .populate('userId', 'username email');
+      .populate('userId', 'name email role');
 
     const total = await GameStats.countDocuments(query);
 
@@ -176,6 +250,10 @@ export const getGameStats = async (req: AuthRequest, res: Response) => {
         page: Number(page),
         limit: Number(limit),
         totalPages: Math.ceil(total / Number(limit))
+      },
+      meta: {
+        mode: req.user.role === 'staff' ? effectiveMode : 'individual',
+        playerId: req.user.role === 'staff' ? (playerId || null) : req.user.id
       }
     });
   } catch (error) {
@@ -196,7 +274,10 @@ export const updateGameStats = async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ message: 'Пользователь не авторизован' });
     }
 
-    const gameStats = await GameStats.findOne({ _id: id, userId: req.user.id });
+    const gameStats =
+      req.user.role === 'staff'
+        ? await GameStats.findById(id)
+        : await GameStats.findOne({ _id: id, userId: req.user.id });
 
     if (!gameStats) {
       return res.status(404).json({ message: 'Запись игровых показателей не найдена' });

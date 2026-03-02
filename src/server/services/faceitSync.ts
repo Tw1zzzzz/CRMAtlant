@@ -49,7 +49,8 @@ export const refreshExpiredTokens = async (): Promise<number> => {
     // Находим аккаунты, токены которых истекают в течение 1 часа
     const oneHourFromNow = new Date(Date.now() + 60 * 60 * 1000);
     const accounts = await FaceitAccount.find({
-      tokenExpiresAt: { $lt: oneHourFromNow }
+      tokenExpiresAt: { $lt: oneHourFromNow },
+      refreshToken: { $exists: true, $ne: '' }
     });
     
     let updatedCount = 0;

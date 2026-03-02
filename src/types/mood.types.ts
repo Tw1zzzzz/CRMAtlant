@@ -31,9 +31,35 @@ export interface CreateMoodEntryDto {
 /** Запись о тесте */
 export interface TestEntry {
   readonly id: string;
-  date: string;
-  type: string;
-  score: number;
+  date: string | Date;
+  name?: string;
+  link?: string;
+  screenshotUrl?: string;
+  isWeeklyTest?: boolean;
+  type?: string;
+  score?: number;
+  testType?: string;
+  scoreNormalized?: number;
+  rawScore?: number;
+  unit?: string;
+  durationSec?: number;
+  attempts?: number;
+  stateSnapshot?: {
+    fatigue?: number;
+    focus?: number;
+    stress?: number;
+    sleepHours?: number;
+    mood?: number;
+    energy?: number;
+  };
+  context?: {
+    matchType?: string;
+    map?: string;
+    role?: string;
+    source?: string;
+    notes?: string;
+  };
+  measuredAt?: string | Date;
   notes?: string;
   userId?: string;
   createdAt?: string;
@@ -42,9 +68,14 @@ export interface TestEntry {
 
 /** Данные для создания записи о тесте */
 export interface CreateTestEntryDto {
-  date: string;
-  type: string;
-  score: number;
+  date: string | Date;
+  type?: string;
+  score?: number;
+  name?: string;
+  link?: string;
+  testType?: string;
+  scoreNormalized?: number;
+  rawScore?: number;
   notes?: string;
 }
 

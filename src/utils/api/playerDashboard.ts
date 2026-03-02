@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const baseUrl =
-  process.env.NODE_ENV === "production" ? window.location.origin : "http://localhost:5000";
+  process.env.NODE_ENV === "production" ? window.location.origin : "";
 
 export type PlayerDashboardData = {
   scores: {

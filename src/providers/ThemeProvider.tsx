@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { COLORS } from '@/styles/theme';
 import { ThemeProvider as MUIThemeProvider, CssBaseline } from '@mui/material';
 import darkTheme from '../theme';
@@ -11,12 +11,7 @@ type ThemeContextType = {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children, ...restProps }) => {
-  // Отфильтруем все data-* атрибуты, чтобы они не передавались в MUIThemeProvider
-  const filteredProps = Object.fromEntries(
-    Object.entries(restProps).filter(([key]) => !key.startsWith('data-'))
-  );
-
+export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // По умолчанию используем темную тему из Dashboard
   const [isDarkMode, setIsDarkMode] = useState(true);
 
@@ -26,6 +21,16 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children, ...
     // При желании здесь можно добавить логику для переключения на светлую тему
   };
 
+  useEffect(() => {
+    document.documentElement.classList.add("dark");
+    document.body.classList.add("dark");
+
+    return () => {
+      document.documentElement.classList.remove("dark");
+      document.body.classList.remove("dark");
+    };
+  }, []);
+
   return (
     <ThemeContext.Provider 
       value={{ 
@@ -34,7 +39,7 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children, ...
         colors: COLORS
       }}
     >
-      <MUIThemeProvider theme={darkTheme} {...filteredProps}>
+      <MUIThemeProvider theme={darkTheme}>
         <CssBaseline />
         <div style={{ 
           backgroundColor: COLORS.backgroundColor,

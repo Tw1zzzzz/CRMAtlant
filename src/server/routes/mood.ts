@@ -1,46 +1,9 @@
 import express from 'express';
 import MoodEntry from '../models/MoodEntry';
-import User from '../models/User';
 import ActivityHistory from '../models/ActivityHistory';
-import jwt from 'jsonwebtoken';
+import { protect, isStaff } from '../middleware/auth';
 
 const router = express.Router();
-
-// Middleware для проверки аутентификации
-const protect = async (req: any, res: any, next: any) => {
-  let token;
-
-  if (req.headers.authorization?.startsWith('Bearer')) {
-    try {
-      token = req.headers.authorization.split(' ')[1];
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
-      req.user = await User.findById((decoded as any).id).select('-password');
-      if (!req.user) {
-        console.log('User not found for token');
-        return res.status(401).json({ message: 'User not found' });
-      }
-      console.log('Authenticated user:', req.user._id);
-      next();
-    } catch (error) {
-      console.error('Token verification failed:', error);
-      return res.status(401).json({ message: 'Not authorized, token failed' });
-    }
-  } else {
-    console.log('No token provided');
-    return res.status(401).json({ message: 'Not authorized, no token' });
-  }
-};
-
-// Middleware для проверки прав сотрудника
-const isStaff = (req: any, res: any, next: any) => {
-  if (req.user && req.user.role === 'staff') {
-    console.log('Staff access granted for user:', req.user._id);
-    next();
-  } else {
-    console.log('Staff access denied for user:', req.user?._id);
-    return res.status(403).json({ message: 'Not authorized as staff' });
-  }
-};
 
 // Создать новую запись о настроении
 router.post('/', protect, async (req: any, res) => {

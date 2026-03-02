@@ -115,6 +115,10 @@ export class ApiClient {
     const { status, data } = error.response;
     let message = data?.message || data?.error || 'Неизвестная ошибка';
 
+    if (status === 503 && data?.code === 'DB_UNAVAILABLE') {
+      message = 'Сервер не подключен к базе данных MongoDB. Проверьте запуск MongoDB и MONGODB_URI.';
+    }
+
     // Обработка типовых статус-кодов с русскими сообщениями
     const statusMessages: Record<number, string> = {
       400: 'Некорректные данные',
@@ -252,7 +256,7 @@ export class ApiClient {
  */
 const baseURL = process.env.NODE_ENV === 'production' 
   ? '/api' 
-  : 'http://localhost:5000/api';
+  : '/api';
 
 export const apiClient = new ApiClient({
   baseURL,

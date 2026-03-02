@@ -1,15 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Target, Save, Users, Trophy, Award, Crosshair, Shield } from 'lucide-react';
-import { toast } from 'sonner';
-import api from '@/lib/api';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '../../hooks/use-toast';
-import { useAuth } from '@/hooks/useAuth';
 
 interface SideStatsData {
   totalMatches: number;
@@ -28,10 +25,38 @@ interface GameStatsFormData {
   kills: number;
   deaths: number;
   assists: number;
+  adr?: number | null;
+  kpr?: number | null;
+  deathPerRound?: number | null;
+  avgKr?: number | null;
+  avgKd?: number | null;
+  kast?: number | null;
+  firstKills?: number | null;
+  firstDeaths?: number | null;
+  openingDuelDiff?: number | null;
+  udr?: number | null;
+  avgMultikills?: number | null;
+  clutchesWon?: number | null;
+  avgFlashTime?: number | null;
   ctSide: SideStatsData;
   tSide: SideStatsData;
   userId?: string;
 }
+
+type OptionalMetricField =
+  | 'adr'
+  | 'kpr'
+  | 'deathPerRound'
+  | 'avgKr'
+  | 'avgKd'
+  | 'kast'
+  | 'firstKills'
+  | 'firstDeaths'
+  | 'openingDuelDiff'
+  | 'udr'
+  | 'avgMultikills'
+  | 'clutchesWon'
+  | 'avgFlashTime';
 
 interface CalculatedSideStats extends SideStatsData {
   winRate: number;
@@ -71,6 +96,12 @@ interface Player {
 
 interface GameStatsFormProps {
   onSubmit: (data: GameStatsFormData) => Promise<void>;
+  analysisMode: 'team' | 'individual';
+  onAnalysisModeChange: (mode: 'team' | 'individual') => void;
+  players: Player[];
+  selectedPlayerId: string;
+  onSelectedPlayerChange: (playerId: string) => void;
+  loadingPlayers?: boolean;
   isLoading?: boolean;
   initialData?: Partial<GameStatsFormData>;
 }
@@ -89,23 +120,35 @@ const defaultSideStats: SideStatsData = {
 
 const GameStatsForm: React.FC<GameStatsFormProps> = ({
   onSubmit,
+  analysisMode,
+  onAnalysisModeChange,
+  players,
+  selectedPlayerId,
+  onSelectedPlayerChange,
+  loadingPlayers = false,
   isLoading = false,
   initialData = {}
 }) => {
   const { toast } = useToast();
-  const { user } = useAuth();
-  
-  // Состояния для выбора режима и игроков
-  const [analysisMode, setAnalysisMode] = useState<'team' | 'individual'>('individual');
-  const [players, setPlayers] = useState<Player[]>([]);
-  const [selectedPlayerId, setSelectedPlayerId] = useState('');
-  const [loadingPlayers, setLoadingPlayers] = useState(false);
   
   const [formData, setFormData] = useState<GameStatsFormData>({
     date: initialData.date || new Date().toISOString().split('T')[0],
     kills: initialData.kills || 0,
     deaths: initialData.deaths || 0,
     assists: initialData.assists || 0,
+    adr: initialData.adr ?? null,
+    kpr: initialData.kpr ?? null,
+    deathPerRound: initialData.deathPerRound ?? null,
+    avgKr: initialData.avgKr ?? null,
+    avgKd: initialData.avgKd ?? null,
+    kast: initialData.kast ?? null,
+    firstKills: initialData.firstKills ?? null,
+    firstDeaths: initialData.firstDeaths ?? null,
+    openingDuelDiff: initialData.openingDuelDiff ?? null,
+    udr: initialData.udr ?? null,
+    avgMultikills: initialData.avgMultikills ?? null,
+    clutchesWon: initialData.clutchesWon ?? null,
+    avgFlashTime: initialData.avgFlashTime ?? null,
     ctSide: initialData.ctSide || { ...defaultSideStats },
     tSide: initialData.tSide || { ...defaultSideStats },
     userId: initialData.userId || ''
@@ -113,43 +156,19 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
 
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
-  // Загрузка списка игроков
-  const fetchPlayers = async () => {
-    if (user?.role !== 'staff') return;
-    
-    setLoadingPlayers(true);
-    try {
-      const response = await api.get('/users/players');
-      setPlayers(response.data || []);
-    } catch (error) {
-      console.error('Ошибка при загрузке игроков:', error);
-      toast({
-        title: 'Ошибка',
-        description: 'Не удалось загрузить список игроков',
-        variant: 'destructive'
-      });
-    } finally {
-      setLoadingPlayers(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchPlayers();
-  }, []);
-
   // Обработчик изменения режима анализа
   const handleAnalysisModeChange = (mode: 'team' | 'individual') => {
-    setAnalysisMode(mode);
+    onAnalysisModeChange(mode);
     
     if (mode === 'team') {
-      setSelectedPlayerId('');
+      onSelectedPlayerChange('');
       setFormData(prev => ({ ...prev, userId: '' }));
     }
   };
 
   // Обработчик выбора игрока
   const handlePlayerSelect = (playerId: string) => {
-    setSelectedPlayerId(playerId);
+    onSelectedPlayerChange(playerId);
     setFormData(prev => ({ ...prev, userId: playerId }));
   };
 
@@ -239,7 +258,7 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
     const errors: Record<string, string> = {};
 
     // Проверяем выбор игрока для staff в индивидуальном режиме
-    if (user?.role === 'staff' && analysisMode === 'individual' && !selectedPlayerId) {
+    if (analysisMode === 'individual' && !selectedPlayerId) {
       errors.playerSelection = 'Необходимо выбрать игрока для индивидуальной статистики';
     }
 
@@ -301,6 +320,20 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
     }
   };
 
+  const handleOptionalMetricChange = (field: OptionalMetricField, rawValue: string) => {
+    const normalized = rawValue.replace(',', '.').trim();
+    if (!normalized) {
+      setFormData(prev => ({ ...prev, [field]: null }));
+      return;
+    }
+
+    const parsed = Number(normalized);
+    setFormData(prev => ({
+      ...prev,
+      [field]: Number.isFinite(parsed) ? parsed : null
+    }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -331,13 +364,26 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
       
       // Сбрасываем форму после успешного сохранения
       if (analysisMode === 'individual') {
-        setSelectedPlayerId('');
+        onSelectedPlayerChange('');
         setFormData(prev => ({ 
           ...prev, 
           date: new Date().toISOString().split('T')[0],
           kills: 0,
           deaths: 0,
           assists: 0,
+          adr: null,
+          kpr: null,
+          deathPerRound: null,
+          avgKr: null,
+          avgKd: null,
+          kast: null,
+          firstKills: null,
+          firstDeaths: null,
+          openingDuelDiff: null,
+          udr: null,
+          avgMultikills: null,
+          clutchesWon: null,
+          avgFlashTime: null,
           ctSide: { ...defaultSideStats },
           tSide: { ...defaultSideStats },
           userId: ''
@@ -358,80 +404,75 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* Выбор режима и игрока */}
-      {user?.role === 'staff' && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              Режим анализа
-            </CardTitle>
-            <CardDescription>
-              Выберите режим для ввода игровых показателей
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Выбор режима */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5" />
+            Режим анализа
+          </CardTitle>
+          <CardDescription>
+            Выберите режим для ввода игровых показателей
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label className="text-base font-medium">Режим анализа</Label>
+            <Select value={analysisMode} onValueChange={handleAnalysisModeChange}>
+              <SelectTrigger>
+                <SelectValue placeholder="Выберите режим анализа" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="individual">Индивидуальная статистика</SelectItem>
+                <SelectItem value="team">Командная статистика</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {analysisMode === 'individual' && (
             <div className="space-y-2">
-              <Label className="text-base font-medium">Режим анализа</Label>
-              <Select value={analysisMode} onValueChange={handleAnalysisModeChange}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Выберите режим анализа" />
+              <Label className="text-base font-medium">Выберите игрока</Label>
+              <Select 
+                value={selectedPlayerId} 
+                onValueChange={handlePlayerSelect}
+                disabled={loadingPlayers}
+              >
+                <SelectTrigger className={validationErrors.playerSelection ? 'border-red-500' : ''}>
+                  <SelectValue placeholder={loadingPlayers ? "Загрузка игроков..." : "Выберите игрока"} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="individual">Индивидуальная статистика</SelectItem>
-                  <SelectItem value="team">Командная статистика</SelectItem>
+                  {players.map((player) => (
+                    <SelectItem key={player._id} value={player._id}>
+                      {player.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
+              {validationErrors.playerSelection && (
+                <p className="text-red-500 text-sm">{validationErrors.playerSelection}</p>
+              )}
+              {players.length === 0 && !loadingPlayers && (
+                <p className="text-sm text-muted-foreground">
+                  Игроки не найдены
+                </p>
+              )}
             </div>
+          )}
 
-            {/* Выбор игрока для индивидуального режима */}
-            {analysisMode === 'individual' && (
-              <div className="space-y-2">
-                <Label className="text-base font-medium">Выберите игрока</Label>
-                <Select 
-                  value={selectedPlayerId} 
-                  onValueChange={handlePlayerSelect}
-                  disabled={loadingPlayers}
-                >
-                  <SelectTrigger className={validationErrors.playerSelection ? 'border-red-500' : ''}>
-                    <SelectValue placeholder={loadingPlayers ? "Загрузка игроков..." : "Выберите игрока"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {players.map((player) => (
-                                              <SelectItem key={player._id} value={player._id}>
-                        {player.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {validationErrors.playerSelection && (
-                  <p className="text-red-500 text-sm">{validationErrors.playerSelection}</p>
-                )}
-                {players.length === 0 && !loadingPlayers && (
-                  <p className="text-sm text-muted-foreground">
-                    Игроки не найдены
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* Информация о режиме */}
-            <div className="p-3 bg-muted rounded-lg">
-              <div className="text-sm">
-                {analysisMode === 'individual' ? (
-                  <>
-                    <strong>Индивидуальная статистика:</strong> Данные будут сохранены для выбранного игрока
-                  </>
-                ) : (
-                  <>
-                    <strong>Командная статистика:</strong> Данные будут сохранены как общекомандные показатели
-                  </>
-                )}
-              </div>
+          <div className="p-3 bg-muted rounded-lg">
+            <div className="text-sm">
+              {analysisMode === 'individual' ? (
+                <>
+                  <strong>Индивидуальная статистика:</strong> Данные будут сохранены для выбранного игрока
+                </>
+              ) : (
+                <>
+                  <strong>Командная статистика:</strong> Данные будут сохранены как общекомандные показатели
+                </>
+              )}
             </div>
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Основные данные */}
       <Card>
@@ -511,6 +552,75 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
                 <span>K/D Ratio:</span>
                 <span className="font-mono">{calculatedStats.overall.kdRatio}</span>
               </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* CT Side Статистика */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Target className="h-5 w-5" />
+            Аналитические метрики игрока
+          </CardTitle>
+          <CardDescription>
+            Заполняются аналитиком вручную для выбранного игрока и даты. Пустые поля могут быть посчитаны автоматически.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <Label htmlFor="adr">ADR (урон/раунд)</Label>
+              <Input id="adr" value={formData.adr ?? ''} onChange={(e) => handleOptionalMetricChange('adr', e.target.value)} inputMode="decimal" />
+            </div>
+            <div>
+              <Label htmlFor="kpr">KPR (киллы/раунд)</Label>
+              <Input id="kpr" value={formData.kpr ?? ''} onChange={(e) => handleOptionalMetricChange('kpr', e.target.value)} inputMode="decimal" />
+            </div>
+            <div>
+              <Label htmlFor="dpr">Death/round</Label>
+              <Input id="dpr" value={formData.deathPerRound ?? ''} onChange={(e) => handleOptionalMetricChange('deathPerRound', e.target.value)} inputMode="decimal" />
+            </div>
+            <div>
+              <Label htmlFor="avg-kr">AVG KR</Label>
+              <Input id="avg-kr" value={formData.avgKr ?? ''} onChange={(e) => handleOptionalMetricChange('avgKr', e.target.value)} inputMode="decimal" />
+            </div>
+            <div>
+              <Label htmlFor="avg-kd">AVG KD</Label>
+              <Input id="avg-kd" value={formData.avgKd ?? ''} onChange={(e) => handleOptionalMetricChange('avgKd', e.target.value)} inputMode="decimal" />
+            </div>
+            <div>
+              <Label htmlFor="kast">KAST (%)</Label>
+              <Input id="kast" value={formData.kast ?? ''} onChange={(e) => handleOptionalMetricChange('kast', e.target.value)} inputMode="decimal" />
+            </div>
+            <div>
+              <Label htmlFor="fk">First kills</Label>
+              <Input id="fk" value={formData.firstKills ?? ''} onChange={(e) => handleOptionalMetricChange('firstKills', e.target.value)} inputMode="decimal" />
+            </div>
+            <div>
+              <Label htmlFor="fd">First deaths</Label>
+              <Input id="fd" value={formData.firstDeaths ?? ''} onChange={(e) => handleOptionalMetricChange('firstDeaths', e.target.value)} inputMode="decimal" />
+            </div>
+            <div>
+              <Label htmlFor="odd">Разница опен дуэлей</Label>
+              <Input id="odd" value={formData.openingDuelDiff ?? ''} onChange={(e) => handleOptionalMetricChange('openingDuelDiff', e.target.value)} inputMode="decimal" />
+            </div>
+            <div>
+              <Label htmlFor="udr">UDR</Label>
+              <Input id="udr" value={formData.udr ?? ''} onChange={(e) => handleOptionalMetricChange('udr', e.target.value)} inputMode="decimal" />
+            </div>
+            <div>
+              <Label htmlFor="multi">Ср. мультикилы</Label>
+              <Input id="multi" value={formData.avgMultikills ?? ''} onChange={(e) => handleOptionalMetricChange('avgMultikills', e.target.value)} inputMode="decimal" />
+            </div>
+            <div>
+              <Label htmlFor="clutch">Выигранные клатчи</Label>
+              <Input id="clutch" value={formData.clutchesWon ?? ''} onChange={(e) => handleOptionalMetricChange('clutchesWon', e.target.value)} inputMode="decimal" />
+            </div>
+            <div>
+              <Label htmlFor="flash">Ср. время ослепления</Label>
+              <Input id="flash" value={formData.avgFlashTime ?? ''} onChange={(e) => handleOptionalMetricChange('avgFlashTime', e.target.value)} inputMode="decimal" />
             </div>
           </div>
         </CardContent>

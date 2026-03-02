@@ -50,7 +50,7 @@ const getNavItems = (role: UserRole): NavItem[] => {
     },
     {
       title: "Аналитика",
-      href: "/analytics",
+      href: "/new-analytics",
       icon: <BarChart className="h-5 w-5" />,
     },
     {

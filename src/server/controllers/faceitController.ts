@@ -5,7 +5,9 @@ import { AuthRequest } from '../types';
 // Константы для конфигурации OAuth
 const FACEIT_CLIENT_ID = process.env.FACEIT_CLIENT_ID || 'YOUR_FACEIT_CLIENT_ID';
 const FACEIT_CLIENT_SECRET = process.env.FACEIT_CLIENT_SECRET || 'YOUR_FACEIT_CLIENT_SECRET';
-const REDIRECT_URI = process.env.REDIRECT_URI || 'http://localhost:5000/api/faceit/oauth/callback';
+const REDIRECT_URI =
+  process.env.REDIRECT_URI ||
+  `http://localhost:${process.env.PORT || '5001'}/api/faceit/oauth/callback`;
 
 /**
  * Инициализация OAuth процесса

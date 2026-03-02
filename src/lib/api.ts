@@ -3,7 +3,7 @@ import ROUTES from './routes';
 
 // Создаем экземпляр axios с базовыми настройками
 const api = axios.create({
-  baseURL: window.location.origin.includes('localhost') ? 'http://localhost:5000/api' : '/api',
+  baseURL: '/api',
   headers: {
     'Content-Type': 'application/json',
   },
@@ -44,6 +44,7 @@ api.interceptors.response.use((response) => {
   if (error.response) {
     // Обработка ошибок аутентификации
     if (error.response.status === 401 && window.location.pathname !== ROUTES.WELCOME) {
+      localStorage.removeItem('token');
       window.location.href = `${ROUTES.WELCOME}?session=expired`;
     }
   }
@@ -74,10 +75,32 @@ interface MoodEntryData {
 
 interface TestEntryData {
   date: Date;
-  name: string;
-  link: string;
+  name?: string;
+  link?: string;
   screenshotUrl?: string;
   isWeeklyTest?: boolean;
+  testType?: string;
+  scoreNormalized?: number;
+  rawScore?: number;
+  unit?: string;
+  durationSec?: number;
+  attempts?: number;
+  stateSnapshot?: {
+    fatigue?: number;
+    focus?: number;
+    stress?: number;
+    sleepHours?: number;
+    mood?: number;
+    energy?: number;
+  };
+  context?: {
+    matchType?: string;
+    map?: string;
+    role?: string;
+    source?: string;
+    notes?: string;
+  };
+  measuredAt?: string | Date;
 }
 
 interface PlayerStatusUpdate {
@@ -159,7 +182,7 @@ const extractPlayerId = (playerId: string | any): string => {
 };
 
 // API для работы с игроками (для staff)
-export const getPlayers = () => retryRequest(() => api.get('/users/players?debug=true'));
+export const getPlayers = () => retryRequest(() => api.get('/users/players'));
 export const getPlayerStats = (playerId: string | any) => 
   retryRequest(() => api.get(`/users/players/${extractPlayerId(playerId)}/stats`));
 export const deletePlayer = (playerId: string | any) => 
@@ -311,6 +334,28 @@ export const refreshAnalyticsCache = () => retryRequest(() => api.post('/analyti
 export const getAnalyticsMoodStats = () => retryRequest(() => api.get('/stats/analytics/mood'));
 export const getAnalyticsTestStats = () => retryRequest(() => api.get('/stats/analytics/tests'));
 export const getAnalyticsBalanceWheelStats = () => retryRequest(() => api.get('/stats/analytics/balance-wheel'));
+export const getAnalyticsOverview = () => retryRequest(() => api.get('/stats/analytics/overview'));
+export const getTestsStateImpact = (params?: {
+  from?: string;
+  to?: string;
+  testType?: string;
+  matchType?: string;
+  map?: string;
+  role?: string;
+}) => {
+  const search = new URLSearchParams();
+  if (params?.from) search.append('from', params.from);
+  if (params?.to) search.append('to', params.to);
+  if (params?.testType) search.append('testType', params.testType);
+  if (params?.matchType) search.append('matchType', params.matchType);
+  if (params?.map) search.append('map', params.map);
+  if (params?.role) search.append('role', params.role);
+
+  const query = search.toString();
+  return retryRequest(() => api.get(`/stats/tests/state-impact${query ? `?${query}` : ''}`));
+};
+
+export const getNotifications = () => retryRequest(() => api.get('/notifications'));
 
 // API для управления ключом привилегий
 // Update privilege key (for staff) with enhanced error handling

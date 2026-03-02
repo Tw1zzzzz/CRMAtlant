@@ -59,6 +59,21 @@ export interface IGameStats extends Document {
   totalPistolRounds: number; // Автоматически рассчитывается
   pistolRoundsWon: number; // Автоматически рассчитывается
   pistolWinRate: number; // Автоматически рассчитывается
+
+  // Расширенные аналитические метрики (ручной ввод аналитиком + автофоллбэк)
+  adr?: number | null; // Average Damage per Round
+  kpr?: number | null; // Kills per Round
+  deathPerRound?: number | null;
+  avgKr?: number | null;
+  avgKd?: number | null;
+  kast?: number | null;
+  firstKills?: number | null;
+  firstDeaths?: number | null;
+  openingDuelDiff?: number | null;
+  udr?: number | null;
+  avgMultikills?: number | null;
+  clutchesWon?: number | null;
+  avgFlashTime?: number | null;
 }
 
 // Схема для статистики одной стороны
@@ -119,7 +134,22 @@ const GameStatsSchema = new Schema<IGameStats>({
   // Общая статистика пистолетных раундов
   totalPistolRounds: { type: Number, default: 0, min: 0 },
   pistolRoundsWon: { type: Number, default: 0, min: 0 },
-  pistolWinRate: { type: Number, default: 0, min: 0, max: 100 }
+  pistolWinRate: { type: Number, default: 0, min: 0, max: 100 },
+
+  // Расширенные аналитические метрики
+  adr: { type: Number, default: null, min: 0 },
+  kpr: { type: Number, default: null, min: 0 },
+  deathPerRound: { type: Number, default: null, min: 0 },
+  avgKr: { type: Number, default: null, min: 0 },
+  avgKd: { type: Number, default: null, min: 0 },
+  kast: { type: Number, default: null, min: 0, max: 100 },
+  firstKills: { type: Number, default: null, min: 0 },
+  firstDeaths: { type: Number, default: null, min: 0 },
+  openingDuelDiff: { type: Number, default: null },
+  udr: { type: Number, default: null, min: 0 },
+  avgMultikills: { type: Number, default: null, min: 0 },
+  clutchesWon: { type: Number, default: null, min: 0 },
+  avgFlashTime: { type: Number, default: null, min: 0 }
 }, {
   timestamps: true
 });
@@ -209,6 +239,27 @@ GameStatsSchema.pre('save', function(next) {
     this.pistolWinRate = Math.round((this.pistolRoundsWon / this.totalPistolRounds) * 100 * 100) / 100;
   } else {
     this.pistolWinRate = 0;
+  }
+
+  // Автозаполнение производных метрик, если аналитик не ввел их вручную
+  if (this.kpr == null) {
+    this.kpr = this.totalRounds > 0 ? Math.round((this.kills / this.totalRounds) * 100) / 100 : 0;
+  }
+
+  if (this.deathPerRound == null) {
+    this.deathPerRound = this.totalRounds > 0 ? Math.round((this.deaths / this.totalRounds) * 100) / 100 : 0;
+  }
+
+  if (this.avgKr == null) {
+    this.avgKr = this.kpr;
+  }
+
+  if (this.avgKd == null) {
+    this.avgKd = this.kdRatio;
+  }
+
+  if (this.openingDuelDiff == null && this.firstKills != null && this.firstDeaths != null) {
+    this.openingDuelDiff = Math.round((this.firstKills - this.firstDeaths) * 100) / 100;
   }
 
   next();

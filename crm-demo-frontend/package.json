@@ -1,0 +1,13 @@
+{
+  "name": "crm-performance-demo",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Демо-версия CRM Performance для покупателей — только фронт, без бэкенда",
+  "scripts": {
+    "start": "serve -p 4173",
+    "preview": "serve -p 4173"
+  },
+  "dependencies": {
+    "serve": "^14.2.4"
+  }
+}

@@ -5,9 +5,89 @@ import User from '../models/User';
 import { Types } from 'mongoose';
 
 // Конфигурация Faceit API
-const FACEIT_API_KEY = process.env.FACEIT_API_KEY || '9835c8aa-4ac2-4201-ab54-fa5a79d9f731';
+const FACEIT_API_KEY = process.env.FACEIT_API_KEY || '';
 const FACEIT_API_URL = 'https://open.faceit.com/data/v4';
 const FACEIT_AUTH_URL = 'https://api.faceit.com/auth/v1';
+
+export interface FaceitProfileInfo {
+  faceitId: string;
+  nickname: string;
+  elo: number | null;
+  rawData: any;
+}
+
+const hasFaceitApiKey = (): boolean => {
+  const normalized = FACEIT_API_KEY.trim();
+  if (!normalized) {
+    return false;
+  }
+
+  const placeholders = ['ваш_ключ_faceit_api', 'YOUR_FACEIT_API_KEY'];
+  return !placeholders.includes(normalized);
+};
+
+const normalizeFaceitInput = (value: string): string => value.trim();
+
+const extractIdentifierFromFaceitInput = (value: string): string | null => {
+  const normalized = normalizeFaceitInput(value);
+  if (!normalized) {
+    return null;
+  }
+
+  const tryParseUrl = (input: string): URL | null => {
+    try {
+      return new URL(input);
+    } catch {
+      try {
+        return new URL(`https://${input}`);
+      } catch {
+        return null;
+      }
+    }
+  };
+
+  const parsedUrl = tryParseUrl(normalized);
+  if (!parsedUrl) {
+    return normalized.replace(/^@/, '').trim() || null;
+  }
+
+  if (!/faceit\.com$/i.test(parsedUrl.hostname) && !/\.faceit\.com$/i.test(parsedUrl.hostname)) {
+    return null;
+  }
+
+  const segments = parsedUrl.pathname.split('/').filter(Boolean);
+  const playersIndex = segments.findIndex((segment) => segment.toLowerCase() === 'players');
+  if (playersIndex !== -1 && segments[playersIndex + 1]) {
+    return decodeURIComponent(segments[playersIndex + 1]).trim() || null;
+  }
+
+  if (segments.length > 0) {
+    return decodeURIComponent(segments[segments.length - 1]).trim() || null;
+  }
+
+  return null;
+};
+
+const parseFaceitProfile = (data: any): FaceitProfileInfo => {
+  const faceitId = data?.player_id || data?.guid || data?.id;
+  const nickname = data?.nickname || data?.game_player_name || '';
+  const eloFromCs2 = data?.games?.cs2?.faceit_elo;
+  const eloFromCsgo = data?.games?.csgo?.faceit_elo;
+  const eloValue = Number.isFinite(eloFromCs2)
+    ? eloFromCs2
+    : (Number.isFinite(eloFromCsgo) ? eloFromCsgo : null);
+
+  if (!faceitId || !nickname) {
+    throw new Error('Не удалось получить корректный профиль Faceit');
+  }
+
+  return {
+    faceitId: String(faceitId),
+    nickname: String(nickname),
+    elo: eloValue === null ? null : Number(eloValue),
+    rawData: data
+  };
+};
 
 // API клиент для запросов к Faceit
 const faceitApiClient = axios.create({
@@ -17,6 +97,42 @@ const faceitApiClient = axios.create({
     'Content-Type': 'application/json'
   }
 });
+
+/**
+ * Разрешает ссылку/ник Faceit в профиль игрока
+ * @param faceitInput - Ссылка на профиль Faceit, ник или идентификатор
+ * @returns Профиль игрока Faceit
+ */
+export const resolveFaceitProfile = async (faceitInput: string): Promise<FaceitProfileInfo> => {
+  if (!hasFaceitApiKey()) {
+    throw new Error('FACEIT_API_KEY не настроен на сервере');
+  }
+
+  const identifier = extractIdentifierFromFaceitInput(faceitInput);
+  if (!identifier) {
+    throw new Error('Некорректная ссылка или идентификатор Faceit');
+  }
+
+  try {
+    const byNickname = await faceitApiClient.get('/players', {
+      params: { nickname: identifier }
+    });
+    return parseFaceitProfile(byNickname.data);
+  } catch (error: any) {
+    const status = error?.response?.status;
+    if (status && status !== 404) {
+      throw new Error('Не удалось получить данные Faceit по нику');
+    }
+  }
+
+  try {
+    const byId = await faceitApiClient.get(`/players/${encodeURIComponent(identifier)}`);
+    return parseFaceitProfile(byId.data);
+  } catch (error) {
+    console.error('Ошибка при разрешении профиля Faceit:', error);
+    throw new Error('Профиль Faceit не найден');
+  }
+};
 
 /**
  * Инициализирует процесс OAuth авторизации
@@ -125,6 +241,9 @@ export const getUserInfo = async (accessToken: string): Promise<any> => {
  */
 export const getPlayerMatchHistory = async (faceitId: string, limit: number = 20): Promise<any> => {
   try {
+    if (!hasFaceitApiKey()) {
+      throw new Error('FACEIT_API_KEY не настроен на сервере');
+    }
     const response = await faceitApiClient.get(`/players/${faceitId}/history`, {
       params: { limit }
     });
@@ -143,6 +262,9 @@ export const getPlayerMatchHistory = async (faceitId: string, limit: number = 20
  */
 export const getMatchDetails = async (matchId: string): Promise<any> => {
   try {
+    if (!hasFaceitApiKey()) {
+      throw new Error('FACEIT_API_KEY не настроен на сервере');
+    }
     const response = await faceitApiClient.get(`/matches/${matchId}`);
     return response.data;
   } catch (error) {
@@ -158,6 +280,9 @@ export const getMatchDetails = async (matchId: string): Promise<any> => {
  */
 export const getMatchStats = async (matchId: string): Promise<any> => {
   try {
+    if (!hasFaceitApiKey()) {
+      throw new Error('FACEIT_API_KEY не настроен на сервере');
+    }
     const response = await faceitApiClient.get(`/matches/${matchId}/stats`);
     return response.data;
   } catch (error) {
@@ -210,6 +335,9 @@ export const saveFaceitAccount = async (
       // Обновляем поле faceitAccountId в модели пользователя
       await User.findByIdAndUpdate(userId, { faceitAccountId: faceitAccount._id });
     }
+
+    // Гарантируем синхронизацию связи в профиле пользователя
+    await User.findByIdAndUpdate(userId, { faceitAccountId: faceitAccount._id });
     
     return faceitAccount;
   } catch (error) {
@@ -243,9 +371,6 @@ export const importMatches = async (faceitAccountId: string | Types.ObjectId): P
       const existingMatch = await Match.findOne({ matchId: matchData.match_id });
       
       if (!existingMatch) {
-        // Получаем детали матча для дополнительной информации
-        const matchDetails = await getMatchDetails(matchData.match_id);
-        
         // Определяем результат матча
         let result = 'draw';
         if (matchData.results && matchData.results.length > 0) {
@@ -283,6 +408,7 @@ export default {
   initOAuth,
   exchangeCodeForTokens,
   refreshAccessToken,
+  resolveFaceitProfile,
   getUserInfo,
   getPlayerMatchHistory,
   getMatchDetails,

@@ -2,6 +2,7 @@ import express from 'express';
 import BalanceWheel from '../models/BalanceWheel';
 import MoodEntry from '../models/MoodEntry';
 import TestEntry from '../models/TestEntry';
+import User from '../models/User';
 import { protect, isStaff } from '../middleware/authMiddleware';
 
 const router = express.Router();
@@ -742,4 +743,236 @@ router.get('/analytics/balance-wheel', protect, async (req: any, res) => {
   }
 });
 
-export default router; 
+const avg = (values: number[]): number =>
+  values.length === 0 ? 0 : Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(2));
+
+const toBucket = (value: number): 'low' | 'mid' | 'high' => {
+  if (value <= 3) return 'low';
+  if (value <= 7) return 'mid';
+  return 'high';
+};
+
+const getStateIndex = (entry: any): number | null => {
+  const snapshot = entry.stateSnapshot;
+  if (!snapshot) return null;
+
+  const {
+    fatigue = 0,
+    focus = 0,
+    stress = 0,
+    sleepHours = 0,
+    mood = 0,
+    energy = 0
+  } = snapshot;
+
+  const raw = focus + energy + mood + sleepHours - fatigue - stress;
+  return Number((raw / 3).toFixed(2));
+};
+
+// Сводка влияния состояния игрока на результаты тестов
+router.get('/tests/state-impact', protect, async (req: any, res) => {
+  try {
+    const {
+      from,
+      to,
+      testType,
+      matchType,
+      map,
+      role
+    } = req.query;
+
+    const filter: any = {};
+
+    if (req.user.role !== 'staff') {
+      filter.userId = req.user._id;
+    }
+
+    if (testType) {
+      filter.testType = testType;
+    }
+
+    if (matchType) {
+      filter['context.matchType'] = matchType;
+    }
+
+    if (map) {
+      filter['context.map'] = map;
+    }
+
+    if (role) {
+      filter['context.role'] = role;
+    }
+
+    if (from || to) {
+      filter.measuredAt = {};
+      if (from) {
+        filter.measuredAt.$gte = new Date(from);
+      }
+      if (to) {
+        const end = new Date(to);
+        end.setHours(23, 59, 59, 999);
+        filter.measuredAt.$lte = end;
+      }
+    }
+
+    const entries = await TestEntry.find(filter).sort({ measuredAt: -1 });
+    const scoredEntries = entries.filter((entry: any) => typeof entry.scoreNormalized === 'number');
+
+    const fatigueGroups: Record<'low' | 'mid' | 'high', number[]> = { low: [], mid: [], high: [] };
+    const focusGroups: Record<'low' | 'mid' | 'high', number[]> = { low: [], mid: [], high: [] };
+    const stressGroups: Record<'low' | 'mid' | 'high', number[]> = { low: [], mid: [], high: [] };
+    const typeGroups = new Map<string, number[]>();
+    const stateIndexes: number[] = [];
+
+    for (const entry of scoredEntries as any[]) {
+      const score = entry.scoreNormalized;
+      const snapshot = entry.stateSnapshot;
+      if (snapshot) {
+        if (typeof snapshot.fatigue === 'number') {
+          fatigueGroups[toBucket(snapshot.fatigue)].push(score);
+        }
+        if (typeof snapshot.focus === 'number') {
+          focusGroups[toBucket(snapshot.focus)].push(score);
+        }
+        if (typeof snapshot.stress === 'number') {
+          stressGroups[toBucket(snapshot.stress)].push(score);
+        }
+
+        const index = getStateIndex(entry);
+        if (index !== null) {
+          stateIndexes.push(index);
+        }
+      }
+
+      const currentType = entry.testType || 'generic';
+      const typeScores = typeGroups.get(currentType) || [];
+      typeScores.push(score);
+      typeGroups.set(currentType, typeScores);
+    }
+
+    const byTestType = Array.from(typeGroups.entries()).map(([type, scores]) => ({
+      type,
+      entries: scores.length,
+      avgScore: avg(scores)
+    }));
+
+    const response = {
+      filters: {
+        from: from || null,
+        to: to || null,
+        testType: testType || null,
+        matchType: matchType || null,
+        map: map || null,
+        role: role || null
+      },
+      totals: {
+        entries: entries.length,
+        scoredEntries: scoredEntries.length,
+        avgScore: avg(scoredEntries.map((entry: any) => entry.scoreNormalized)),
+        avgStateIndex: avg(stateIndexes)
+      },
+      stateToResult: {
+        fatigue: {
+          low: avg(fatigueGroups.low),
+          mid: avg(fatigueGroups.mid),
+          high: avg(fatigueGroups.high)
+        },
+        focus: {
+          low: avg(focusGroups.low),
+          mid: avg(focusGroups.mid),
+          high: avg(focusGroups.high)
+        },
+        stress: {
+          low: avg(stressGroups.low),
+          mid: avg(stressGroups.mid),
+          high: avg(stressGroups.high)
+        }
+      },
+      byTestType
+    };
+
+    return res.json(response);
+  } catch (error) {
+    console.error('Error fetching state impact test stats:', error);
+    return res.status(500).json({ message: 'Error fetching state impact test stats' });
+  }
+});
+
+// Единая сводка для новой аналитики
+router.get('/analytics/overview', protect, async (req: any, res) => {
+  try {
+    const baseFilter = req.user.role === 'staff' ? {} : { userId: req.user._id };
+    const [moodEntries, testEntries, wheels, usersCount] = await Promise.all([
+      MoodEntry.find(baseFilter).sort({ date: 1 }),
+      TestEntry.find(baseFilter).sort({ measuredAt: 1 }),
+      BalanceWheel.find(baseFilter).sort({ date: 1 }),
+      req.user.role === 'staff'
+        ? User.countDocuments({ role: 'player' })
+        : Promise.resolve(1)
+    ]);
+
+    const moodTrendMap = new Map<string, { mood: number[]; energy: number[] }>();
+    moodEntries.forEach((entry: any) => {
+      const key = new Date(entry.date).toISOString().slice(0, 10);
+      const point = moodTrendMap.get(key) || { mood: [], energy: [] };
+      point.mood.push(entry.mood);
+      point.energy.push(entry.energy);
+      moodTrendMap.set(key, point);
+    });
+
+    const moodTrend = Array.from(moodTrendMap.entries())
+      .map(([date, point]) => ({
+        date,
+        mood: avg(point.mood),
+        energy: avg(point.energy)
+      }))
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    const scoreValues = testEntries
+      .map((entry: any) => entry.scoreNormalized)
+      .filter((score: any) => typeof score === 'number');
+
+    const balanceAverages = wheels.map((wheel: any) => {
+      const values = [
+        wheel.physical,
+        wheel.emotional,
+        wheel.intellectual,
+        wheel.spiritual,
+        wheel.occupational,
+        wheel.social,
+        wheel.environmental,
+        wheel.financial
+      ];
+      return avg(values);
+    });
+
+    const testsByType = Object.entries(
+      testEntries.reduce((acc: Record<string, number>, entry: any) => {
+        const type = entry.testType || 'generic';
+        acc[type] = (acc[type] || 0) + 1;
+        return acc;
+      }, {})
+    ).map(([type, count]) => ({ type, count }));
+
+    return res.json({
+      role: req.user.role,
+      totals: {
+        activePlayers: usersCount,
+        moodEntries: moodEntries.length,
+        testEntries: testEntries.length,
+        balanceEntries: wheels.length,
+        avgMood: avg(moodEntries.map((entry: any) => entry.mood)),
+        avgEnergy: avg(moodEntries.map((entry: any) => entry.energy)),
+        avgTestScore: avg(scoreValues),
+        avgBalanceIndex: avg(balanceAverages)
+      },
+      moodTrend,
+      testsByType
+    });
+  } catch (error) {
+    console.error('Error fetching analytics overview:', error);
+    return res.status(500).json({ message: 'Error fetching analytics overview' });
+  }
+});
+
+export default router;

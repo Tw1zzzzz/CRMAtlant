@@ -22,7 +22,6 @@ import { COLORS, COMPONENT_STYLES } from "@/styles/theme";
 import { BalanceWheelChart } from "@/components/BalanceWheelChart";
 import { useNavigate } from "react-router-dom";
 import ROUTES from "@/lib/routes";
-import StaffPrivilegeUpgrade from "@/components/StaffPrivilegeUpgrade";
 
 // Обновим тип MoodEntry
 type MoodEntry = {
@@ -435,17 +434,6 @@ const Dashboard = () => {
             : "Ваша персональная статистика и отслеживание прогресса"}
         </p>
       </div>
-
-      {/* Компонент для повышения привилегий staff пользователей */}
-      {isStaff && (
-        <StaffPrivilegeUpgrade 
-          onUpgradeSuccess={() => {
-            // Обновляем данные после получения привилегий
-            window.location.reload();
-          }}
-          className="mb-6"
-        />
-      )}
 
       <Tabs defaultValue="overview" className="space-y-4" style={{ color: COLORS.textColor }}>
         <TabsList className="grid w-full grid-cols-4 p-1" style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor }}>

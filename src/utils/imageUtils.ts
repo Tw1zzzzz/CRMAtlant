@@ -11,10 +11,7 @@
 export function getImageUrl(path: string | undefined, size: string = ''): string | undefined {
   if (!path) return undefined;
   
-  // Базовый URL для API - используем тот же метод что и в playerCard.ts
-  const baseUrl = typeof window !== 'undefined' && window.location.origin.includes('localhost') 
-    ? 'http://localhost:5000' 
-    : typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5000';
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
   
   // Обеспечиваем правильный формат пути и обрабатываем возможные ошибки в путях
   let normalizedPath = path;

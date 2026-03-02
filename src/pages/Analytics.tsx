@@ -1,5 +1,5 @@
 import React, { useState, useRef, ChangeEvent, useEffect } from 'react';
-import { Trophy, Crosshair, Target, Swords, LineChart as ChartLineUp, Medal, Upload, User, Users, Calendar, UsersRound, Dumbbell, Clock, Flame, TrendingUp, Map, X, Image } from 'lucide-react';
+import { Trophy, Crosshair, Target, Swords, LineChart as ChartLineUp, Medal, Upload, User, Users, Calendar, UsersRound, TrendingUp, Map, X, Image } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -49,20 +49,6 @@ interface TeamStats {
   winRateHistory: { date: string; official: number; practice: number }[];
 }
 
-interface TrainingStats {
-  totalSessions: number;
-  averageDuration: number;
-  completionRate: number;
-  intensityScore: number;
-  progressRate: number;
-  recentSessions: {
-    date: string;
-    duration: number;
-    intensity: number;
-    completed: boolean;
-  }[];
-}
-
 interface MapStats {
   name: string;
   totalGames: number;
@@ -99,7 +85,7 @@ interface MapStats {
 }
 
 const Analytics: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'heatmaps' | 'training' | 'detailedStats' | 'reports' | 'correlations' | 'advanced' | 'cs2'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'heatmaps' | 'detailedStats' | 'reports' | 'correlations' | 'advanced' | 'cs2'>('overview');
   const [selectedMapType, setSelectedMapType] = useState<'practice' | 'official'>('official');
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [statsView, setStatsView] = useState<'team' | 'personal'>('team');
@@ -255,24 +241,6 @@ const Analytics: React.FC = () => {
       date: month,
       value: Math.floor(Math.random() * 15) + 45
     }));
-  };
-
-  // Тестовые данные - только для данных, которые еще не загружены
-  const trainingStats: TrainingStats = {
-    totalSessions: 52,
-    averageDuration: 87,
-    completionRate: 92,
-    intensityScore: 7.8,
-    progressRate: 8.5,
-    recentSessions: [
-      { date: '2024-04-01', duration: 90, intensity: 8, completed: true },
-      { date: '2024-04-03', duration: 85, intensity: 7, completed: true },
-      { date: '2024-04-05', duration: 95, intensity: 9, completed: true },
-      { date: '2024-04-07', duration: 75, intensity: 6, completed: false },
-      { date: '2024-04-09', duration: 92, intensity: 8, completed: true },
-      { date: '2024-04-11', duration: 88, intensity: 8, completed: true },
-      { date: '2024-04-13', duration: 90, intensity: 9, completed: true }
-    ]
   };
 
   // Рекомендуемые тесты - расширенный список
@@ -522,20 +490,21 @@ const Analytics: React.FC = () => {
   }
 
   return (
-    <div className="container mx-auto py-4">
+    <div className="container mx-auto py-4 performance-page">
       <div className="flex flex-col space-y-4">
         {/* Основной заголовок и вкладки в одну линию */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 rounded-lg shadow-sm mb-2" style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor }}>
+        <div className="performance-hero flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 rounded-lg shadow-sm mb-2" style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor }}>
           <div className="flex flex-col mb-4 sm:mb-0">
-            <h1 className="text-2xl font-bold tracking-tight font-heading" style={{ color: COLORS.textColor }}>Аналитика</h1>
-            <p className="text-sm" style={{ color: COLORS.textColorSecondary }}>Игровая статистика и аналитика игроков</p>
+            <span className="performance-eyebrow">Operations View</span>
+            <h1 className="text-2xl font-bold tracking-tight font-heading performance-title" style={{ color: COLORS.textColor }}>Аналитика</h1>
+            <p className="text-sm performance-subtitle" style={{ color: COLORS.textColorSecondary }}>Игровая статистика и аналитика игроков</p>
           </div>
           
           <div className="flex flex-col space-y-2 w-full sm:w-auto">
             <Tabs 
               defaultValue="overview" 
               value={activeTab} 
-              onValueChange={(value) => setActiveTab(value as 'overview' | 'heatmaps' | 'training' | 'detailedStats' | 'reports' | 'correlations' | 'advanced' | 'cs2')}
+              onValueChange={(value) => setActiveTab(value as 'overview' | 'heatmaps' | 'detailedStats' | 'reports' | 'correlations' | 'advanced' | 'cs2')}
               className="w-full sm:w-auto"
             >
               <TabsList className="w-full" style={COMPONENT_STYLES.tabs.list}>
@@ -552,13 +521,6 @@ const Analytics: React.FC = () => {
                   style={{ color: COLORS.textColor }}
                 >
                   Тепловая карта
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="training" 
-                  className="flex-1 data-[state=active]:bg-primary data-[state=active]:text-white"
-                  style={{ color: COLORS.textColor }}
-                >
-                  Тренировки
                 </TabsTrigger>
                 <TabsTrigger 
                   value="detailedStats" 
@@ -993,38 +955,6 @@ const Analytics: React.FC = () => {
               </CardContent>
             </Card>
           </div>
-        )}
-
-        {activeTab === 'training' && (
-          <Card style={COMPONENT_STYLES.card}>
-            <CardHeader className="pb-2">
-              <CardTitle className="py-1 px-1 font-heading" style={{ color: COLORS.textColor }}>Тренировки</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col items-center p-2 rounded-lg" style={{ backgroundColor: COLORS.backgroundColor }}>
-                  <Dumbbell className="h-5 w-5 mb-1" style={{ color: COLORS.textColorSecondary }} />
-                  <p className="text-xl font-bold" style={{ color: COLORS.textColor }}>{trainingStats.totalSessions}</p>
-                  <p className="text-xs" style={{ color: COLORS.textColorSecondary }}>Всего тренировок</p>
-                </div>
-                <div className="flex flex-col items-center p-2 rounded-lg" style={{ backgroundColor: COLORS.backgroundColor }}>
-                  <Clock className="h-5 w-5 mb-1" style={{ color: COLORS.textColorSecondary }} />
-                  <p className="text-xl font-bold" style={{ color: COLORS.textColor }}>{trainingStats.averageDuration} минут</p>
-                  <p className="text-xs" style={{ color: COLORS.textColorSecondary }}>Средняя продолжительность</p>
-                </div>
-                <div className="flex flex-col items-center p-2 rounded-lg" style={{ backgroundColor: COLORS.backgroundColor }}>
-                  <Flame className="h-5 w-5 mb-1" style={{ color: COLORS.textColorSecondary }} />
-                  <p className="text-xl font-bold" style={{ color: COLORS.textColor }}>{trainingStats.completionRate}%</p>
-                  <p className="text-xs" style={{ color: COLORS.textColorSecondary }}>Завершенность</p>
-                </div>
-                <div className="flex flex-col items-center p-2 rounded-lg" style={{ backgroundColor: COLORS.backgroundColor }}>
-                  <TrendingUp className="h-5 w-5 mb-1" style={{ color: COLORS.textColorSecondary }} />
-                  <p className="text-xl font-bold" style={{ color: COLORS.textColor }}>{trainingStats.intensityScore}</p>
-                  <p className="text-xs" style={{ color: COLORS.textColorSecondary }}>Интенсивность</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
         )}
 
         {activeTab === 'detailedStats' && (

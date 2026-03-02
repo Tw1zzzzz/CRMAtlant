@@ -728,7 +728,7 @@ const PlayerCardPage: React.FC = () => {
         throw new Error('Требуется авторизация');
       }
       
-      const baseUrl = window.location.origin.includes('localhost') ? 'http://localhost:5000' : window.location.origin;
+      const baseUrl = '';
       
       toast.loading("Создание карточки игрока...");
       
@@ -1516,7 +1516,7 @@ const safeDeletePlayerCard = async (
       }
       
       // Создаем аналогичный URL как для загрузки других изображений
-      const baseUrl = window.location.origin.includes('localhost') ? 'http://localhost:5000' : window.location.origin;
+      const baseUrl = '';
       const url = `${baseUrl}/api/player-cards/${selectedPlayerId}/communication-image`;
       
       // Отправляем запрос на загрузку
@@ -1615,7 +1615,7 @@ const safeDeletePlayerCard = async (
       }
       
       // Загружаем данные напрямую с сервера
-      const baseUrl = window.location.origin.includes('localhost') ? 'http://localhost:5000' : window.location.origin;
+      const baseUrl = '';
       
       const response = await axios.get(`${baseUrl}/api/player-cards/${playerId}`, {
         headers: {
@@ -2126,7 +2126,7 @@ const safeDeletePlayerCard = async (
   // Компонент для загрузки списка игроков
   if (loadingPlayers) {
     return (
-      <div className="flex flex-col justify-center items-center h-[80vh]">
+      <div className="container mx-auto performance-page flex flex-col justify-center items-center h-[80vh]">
         <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
         <span className="mb-4">Загрузка списка игроков...</span>
         
@@ -2149,12 +2149,13 @@ const safeDeletePlayerCard = async (
   }
   
   return (
-    <div className="container px-4 py-6 mx-auto">
+    <div className="container px-4 py-6 mx-auto performance-page">
       {/* Добавляем стили анимаций */}
       <style>{animationStyles}</style>
       
-      <h1 className="text-3xl font-bold mb-2">Карточки игроков</h1>
-      <p className="text-muted-foreground mb-4">Создавайте и управляйте карточками игроков - добавляйте контакты и карты развития.</p>
+      <span className="performance-eyebrow">Player Intelligence</span>
+      <h1 className="text-3xl font-bold mb-2 performance-title">Карточки игроков</h1>
+      <p className="text-muted-foreground performance-subtitle mb-4">Создавайте и управляйте карточками игроков - добавляйте контакты и карты развития.</p>
       
       <div className="flex justify-between items-center mb-6">
         <div className="relative w-full max-w-xs">

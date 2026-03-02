@@ -95,3 +95,127 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer components {
+  .performance-page {
+    position: relative;
+    border-radius: 1rem;
+    padding: 1.1rem;
+    background:
+      radial-gradient(120% 140% at 0% 0%, rgba(53, 144, 255, 0.2) 0%, rgba(53, 144, 255, 0) 58%),
+      radial-gradient(100% 120% at 100% 0%, rgba(0, 227, 150, 0.13) 0%, rgba(0, 227, 150, 0) 50%),
+      linear-gradient(168deg, rgba(13, 19, 37, 0.92) 0%, rgba(10, 15, 30, 0.86) 100%);
+    border: 1px solid rgba(76, 106, 153, 0.45);
+    box-shadow:
+      inset 0 1px 0 rgba(193, 220, 255, 0.08),
+      0 22px 70px rgba(0, 6, 22, 0.42);
+    overflow: hidden;
+    isolation: isolate;
+  }
+
+  .performance-page::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image:
+      linear-gradient(to right, rgba(139, 176, 238, 0.07) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(139, 176, 238, 0.06) 1px, transparent 1px);
+    background-size: 32px 32px;
+    mask-image: radial-gradient(circle at center, black 42%, transparent 100%);
+  }
+
+  .performance-page .performance-hero {
+    border-radius: 0.85rem;
+    border: 1px solid rgba(106, 139, 191, 0.38);
+    background:
+      linear-gradient(165deg, rgba(26, 39, 66, 0.9) 0%, rgba(16, 24, 44, 0.76) 100%);
+    box-shadow: inset 0 1px 0 rgba(201, 224, 255, 0.08), 0 12px 30px rgba(2, 8, 26, 0.36);
+  }
+
+  .performance-page .performance-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.35rem;
+    padding: 0.2rem 0.65rem;
+    border: 1px solid rgba(53, 144, 255, 0.36);
+    border-radius: 999px;
+    background: rgba(53, 144, 255, 0.12);
+    color: #9dcbff;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+  }
+
+  .performance-page .performance-title {
+    color: #f4fbff;
+    letter-spacing: 0.01em;
+    text-shadow: 0 0 24px rgba(53, 144, 255, 0.2);
+  }
+
+  .performance-page .performance-subtitle {
+    color: #afc1df;
+  }
+
+  .performance-page .rounded-lg.border.bg-card {
+    background:
+      linear-gradient(165deg, rgba(23, 34, 58, 0.93) 0%, rgba(16, 24, 45, 0.86) 100%) !important;
+    border-color: rgba(92, 123, 171, 0.43) !important;
+    box-shadow:
+      inset 0 1px 0 rgba(213, 229, 255, 0.07),
+      0 14px 34px rgba(2, 8, 28, 0.3);
+  }
+
+  .performance-page .text-muted-foreground {
+    color: #98afcf;
+  }
+
+  .performance-page [role="tablist"] {
+    background: rgba(12, 19, 36, 0.9) !important;
+    border: 1px solid rgba(92, 123, 171, 0.45);
+    border-radius: 0.72rem;
+    padding: 0.22rem;
+    box-shadow: inset 0 1px 0 rgba(182, 213, 255, 0.06);
+  }
+
+  .performance-page [role="tab"] {
+    color: #9eb7db;
+    border-radius: 0.55rem;
+    transition: all 180ms ease;
+  }
+
+  .performance-page [role="tab"][data-state="active"] {
+    color: #ecf7ff !important;
+    background:
+      linear-gradient(130deg, rgba(53, 144, 255, 0.8), rgba(0, 227, 150, 0.66));
+    box-shadow: 0 8px 22px rgba(19, 100, 179, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  }
+
+  .performance-page input:not([type="checkbox"]):not([type="radio"]),
+  .performance-page textarea,
+  .performance-page select,
+  .performance-page button[role="combobox"] {
+    border-color: rgba(90, 121, 170, 0.5) !important;
+    background: rgba(13, 20, 37, 0.86) !important;
+    color: #e9f3ff !important;
+  }
+
+  .performance-page input::placeholder,
+  .performance-page textarea::placeholder {
+    color: #7f95b6 !important;
+  }
+
+  .performance-page select.performance-native-select option {
+    background: #151f35;
+    color: #e9f3ff;
+  }
+
+  .performance-page .border,
+  .performance-page table th,
+  .performance-page table td {
+    border-color: rgba(90, 120, 170, 0.44);
+  }
+}

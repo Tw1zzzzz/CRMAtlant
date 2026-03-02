@@ -25,6 +25,9 @@ const normalizePlayer = (player: any): User => {
   
   // Проверка и нормализация ID
   let playerId = player._id || player.id;
+  if (playerId && typeof playerId !== "string") {
+    playerId = playerId.toString ? playerId.toString() : String(playerId);
+  }
   if (!isValidId(playerId)) {
     console.warn('Player with invalid id:', player);
     
@@ -35,11 +38,11 @@ const normalizePlayer = (player: any): User => {
   }
   
   return {
+    ...player,
     id: playerId,
     name: player.name || player.username || 'Неизвестно',
     email: player.email || 'Нет email',
     role: player.role || 'player',
-    ...player
   };
 };
 
@@ -296,7 +299,7 @@ const PlayersManagement = () => {
                 </thead>
                 <tbody>
                   {players.map(player => (
-                    <tr key={player.id || `player-${Math.random()}`} style={{ borderBottom: `1px solid ${COLORS.borderColor}` }}>
+                    <tr key={player.id || player.email} style={{ borderBottom: `1px solid ${COLORS.borderColor}` }}>
                       <td className="px-3 py-3" style={{ color: COLORS.textColorSecondary, fontSize: '0.85rem' }}>
                         {isValidId(player.id) ? player.id.substring(0, 8) + '...' : 'Некорректный ID'}
                       </td>

@@ -25,6 +25,8 @@ export interface CreateUserDto {
   email: string;
   password: string;
   role?: UserRole;
+  faceitUrl?: string;
+  nickname?: string;
 }
 
 /** Данные для входа пользователя */
