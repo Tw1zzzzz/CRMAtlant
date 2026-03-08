@@ -61,7 +61,7 @@ const TestTracker = () => {
   const [isAddingEntry, setIsAddingEntry] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  // Опросник (новая логика тестов)
+  // РћРїСЂРѕСЃРЅРёРє (РЅРѕРІР°СЏ Р»РѕРіРёРєР° С‚Рµстов)
   const [qDate, setQDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [qMood, setQMood] = useState<string>("");
   const [qEnergy, setQEnergy] = useState<string>("");
@@ -218,7 +218,7 @@ const TestTracker = () => {
       setIsLoading(true);
       
       if (user) {
-        // Загружаем данные с сервера
+        // Р—Р°РіСЂСѓР¶Р°РµРј РґР°РЅРЅС‹Рµ СЃ СЃРµСЂРІРµСЂР°
         try {
           const response = await getMyTestEntries();
           const serverEntries = response.data.map((entry: any) => ({
@@ -228,14 +228,14 @@ const TestTracker = () => {
           }));
           setEntries(serverEntries);
           
-          // Обновляем локальное хранилище с данными с сервера
+          // РћР±РЅРѕРІР»СЏРµРј Р»РѕРєР°Р»СЊРЅРѕРµ С…СЂР°РЅРёР»РёС‰Рµ СЃ РґР°РЅРЅС‹РјРё СЃ СЃРµСЂРІРµСЂР°
           testRepository.updateFromServer(serverEntries);
           
           console.log('Test entries loaded from server');
         } catch (error) {
           console.error('Error loading test entries from server:', error);
           
-          // Если не удалось загрузить с сервера, используем локальные данные
+          // Р•СЃР»Рё РЅРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ СЃ СЃРµСЂРІРµСЂР°, РёСЃРїРѕР»СЊР·СѓРµРј Р»РѕРєР°Р»СЊРЅС‹Рµ РґР°РЅРЅС‹Рµ
           const localEntries = testRepository.getAll();
           setEntries(localEntries);
           
@@ -246,7 +246,7 @@ const TestTracker = () => {
           });
         }
       } else {
-        // Если пользователь не авторизован, используем локальные данные
+        // Р•СЃР»Рё РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ РЅРµ Р°РІС‚РѕСЂРёР·РѕРІР°РЅ, РёСЃРїРѕР»СЊР·СѓРµРј Р»РѕРєР°Р»СЊРЅС‹Рµ РґР°РЅРЅС‹Рµ
         const localEntries = testRepository.getAll();
         setEntries(localEntries);
       }
@@ -336,10 +336,10 @@ const TestTracker = () => {
         measuredAt: new Date(date).toISOString()
       };
       
-      // Используем репозиторий для сохранения данных
+      // РСЃРїРѕР»СЊР·СѓРµРј СЂРµРїРѕР·РёС‚РѕСЂРёР№ РґР»СЏ СЃРѕС…СЂР°РЅРµРЅРёСЏ РґР°РЅРЅС‹С…
       const savedEntry = testRepository.create(newEntry);
       
-      // Если пользователь авторизован, пытаемся сразу сохранить на сервере
+      // Р•СЃР»Рё РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ Р°РІС‚РѕСЂРёР·РѕРІР°РЅ, РїС‹С‚Р°РµРјСЃСЏ СЃСЂР°Р·Сѓ СЃРѕС…СЂР°РЅРёС‚СЊ РЅР° СЃРµСЂРІРµСЂРµ
       if (user) {
         try {
           const response = await createTestEntry(newEntry);
@@ -349,7 +349,7 @@ const TestTracker = () => {
         }
       }
       
-      // Обновляем список записей
+      // РћР±РЅРѕРІР»СЏРµРј СЃРїРёСЃРѕРє Р·Р°РїРёСЃРµР№
       await loadEntries();
       resetForm();
       setIsAddingEntry(false);
@@ -407,10 +407,10 @@ const TestTracker = () => {
         }
       }
       
-      // Удаляем запись через репозиторий
+      // РЈРґР°Р»СЏРµРј Р·Р°РїРёСЃСЊ С‡РµСЂРµР· СЂРµРїРѕР·РёС‚РѕСЂРёР№
       testRepository.delete(id);
       
-      // Обновляем список записей
+      // РћР±РЅРѕРІР»СЏРµРј СЃРїРёСЃРѕРє Р·Р°РїРёСЃРµР№
       await loadEntries();
       
       toast({
@@ -591,7 +591,7 @@ const TestTracker = () => {
                                 className="inline-flex items-center"
                                 style={{ color: COLORS.primary }}
                               >
-                                <ExternalLink className="h-4 w-4 mr-1" />
+                                <ExternalLink className="h-4 w-4 mr-1 text-white" />
                                 Открыть тест
                               </a>
                             </TableCell>
@@ -609,7 +609,7 @@ const TestTracker = () => {
                                     setIsDialogOpen(true);
                                   }}
                                 >
-                                  <Plus className="h-4 w-4 mr-1" />
+                                  <Plus className="h-4 w-4 mr-1 text-white" />
                                   Добавить результат
                                 </Button>
                               )}
@@ -626,7 +626,7 @@ const TestTracker = () => {
 
                 {getWeeklyTests().length === 0 ? (
                   <div className="text-center py-8 rounded-lg" style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor, border: `1px solid ${COLORS.borderColor}` }}>
-                    <Image className="h-12 w-12 mx-auto mb-2" style={{ color: COLORS.textColorSecondary }} />
+                    <Image className="h-12 w-12 mx-auto mb-2 text-white" />
                     <p style={{ color: COLORS.textColorSecondary }}>Нет еженедельных тестов на эту неделю</p>
                     {!isStaff && (
                       <Button
@@ -639,7 +639,7 @@ const TestTracker = () => {
                           setIsDialogOpen(true);
                         }}
                       >
-                        <Plus className="mr-2 h-4 w-4" />
+                        <Plus className="mr-2 h-4 w-4 text-white" />
                         Добавить еженедельный тест
                       </Button>
                     )}
@@ -675,13 +675,13 @@ const TestTracker = () => {
                               className="inline-flex items-center"
                               style={{ color: COLORS.primary }}
                             >
-                              <ExternalLink className="h-4 w-4" />
+                              <ExternalLink className="h-4 w-4 text-white" />
                             </a>
                             {test.screenshotUrl && (
                               <Dialog>
                                 <DialogTrigger asChild>
                                   <Button variant="ghost" size="icon" style={{ color: COLORS.primary }}>
-                                    <Image className="h-4 w-4" />
+                                    <Image className="h-4 w-4 text-white" />
                                   </Button>
                                 </DialogTrigger>
                                 <DialogContent style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor }}>
@@ -706,7 +706,7 @@ const TestTracker = () => {
                                   style={{ color: COLORS.primary }}
                                   onClick={() => handleEdit(test)}
                                 >
-                                  <Edit className="h-4 w-4" />
+                                  <Edit className="h-4 w-4 text-white" />
                                 </Button>
                                 <Button
                                   variant="ghost"
@@ -714,7 +714,7 @@ const TestTracker = () => {
                                   style={{ color: COLORS.danger }}
                                   onClick={() => handleDelete(test.id)}
                                 >
-                                  <Trash2 className="h-4 w-4" />
+                                  <Trash2 className="h-4 w-4 text-white" />
                                 </Button>
                               </>
                             )}

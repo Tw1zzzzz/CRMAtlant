@@ -260,6 +260,7 @@ export const getTeamMoodChartData = () => retryRequest(() => api.get('/stats/tea
 // API для работы с записями о настроении
 export const createMoodEntry = (data: MoodEntryData) => retryRequest(() => api.post('/mood', data));
 export const getMyMoodEntries = () => retryRequest(() => api.get('/mood/my'));
+export const getAllMoodEntries = () => retryRequest(() => api.get('/mood/all'));
 export const deleteMoodEntry = (entryId: string) => retryRequest(() => api.delete(`/mood/${entryId}`));
 export const getPlayerMoodEntries = (playerId: string | any) => 
   retryRequest(() => api.get(`/mood/player/${extractPlayerId(playerId)}`));

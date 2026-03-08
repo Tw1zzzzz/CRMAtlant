@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend, PieChart, Pie, Cell } from "recharts";
 import { MoodEntry as GlobalMoodEntry, TestEntry, StatsData, WeeklyData } from "@/types";
@@ -419,6 +419,30 @@ const Dashboard = () => {
     );
   }
 
+  const chartCardStyle = {
+    backgroundColor: COLORS.cardBackground,
+    borderColor: COLORS.borderColor,
+    boxShadow: "0 1px 20px 0 rgba(0,0,0,.1)"
+  };
+
+  const chartGridProps = {
+    stroke: COLORS.borderColor,
+    strokeDasharray: "4 4"
+  };
+
+  const chartAxisProps = {
+    stroke: COLORS.textColorSecondary,
+    fontSize: 12,
+    tickLine: false,
+    axisLine: false
+  };
+
+  const chartTooltipStyle = {
+    backgroundColor: COLORS.cardBackground,
+    borderColor: COLORS.borderColor,
+    color: COLORS.textColor
+  };
+
   return (
     <div className="space-y-6" style={{ 
         backgroundColor: COLORS.backgroundColor, 
@@ -442,30 +466,6 @@ const Dashboard = () => {
             className="text-sm px-4 py-2 rounded-md data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:font-medium hover:bg-gray-800"
           >
             Обзор
-          </TabsTrigger>
-          <TabsTrigger 
-            value="analytics" 
-            disabled
-            className="text-sm px-4 py-2 rounded-md data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:font-medium opacity-50 cursor-not-allowed"
-            title="Функция будет доступна в ближайшем обновлении"
-          >
-            Аналитика
-          </TabsTrigger>
-          <TabsTrigger 
-            value="balance" 
-            disabled
-            className="text-sm px-4 py-2 rounded-md data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:font-medium opacity-50 cursor-not-allowed"
-            title="Функция будет доступна в ближайшем обновлении"
-          >
-            Баланс колеса
-          </TabsTrigger>
-          <TabsTrigger 
-            value="reports" 
-            disabled
-            className="text-sm px-4 py-2 rounded-md data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:font-medium opacity-50 cursor-not-allowed"
-            title="Функция будет доступна в ближайшем обновлении"
-          >
-            Отчеты
           </TabsTrigger>
         </TabsList>
         
@@ -789,124 +789,6 @@ const Dashboard = () => {
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
-            </Card>
-          </div>
-          
-          <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-7">
-            <Card className="md:col-span-4" style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor, boxShadow: "0 1px 20px 0 rgba(0,0,0,.1)" }}>
-              <CardHeader>
-                <CardTitle style={{ color: COLORS.textColor }}>Последние обновления</CardTitle>
-                <CardDescription style={{ color: COLORS.textColorSecondary }}>
-                  {isStaff ? "Активность команды" : "Ваша активность"}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ScrollArea className="h-[350px]" style={{ color: COLORS.textColor }}>
-                  {isStaff ? (
-                    playersMoodStats.length > 0 || playersTestStats.length > 0 ? (
-                      <div className="space-y-8">
-                        {playersMoodStats.slice(0, 5).map((entry: any, index: number) => (
-                          <div key={index} className="flex items-center">
-                            <Avatar className="h-9 w-9" style={{ backgroundColor: COLORS.primary }}>
-                              <AvatarFallback style={{ backgroundColor: COLORS.primary, color: COLORS.textColor }}>
-                                {entry.name?.substring(0, 2).toUpperCase() || 'ИГ'}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="ml-4 space-y-1">
-                              <p className="text-sm font-medium leading-none" style={{ color: COLORS.textColor }}>{entry.name || 'Игрок'}</p>
-                              <p className="text-sm" style={{ color: COLORS.textColorSecondary }}>
-                                Настроение: {entry.mood}, Энергия: {entry.energy}
-                              </p>
-                            </div>
-                            <div className="ml-auto font-medium" style={{ color: COLORS.primary }}>
-                              {entry.lastActivity ? new Date(entry.lastActivity).toLocaleDateString() : 'Недавно'}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-center" style={{ color: COLORS.textColorSecondary }}>Нет данных о последней активности</p>
-                    )
-                  ) : (
-                    moodEntries.length > 0 || testEntries.length > 0 ? (
-                      <div className="space-y-8">
-                        {moodEntries.slice(-5).reverse().map((entry, index) => (
-                          <div key={index} className="flex items-center">
-                            <div className="space-y-1">
-                              <p className="text-sm font-medium leading-none" style={{ color: COLORS.textColor }}>Запись о настроении</p>
-                              <p className="text-sm" style={{ color: COLORS.textColorSecondary }}>
-                                Настроение: {entry.mood !== undefined ? entry.mood : entry.value}, 
-                                Энергия: {entry.energy !== undefined ? entry.energy : entry.energyValue}
-                              </p>
-                            </div>
-                            <div className="ml-auto font-medium" style={{ color: COLORS.primary }}>
-                              {new Date(entry.date).toLocaleDateString()}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-center" style={{ color: COLORS.textColorSecondary }}>Нет данных о вашей активности</p>
-                    )
-                  )}
-                </ScrollArea>
-              </CardContent>
-              <CardFooter>
-                <Button 
-                  variant="outline" 
-                  className="w-full" 
-                  size="sm" 
-                  style={{ borderColor: COLORS.borderColor, color: COLORS.primary }}
-                  onClick={handleViewAllUpdates}
-                >
-                  Смотреть все
-                  <ChevronRight className="ml-auto h-4 w-4" />
-                </Button>
-              </CardFooter>
-            </Card>
-
-            <Card className="md:col-span-3" style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor, boxShadow: "0 1px 20px 0 rgba(0,0,0,.1)" }}>
-              <CardHeader>
-                <CardTitle style={{ color: COLORS.textColor }}>Рекомендации</CardTitle>
-                <CardDescription style={{ color: COLORS.textColorSecondary }}>
-                  {isStaff ? "Для улучшения командных показателей" : "Для улучшения личных показателей"}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-4">
-                  <li className="flex items-start">
-                    <ArrowUpRight className="mr-2 h-5 w-5" style={{ color: COLORS.primary }} />
-                    <p className="text-sm" style={{ color: COLORS.textColor }}>
-                      {isStaff 
-                        ? "Проверяйте статистику команды регулярно" 
-                        : "Отслеживайте настроение и энергию ежедневно"}
-                    </p>
-                  </li>
-                  <li className="flex items-start">
-                    <ArrowUpRight className="mr-2 h-5 w-5" style={{ color: COLORS.primary }} />
-                    <p className="text-sm" style={{ color: COLORS.textColor }}>
-                      {isStaff 
-                        ? "Анализируйте тренды команды на странице статистики" 
-                        : "Выполняйте все назначенные тесты для точной оценки прогресса"}
-                    </p>
-                  </li>
-                  <li className="flex items-start">
-                    <ArrowUpRight className="mr-2 h-5 w-5" style={{ color: COLORS.primary }} />
-                    <p className="text-sm" style={{ color: COLORS.textColor }}>
-                      {isStaff 
-                        ? "Обращайте внимание на игроков с низкими показателями настроения" 
-                        : "Изучите факторы, влияющие на ваше настроение и энергию"}
-                    </p>
-                  </li>
-                </ul>
-              </CardContent>
-              <CardFooter>
-                <Button variant="ghost" className="w-full" size="sm" 
-                        style={{ color: COLORS.primary }}>
-                  Все рекомендации
-                  <ChevronRight className="ml-auto h-4 w-4" />
-                </Button>
-              </CardFooter>
             </Card>
           </div>
         </TabsContent>

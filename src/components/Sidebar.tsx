@@ -2,7 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import { 
   BarChart2, Calendar, Home, ListTodo, 
   User, Users, LogOut, CircleDot, 
-  Trophy, BarChart, FolderOpen, LineChart, Clock, CreditCard, UserPlus, TrendingUp, Upload 
+  Trophy, LineChart, Clock, CreditCard, UserPlus, TrendingUp, Upload 
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
@@ -15,6 +15,7 @@ import ROUTES from "@/lib/routes";
 import { CSSProperties } from "react";
 
 type UserRole = "player" | "staff" | null;
+type PlayerType = "solo" | "team" | null;
 
 type NavItem = {
   title: string;
@@ -24,8 +25,9 @@ type NavItem = {
 
 /**
  * Генерирует список навигационных элементов на основе роли пользователя
+
  */
-const getNavItems = (role: UserRole): NavItem[] => {
+const getNavItems = (role: UserRole, playerType: PlayerType): NavItem[] => {
   // Базовые элементы, доступные для всех пользователей
   const baseItems: NavItem[] = [
     {
@@ -49,14 +51,14 @@ const getNavItems = (role: UserRole): NavItem[] => {
       icon: <BarChart2 className="h-5 w-5" />,
     },
     {
-      title: "Аналитика",
-      href: "/new-analytics",
-      icon: <BarChart className="h-5 w-5" />,
-    },
-    {
       title: "Корреляционный анализ",
       href: "/correlation-analysis",
       icon: <TrendingUp className="h-5 w-5" />,
+    },
+    {
+      title: "Игровая статистика",
+      href: ROUTES.GAME_STATS,
+      icon: <LineChart className="h-5 w-5" />,
     },
   ];
 
@@ -83,25 +85,7 @@ const getNavItems = (role: UserRole): NavItem[] => {
         href: "/top-players",
         icon: <Trophy className="h-5 w-5" />,
       },
-      {
-        title: "Файловое хранилище",
-        href: "/file-storage",
-        icon: <FolderOpen className="h-5 w-5" />,
-      }
-    );
-  }
 
-  // Элементы только для персонала
-  if (role === "staff") {
-    baseItems.push(
-      // Временно скрыта вкладка История из-за технических проблем с отображением данных
-      /* 
-      {
-        title: "История",
-        href: "/history",
-        icon: <Clock className="h-5 w-5" />,
-      },
-      */
       {
         title: "Управление игроками",
         href: "/players",
@@ -117,11 +101,6 @@ const getNavItems = (role: UserRole): NavItem[] => {
         href: "/player-card",
         icon: <CreditCard className="h-5 w-5 text-primary" />,
       },
-      {
-        title: "Импорт CS2 Excel",
-        href: ROUTES.CS2_EXCEL_IMPORT,
-        icon: <Upload className="h-5 w-5" />,
-      }
     );
   }
 
@@ -139,11 +118,12 @@ const getNavItems = (role: UserRole): NavItem[] => {
 
 /**
  * Компонент боковой панели навигации с учетом роли пользователя
+
  */
 const Sidebar: React.FC = () => {
   const location = useLocation();
   const { user, logout } = useAuth();
-  const navItems = getNavItems(user?.role as UserRole || null);
+  const navItems = getNavItems(user?.role as UserRole || null, (user?.playerType as PlayerType) || null);
 
   // Стили для компонентов
   const styles: Record<string, CSSProperties> = {
@@ -182,6 +162,7 @@ const Sidebar: React.FC = () => {
 
   /**
    * Рендерит элемент навигации с поддержкой подсказок
+
    */
   const renderNavItem = (item: NavItem) => {
     const isActive = location.pathname === item.href;
@@ -272,3 +253,6 @@ const Sidebar: React.FC = () => {
 };
 
 export default Sidebar;
+
+
+

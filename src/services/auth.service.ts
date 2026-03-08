@@ -43,6 +43,12 @@ export class AuthService {
     }
 
     const normalizedRole = rawUser.role === 'staff' ? 'staff' : 'player';
+    const normalizedPlayerType =
+      normalizedRole === 'player' && (rawUser.playerType === 'solo' || rawUser.playerType === 'team')
+        ? rawUser.playerType
+        : normalizedRole === 'player'
+          ? 'team'
+          : undefined;
     const id = String(rawUser.id || rawUser._id || '');
 
     if (!id) {
@@ -52,7 +58,8 @@ export class AuthService {
     return {
       ...rawUser,
       id,
-      role: normalizedRole
+      role: normalizedRole,
+      playerType: normalizedPlayerType
     } as User;
   }
 

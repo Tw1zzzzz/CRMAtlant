@@ -1,16 +1,20 @@
-/**
- * Типы, связанные с пользователем
+﻿/**
+ * РўРёРїС‹, СЃРІСЏР·Р°РЅРЅС‹Рµ СЃ РїРѕР»СЊР·РѕРІР°С‚РµР»РµРј
  */
 
-/** Роли пользователей в системе */
+/** Р РѕР»Рё РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№ РІ СЃРёСЃС‚РµРјРµ */
 export type UserRole = "player" | "staff";
 
-/** Основная модель пользователя */
+/** РўРёРї РёРіСЂРѕРєР° */
+export type PlayerType = "solo" | "team";
+
+/** РћСЃРЅРѕРІРЅР°СЏ РјРѕРґРµР»СЊ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ */
 export interface User {
   readonly id: string;
   email: string;
   name: string;
   role: UserRole;
+  playerType?: PlayerType;
   privilegeKey?: string;
   completedTests?: boolean;
   completedBalanceWheel?: boolean;
@@ -19,31 +23,33 @@ export interface User {
   _updateTimestamp?: number;
 }
 
-/** Данные для создания нового пользователя */
+/** Р”Р°РЅРЅС‹Рµ РґР»СЏ СЃРѕР·РґР°РЅРёСЏ РЅРѕРІРѕРіРѕ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ */
 export interface CreateUserDto {
   name: string;
   email: string;
   password: string;
   role?: UserRole;
+  playerType?: PlayerType;
   faceitUrl?: string;
   nickname?: string;
 }
 
-/** Данные для входа пользователя */
+/** Р”Р°РЅРЅС‹Рµ РґР»СЏ РІС…РѕРґР° РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ */
 export interface LoginDto {
   email: string;
   password: string;
 }
 
-/** Ответ от сервера при аутентификации */
+/** РћС‚РІРµС‚ РѕС‚ СЃРµСЂРІРµСЂР° РїСЂРё Р°СѓС‚РµРЅС‚РёС„РёРєР°С†РёРё */
 export interface AuthResponse {
   token: string;
   user: User;
 }
 
-/** Данные для обновления профиля */
+/** Р”Р°РЅРЅС‹Рµ РґР»СЏ РѕР±РЅРѕРІР»РµРЅРёСЏ РїСЂРѕС„РёР»СЏ */
 export interface UpdateUserDto {
   name?: string;
   email?: string;
   avatar?: File;
 } 
+

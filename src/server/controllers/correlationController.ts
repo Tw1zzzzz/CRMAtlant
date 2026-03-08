@@ -11,7 +11,10 @@ import BalanceWheel from '../models/BalanceWheel';
 import ScreenTime from '../models/ScreenTime';
 import GameStats from '../models/GameStats';
 import Match from '../models/Match';
+import TestEntry from '../models/TestEntry';
 import User from '../models/User';
+import FaceitAccount from '../models/FaceitAccount';
+import { resolveFaceitProfile } from '../services/faceitService';
 
 /**
  * Получить корреляции между отчетами команды и настроением игроков
@@ -428,14 +431,54 @@ export const getMultiMetrics = async (req: AuthRequest, res: Response) => {
     
     console.log(`[CORRELATION] Фильтр запроса:`, filter);
     console.log(`[CORRELATION] Фильтр матчей (ELO):`, matchFilter);
+
+    const getCurrentFaceitElo = async (faceitAccountIds: string[]): Promise<number | null> => {
+      if (!faceitAccountIds.length) return null;
+
+      try {
+        const accounts = await FaceitAccount.find({ _id: { $in: faceitAccountIds } })
+          .select('faceitId')
+          .lean();
+
+        if (!accounts.length) return null;
+
+        const profiles = await Promise.all(
+          accounts.map(async (account: any) => {
+            try {
+              return await resolveFaceitProfile(account.faceitId);
+            } catch (error) {
+              console.warn('[CORRELATION] Не удалось получить live ELO Faceit:', account.faceitId, error);
+              return null;
+            }
+          })
+        );
+
+        const eloValues = profiles
+          .map((profile) => profile?.elo)
+          .filter((elo): elo is number => Number.isFinite(elo));
+
+        if (!eloValues.length) return null;
+
+        if (analysisMode === 'individual') {
+          return Math.round(eloValues[0]);
+        }
+
+        const avg = eloValues.reduce((sum, value) => sum + value, 0) / eloValues.length;
+        return Math.round(avg);
+      } catch (error) {
+        console.warn('[CORRELATION] Ошибка получения live ELO Faceit:', error);
+        return null;
+      }
+    };
     
     // Получаем данные из всех коллекций параллельно
-    const [moodData, balanceData, screenTimeData, gameStatsData, matchData] = await Promise.all([
+    const [moodData, balanceData, screenTimeData, gameStatsData, matchData, testData] = await Promise.all([
       MoodEntry.find(filter).sort({ date: 1 }).lean(),
       BalanceWheel.find(filter).sort({ date: 1 }).lean(),
       ScreenTime.find(filter).sort({ date: 1 }).lean(),
       GameStats.find(filter).sort({ date: 1 }).lean(),
-      Match.find(matchFilter).sort({ playedAt: 1 }).lean()
+      Match.find(matchFilter).sort({ playedAt: 1 }).lean(),
+      TestEntry.find(filter).sort({ date: 1 }).lean()
     ]);
     
     console.log(`[CORRELATION] Найдено данных: настроение=${moodData.length}, баланс=${balanceData.length}, экранное время=${screenTimeData.length}, игровые показатели=${gameStatsData.length}, матчи(ELO)=${matchData.length}`);
@@ -503,6 +546,57 @@ export const getMultiMetrics = async (req: AuthRequest, res: Response) => {
         dayData.eloCount = (dayData.eloCount || 0) + 1;
       }
     });
+
+    // РћР±СЂР°Р±Р°С‚С‹РІР°РµРј РґР°РЅРЅС‹Рµ С‚РµСЃС‚РѕРІ
+    testData.forEach((entry: any) => {
+      const dateKey = entry.date.toISOString().split('T')[0];
+      if (!dataByDate.has(dateKey)) {
+        dataByDate.set(dateKey, { date: dateKey, count: 0 });
+      }
+      const dayData = dataByDate.get(dateKey);
+      dayData.testsCount = (dayData.testsCount || 0) + 1;
+      if (Number.isFinite(entry.scoreNormalized)) {
+        dayData.testsScore = (dayData.testsScore || 0) + entry.scoreNormalized;
+        dayData.testsScoreCount = (dayData.testsScoreCount || 0) + 1;
+      }
+    });
+
+    // Текущий ELO: для individual — последний матч, для team — среднее по последнему матчу каждого игрока
+    let currentElo: number | null = null;
+    const requestedFaceitAccountIds =
+      analysisMode === 'individual'
+        ? (matchFilter.faceitAccountId ? [String(matchFilter.faceitAccountId)] : [])
+        : Array.isArray(matchFilter.faceitAccountId?.$in)
+          ? matchFilter.faceitAccountId.$in.map((id: any) => String(id))
+          : [];
+
+    currentElo = await getCurrentFaceitElo(requestedFaceitAccountIds);
+
+    if (matchData.length > 0) {
+      if (currentElo === null) {
+        if (analysisMode === 'individual') {
+          const lastMatch = matchData[matchData.length - 1];
+          const eloValue = Number.isFinite(lastMatch.eloAfter) ? lastMatch.eloAfter : lastMatch.eloBefore;
+          currentElo = Number.isFinite(eloValue) ? Math.round(eloValue) : null;
+        } else {
+          const latestByAccount = new Map<string, { playedAt: Date; elo: number }>();
+          matchData.forEach((entry: any) => {
+            const accountId = entry.faceitAccountId?.toString?.() || String(entry.faceitAccountId);
+            const eloValue = Number.isFinite(entry.eloAfter) ? entry.eloAfter : entry.eloBefore;
+            if (!Number.isFinite(eloValue)) return;
+            const prev = latestByAccount.get(accountId);
+            if (!prev || entry.playedAt > prev.playedAt) {
+              latestByAccount.set(accountId, { playedAt: entry.playedAt, elo: eloValue });
+            }
+          });
+          const eloValues = Array.from(latestByAccount.values()).map((item) => item.elo);
+          if (eloValues.length > 0) {
+            const avg = eloValues.reduce((sum, v) => sum + v, 0) / eloValues.length;
+            currentElo = Math.round(avg);
+          }
+        }
+      }
+    }
     
     // Преобразуем в массив и усредняем значения
     const result = Array.from(dataByDate.values()).map((dayData: any) => ({
@@ -513,7 +607,9 @@ export const getMultiMetrics = async (req: AuthRequest, res: Response) => {
       screenTime: dayData.screenTimeCount ? Number((dayData.screenTime / dayData.screenTimeCount).toFixed(1)) : null,
       winRate: dayData.gameStatsCount ? Number((dayData.winRate / dayData.gameStatsCount).toFixed(1)) : null,
       kdRatio: dayData.gameStatsCount ? Number((dayData.kdRatio / dayData.gameStatsCount).toFixed(2)) : null,
-      elo: dayData.eloCount ? Number((dayData.elo / dayData.eloCount).toFixed(0)) : null
+      elo: dayData.eloCount ? Number((dayData.elo / dayData.eloCount).toFixed(0)) : null,
+      testsScore: dayData.testsScoreCount ? Number((dayData.testsScore / dayData.testsScoreCount).toFixed(1)) : null,
+      testsCount: dayData.testsCount ? Number(dayData.testsCount) : null
     })).sort((a, b) => a.date.localeCompare(b.date));
     
     console.log(`[CORRELATION] Обработано ${result.length} дней данных`);
@@ -527,7 +623,8 @@ export const getMultiMetrics = async (req: AuthRequest, res: Response) => {
         dateFrom,
         dateTo,
         totalDays: result.length,
-        generatedAt: new Date().toISOString()
+        generatedAt: new Date().toISOString(),
+        currentElo
       }
     });
     

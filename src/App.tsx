@@ -1,4 +1,4 @@
-import { Toaster } from "@/components/ui/toaster";
+﻿import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { FullScreenLoader } from "@/components/ui/loading-spinner";
@@ -11,14 +11,11 @@ import Dashboard from "./pages/Dashboard";
 import MoodTracker from "./pages/MoodTracker";
 import TestTracker from "./pages/TestTracker";
 import Statistics from "./pages/Statistics";
+import GameStatsPage from "./pages/GameStatsPage";
 import BalanceWheel from "./pages/BalanceWheel";
 import StaffBalanceWheel from "./pages/StaffBalanceWheel";
 import StaffRoster from "./pages/StaffRoster";
 import TopPlayers from "./pages/TopPlayers";
-import Analytics from "./pages/Analytics";
-import NewAnalytics from "./pages/NewAnalytics";
-import ExcelImport from "./pages/ExcelImport";
-import FileStorage from "./pages/FileStorage";
 import ActivityHistory from "./pages/ActivityHistory";
 import Index from "./pages/Index";
 import Profile from "./pages/Profile";
@@ -28,37 +25,49 @@ import CorrelationAnalysisPage from "./pages/CorrelationAnalysisPage";
 import NotFound from "./pages/NotFound";
 import ROUTES from "./lib/routes";
 import StaffManagement from "./client/src/components/admin/StaffManagement";
-
+import { PlayerType } from "@/types";
 const queryClient = new QueryClient();
 
 /**
- * Унифицированный компонент для защиты маршрутов с проверкой роли
+ * РЈРЅРёС„РёС†РёСЂРѕРІР°РЅРЅС‹Р№ РєРѕРјРїРѕРЅРµРЅС‚ РґР»СЏ Р·Р°С‰РёС‚С‹ РјР°СЂС€СЂСѓС‚РѕРІ СЃ РїСЂРѕРІРµСЂРєРѕР№ СЂРѕР»Рё
  */
 interface RouteGuardProps {
   children: React.ReactNode;
   requiredRole?: string;
+  allowedPlayerTypes?: PlayerType[];
+  blockedPlayerTypes?: PlayerType[];
 }
 
-const RouteGuard = ({ children, requiredRole }: RouteGuardProps) => {
+const RouteGuard = ({ children, requiredRole, allowedPlayerTypes, blockedPlayerTypes }: RouteGuardProps) => {
   const { user, loading } = useAuth();
   
   if (loading) {
-    return <FullScreenLoader text="Проверка авторизации..." />;
+    return <FullScreenLoader text="РџСЂРѕРІРµСЂРєР° Р°РІС‚РѕСЂРёР·Р°С†РёРё..." />;
   }
   
-  // Проверка на авторизацию
+  // РџСЂРѕРІРµСЂРєР° РЅР° Р°РІС‚РѕСЂРёР·Р°С†РёСЋ
   if (!user) return <Navigate to={ROUTES.WELCOME} replace />;
   
-  // Если указана обязательная роль и она не совпадает - перенаправляем
+  // Р•СЃР»Рё СѓРєР°Р·Р°РЅР° РѕР±СЏР·Р°С‚РµР»СЊРЅР°СЏ СЂРѕР»СЊ Рё РѕРЅР° РЅРµ СЃРѕРІРїР°РґР°РµС‚ - РїРµСЂРµРЅР°РїСЂР°РІР»СЏРµРј
   if (requiredRole && user.role !== requiredRole) {
     return <Navigate to={ROUTES.DASHBOARD} replace />;
   }
   
+  const effectivePlayerType: PlayerType | undefined =
+    user.role === "player" ? (user.playerType || "team") : undefined;
+
+  if (user.role === "player" && blockedPlayerTypes?.includes(effectivePlayerType || "team")) {
+    return <Navigate to={ROUTES.DASHBOARD} replace />;
+  }
+
+  if (user.role === "player" && allowedPlayerTypes && !allowedPlayerTypes.includes(effectivePlayerType || "team")) {
+    return <Navigate to={ROUTES.DASHBOARD} replace />;
+  }
   return <>{children}</>;
 };
 
 /**
- * Компонент маршрутов приложения
+ * РљРѕРјРїРѕРЅРµРЅС‚ РјР°СЂС€СЂСѓС‚РѕРІ РїСЂРёР»РѕР¶РµРЅРёСЏ
  */
 const AppRoutes = () => (
   <Routes>
@@ -73,6 +82,7 @@ const AppRoutes = () => (
       <Route path={ROUTES.MOOD_TRACKER} element={<MoodTracker />} />
       <Route path={ROUTES.TEST_TRACKER} element={<TestTracker />} />
       <Route path={ROUTES.STATISTICS} element={<Statistics />} />
+      <Route path={ROUTES.GAME_STATS} element={<GameStatsPage />} />
       
       <Route 
         path={ROUTES.BALANCE_WHEEL} 
@@ -94,33 +104,17 @@ const AppRoutes = () => (
       
       <Route 
         path={ROUTES.TOP_PLAYERS} 
-        element={<TopPlayers />} 
-      />
-      
-      <Route 
-        path={ROUTES.ANALYTICS} 
         element={
-          <RouteGuard>
-            <Analytics />
-          </RouteGuard>
-        } 
-      />
-
-      <Route 
-        path={ROUTES.CS2_EXCEL_IMPORT} 
-        element={
-          <RouteGuard requiredRole="staff">
-            <ExcelImport />
+          <RouteGuard blockedPlayerTypes={["solo"]}>
+            <TopPlayers />
           </RouteGuard>
         } 
       />
       
-      <Route 
-        path={ROUTES.FILE_STORAGE} 
-        element={<FileStorage />} 
-      />
+      <Route path={ROUTES.ANALYTICS} element={<Navigate to={ROUTES.STATISTICS} replace />} />
       
-      {/* Временно отключен маршрут к странице истории активности из-за технических проблем
+      
+      {/*
       <Route 
         path={ROUTES.ACTIVITY_HISTORY} 
         element={<ActivityHistory />} 
@@ -141,10 +135,7 @@ const AppRoutes = () => (
         } 
       />
       
-      <Route 
-        path={ROUTES.NEW_ANALYTICS} 
-        element={<NewAnalytics />} 
-      />
+      <Route path={ROUTES.NEW_ANALYTICS} element={<Navigate to={ROUTES.STATISTICS} replace />} />
       
       <Route 
         path="/correlation-analysis" 
@@ -197,7 +188,7 @@ const AppRoutes = () => (
 );
 
 /**
- * Главный компонент приложения
+ * Р“Р»Р°РІРЅС‹Р№ РєРѕРјРїРѕРЅРµРЅС‚ РїСЂРёР»РѕР¶РµРЅРёСЏ
  */
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -216,3 +207,8 @@ const App = () => (
 );
 
 export default App;
+
+
+
+
+

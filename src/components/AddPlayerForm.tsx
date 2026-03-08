@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import axios from "axios";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { PlayerType } from "@/types";
 
 // Базовый URL API
 const baseUrl = "";
@@ -26,6 +27,7 @@ interface AddPlayerFormData {
     nickname: string;
   };
   communicationLine: string;
+  playerType: PlayerType;
 }
 
 // Тип пропсов
@@ -47,7 +49,8 @@ const AddPlayerForm: React.FC<AddPlayerFormProps> = ({ onPlayerAdded }) => {
       steam: "",
       nickname: ""
     },
-    communicationLine: ""
+    communicationLine: "",
+    playerType: "team"
   });
   
   // Состояние загрузки
@@ -279,6 +282,7 @@ const AddPlayerForm: React.FC<AddPlayerFormProps> = ({ onPlayerAdded }) => {
             email: email,
             password: randomPassword,
             role: "player",
+            playerType: formData.playerType,
             faceitUrl: formData.contacts.faceit.trim(),
             nickname: formData.contacts.nickname.trim() || formData.name.trim()
           }, 
@@ -370,7 +374,8 @@ const AddPlayerForm: React.FC<AddPlayerFormProps> = ({ onPlayerAdded }) => {
           steam: "",
           nickname: ""
         },
-        communicationLine: ""
+        communicationLine: "",
+        playerType: "team"
       });
       
       setRoadmapFile(null);
@@ -416,23 +421,49 @@ const AddPlayerForm: React.FC<AddPlayerFormProps> = ({ onPlayerAdded }) => {
           </TabsList>
           
           <TabsContent value="info" className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Никнейм игрока</Label>
-              <Input
-                id="name"
-                name="name"
-                value={formData.name}
-                onChange={handleChange}
-                placeholder="Введите никнейм игрока"
-                required
-                disabled={isLoading}
-                className="text-lg py-6"
-              />
-              <p className="text-sm text-muted-foreground">
-                Email и пароль будут сгенерированы автоматически
-              </p>
-            </div>
-          </TabsContent>
+  <div className="space-y-2">
+    <Label htmlFor="name">Никнейм игрока</Label>
+    <Input
+      id="name"
+      name="name"
+      value={formData.name}
+      onChange={handleChange}
+      placeholder="Введите никнейм игрока"
+      required
+      disabled={isLoading}
+      className="text-lg py-6"
+    />
+    <p className="text-sm text-muted-foreground">
+      Email и пароль будут сгенерированы автоматически
+    </p>
+  </div>
+
+  <div className="space-y-2">
+    <Label>Тип игрока</Label>
+    <div className="flex items-center space-x-4">
+      <label className="flex items-center space-x-2">
+        <input
+          type="radio"
+          checked={formData.playerType === "team"}
+          onChange={() => setFormData(prev => ({ ...prev, playerType: "team" }))}
+          className="h-4 w-4"
+          disabled={isLoading}
+        />
+        <span>Член команды</span>
+      </label>
+      <label className="flex items-center space-x-2">
+        <input
+          type="radio"
+          checked={formData.playerType === "solo"}
+          onChange={() => setFormData(prev => ({ ...prev, playerType: "solo" }))}
+          className="h-4 w-4"
+          disabled={isLoading}
+        />
+        <span>Одиночный игрок</span>
+      </label>
+    </div>
+  </div>
+</TabsContent>
           
           <TabsContent value="contacts" className="space-y-4">
             <div className="space-y-2">
@@ -636,3 +667,9 @@ const AddPlayerForm: React.FC<AddPlayerFormProps> = ({ onPlayerAdded }) => {
 };
 
 export default AddPlayerForm; 
+
+
+
+
+
+

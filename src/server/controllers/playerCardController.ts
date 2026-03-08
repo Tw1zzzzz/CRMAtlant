@@ -299,9 +299,9 @@ export const updateContacts = async (req: Request, res: Response) => {
     }
 
     // Находим карточку
-    let playerCard = await PlayerCard.findOne({ userId });
+    const existingCard = await PlayerCard.findOne({ userId });
     
-    if (!playerCard) {
+    if (!existingCard) {
       return res.status(404).json({ 
         success: false, 
         message: 'Карточка игрока не найдена' 
@@ -318,10 +318,29 @@ export const updateContacts = async (req: Request, res: Response) => {
     };
 
     // Обновляем контакты
-    playerCard.contacts = sanitizedContacts;
+    const playerCard = await PlayerCard.findOneAndUpdate(
+      { userId },
+      {
+        $set: {
+          'contacts.vk': sanitizedContacts.vk,
+          'contacts.telegram': sanitizedContacts.telegram,
+          'contacts.faceit': sanitizedContacts.faceit,
+          'contacts.steam': sanitizedContacts.steam,
+          'contacts.nickname': sanitizedContacts.nickname
+        }
+      },
+      {
+        new: true,
+        runValidators: true
+      }
+    );
 
-    // Сохраняем изменения
-    await playerCard.save();
+    if (!playerCard) {
+      return res.status(404).json({
+        success: false,
+        message: 'Карточка игрока не найдена'
+      });
+    }
 
     return res.status(200).json({ 
       success: true,

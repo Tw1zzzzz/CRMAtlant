@@ -84,7 +84,7 @@ export const oauthCallback = async (req: AuthRequest, res: Response): Promise<Re
       .catch(err => console.error('Ошибка при импорте матчей:', err));
     
     // Перенаправляем на страницу аналитики
-    res.redirect('/analytics');
+    res.redirect('/stats');
   } catch (error) {
     console.error('Ошибка при обработке callback OAuth:', error);
     res.status(500).json({ message: 'Не удалось обработать ответ OAuth' });

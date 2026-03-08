@@ -15,6 +15,7 @@ import {
   getMyMoodEntries, 
   getAllPlayersMoodStats, 
   getAllPlayersMoodStatsByDate,
+  getAllMoodEntries,
   getPlayerMoodEntries, 
   getPlayerMoodChartData,
   getPlayerMoodByDate,
@@ -34,11 +35,13 @@ import axios from "axios";
 interface MoodEntryWithTimeOfDay extends MoodEntry {
   id: string;
   _id?: string; // Добавляем поле _id, так как оно может приходить с сервера
-  date: string;
+  date: Date | string;
   mood: number;
   energy: number;
   timeOfDay: "morning" | "afternoon" | "evening";
   comment?: string;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
 }
 
 // Добавление интерфейса MoodEntryData
@@ -137,6 +140,24 @@ const extractPlayerId = (playerId: any): string => {
   return playerId;
 }
 
+const toLocalYmd = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const toSafeDate = (value: any): Date => {
+  if (value instanceof Date) return value;
+  return new Date(value);
+};
+
+const getEntryTimestamp = (entry: any): Date => {
+  if (entry?.createdAt) return toSafeDate(entry.createdAt);
+  if (entry?.updatedAt) return toSafeDate(entry.updatedAt);
+  return toSafeDate(entry?.date);
+};
+
 const MoodTracker = () => {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -156,6 +177,8 @@ const MoodTracker = () => {
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [playerEntries, setPlayerEntries] = useState<MoodEntryWithTimeOfDay[]>([]);
   const [isLoadingPlayerData, setIsLoadingPlayerData] = useState<boolean>(false);
+  const [recentEntries, setRecentEntries] = useState<MoodEntryWithTimeOfDay[]>([]);
+  const [isLoadingRecentEntries, setIsLoadingRecentEntries] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<string>(user?.role === "staff" ? "players" : "my");
   const [chartData, setChartData] = useState<ChartData[]>([]);
   
@@ -188,11 +211,39 @@ const MoodTracker = () => {
   
   // Добавляем ref для секции с записями игрока
   const playerEntriesRef = useRef<HTMLDivElement>(null);
+
+  const resolveTimeOfDay = (date: Date, explicit?: string) => {
+    if (explicit === "morning" || explicit === "afternoon" || explicit === "evening") {
+      return explicit;
+    }
+    const hour = date.getHours();
+    if (hour < 12) return "morning";
+    if (hour < 18) return "afternoon";
+    return "evening";
+  };
+
+  const normalizeEntry = (entry: any): MoodEntryWithTimeOfDay => {
+    const entryDate = entry.date instanceof Date ? entry.date : new Date(entry.date);
+    const timeOfDayResolved = resolveTimeOfDay(entryDate, entry.timeOfDay);
+    const id = entry.id || entry._id || `${entryDate.toISOString()}_${timeOfDayResolved}_${entry.mood ?? "x"}_${entry.energy ?? "x"}`;
+    const createdAt = entry.createdAt ? toSafeDate(entry.createdAt) : undefined;
+    const updatedAt = entry.updatedAt ? toSafeDate(entry.updatedAt) : undefined;
+
+    return {
+      ...entry,
+      id,
+      date: entryDate,
+      timeOfDay: timeOfDayResolved,
+      createdAt,
+      updatedAt
+    };
+  };
   
   useEffect(() => {
     if (user?.role === "staff") {
       // Персонал видит только статистику игроков
       loadPlayerStats();
+      loadRecentEntries();
       
       // Восстанавливаем выбранного игрока из sessionStorage
       try {
@@ -222,14 +273,15 @@ const MoodTracker = () => {
   }, [playerEntries]);
   
   // Загрузка статистики по всем игрокам (для персонала)
-  const loadPlayerStats = async () => {
+  const loadPlayerStats = async (dateOverride?: Date) => {
     if (user?.role !== "staff") return;
     
     try {
       setIsLoadingPlayerData(true);
       
       // Используем форматированную дату для API
-      const formattedDate = selectedChartDate.toISOString().split('T')[0];
+      const targetDate = dateOverride ?? selectedChartDate;
+      const formattedDate = toLocalYmd(targetDate);
       
       // Используем обновленное API с фильтрацией по дате
       const response = await getAllPlayersMoodStatsByDate(formattedDate);
@@ -256,13 +308,30 @@ const MoodTracker = () => {
       setIsLoadingPlayerData(false);
     }
   };
+
+  const loadRecentEntries = async () => {
+    if (user?.role !== "staff") return;
+
+    try {
+      setIsLoadingRecentEntries(true);
+      const response = await getAllMoodEntries();
+      const normalizedEntries = response.data.map(normalizeEntry);
+      const sortedEntries = normalizedEntries.sort((a, b) => getEntryTimestamp(b).getTime() - getEntryTimestamp(a).getTime());
+      setRecentEntries(sortedEntries.slice(0, 8));
+    } catch (error) {
+      console.error("Ошибка при загрузке последних записей игроков:", error);
+      setRecentEntries([]);
+    } finally {
+      setIsLoadingRecentEntries(false);
+    }
+  };
   
   // Метод для изменения выбранной даты графика
   const handleChartDateChange = (date: Date) => {
     setSelectedChartDate(date);
     
     // Перезагружаем статистику игроков с новой датой
-    loadPlayerStats();
+    loadPlayerStats(date);
     
     // Если выбран игрок - перезагружаем его данные с новой датой
     if (selectedPlayerId) {
@@ -297,16 +366,12 @@ const MoodTracker = () => {
       
       try {
         // Форматируем дату для API (YYYY-MM-DD)
-        const apiDateFormat = date.toISOString().split('T')[0];
+        const apiDateFormat = toLocalYmd(date);
         
         // Используем API с фильтрацией по дате на сервере
         const response = await getPlayerMoodByDate(actualPlayerId, apiDateFormat);
         
-        const playerEntries = response.data.map((entry: any) => ({
-          ...entry,
-          date: new Date(entry.date),
-          timeOfDay: entry.timeOfDay || "morning"
-        }));
+        const playerEntries = response.data.map(normalizeEntry);
         
         setPlayerEntries(playerEntries as MoodEntryWithTimeOfDay[]);
         setSelectedPlayerId(actualPlayerId);
@@ -325,7 +390,7 @@ const MoodTracker = () => {
             // Фильтруем данные на клиентской стороне если необходимо
             const filteredChartData = fallbackChartResponse.data.filter((item: any) => {
               const itemDate = new Date(item.date);
-              const itemDateStr = itemDate.toISOString().split('T')[0];
+              const itemDateStr = toLocalYmd(itemDate);
               return itemDateStr === apiDateFormat;
             });
             
@@ -353,17 +418,13 @@ const MoodTracker = () => {
           const fallbackResponse = await getPlayerMoodEntries(actualPlayerId);
           
           // Фильтруем записи по дате на стороне клиента
-          const apiDateFormat = date.toISOString().split('T')[0];
+          const apiDateFormat = toLocalYmd(date);
           const filteredEntries = fallbackResponse.data
             .filter((entry: any) => {
               const entryDate = new Date(entry.date);
-              return entryDate.toISOString().split('T')[0] === apiDateFormat;
+              return toLocalYmd(entryDate) === apiDateFormat;
             })
-            .map((entry: any) => ({
-              ...entry,
-              date: new Date(entry.date),
-              timeOfDay: entry.timeOfDay || "morning"
-            }));
+            .map(normalizeEntry);
           
           setPlayerEntries(filteredEntries as MoodEntryWithTimeOfDay[]);
           setSelectedPlayerId(actualPlayerId);
@@ -516,11 +577,7 @@ const MoodTracker = () => {
         // Загружаем данные с сервера
         try {
           const response = await getMyMoodEntries();
-          // Преобразуем даты из строк в объекты Date
-          let serverEntries = response.data.map((entry: any) => ({
-            ...entry,
-            date: new Date(entry.date)
-          }));
+          const serverEntries = response.data.map(normalizeEntry);
           
           console.log('Загружено записей с сервера:', serverEntries.length);
           
@@ -539,7 +596,7 @@ const MoodTracker = () => {
           console.error('Ошибка загрузки настроений с сервера:', error);
           
           // Если не удалось загрузить с сервера, используем локальные данные
-          const localEntries = moodRepository.getAll();
+          const localEntries = moodRepository.getAll().map(normalizeEntry);
           const uniqueLocalEntries = removeDuplicateEntries(localEntries);
           setEntries(uniqueLocalEntries as MoodEntryWithTimeOfDay[]);
           
@@ -551,7 +608,7 @@ const MoodTracker = () => {
         }
       } else {
         // Если пользователь не авторизован, используем локальные данные
-        const localEntries = moodRepository.getAll();
+        const localEntries = moodRepository.getAll().map(normalizeEntry);
         const uniqueLocalEntries = removeDuplicateEntries(localEntries);
         setEntries(uniqueLocalEntries as MoodEntryWithTimeOfDay[]);
       }
@@ -575,8 +632,8 @@ const MoodTracker = () => {
     // Проходим по всем записям и сохраняем только уникальные
     entries.forEach(entry => {
       const entryDate = typeof entry.date === 'string' 
-        ? new Date(entry.date).toISOString().split('T')[0]
-        : entry.date.toISOString().split('T')[0];
+        ? toLocalYmd(new Date(entry.date))
+        : toLocalYmd(entry.date);
       
       // Создаем уникальный ключ для записи на основе даты и времени суток
       const key = `${entryDate}_${entry.timeOfDay}`;
@@ -643,14 +700,23 @@ const MoodTracker = () => {
       
       // Форматируем дату для проверки и API
       const formattedDate = selectedDate instanceof Date 
-        ? selectedDate.toISOString().split('T')[0] 
+        ? toLocalYmd(selectedDate) 
         : selectedDate;
+
+      const now = new Date();
+      const entryDate = new Date(selectedDate);
+      if (toLocalYmd(entryDate) === toLocalYmd(now)) {
+        entryDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+      } else {
+        const hour = timeOfDay === "morning" ? 9 : timeOfDay === "afternoon" ? 14 : 20;
+        entryDate.setHours(hour, 0, 0, 0);
+      }
     
       // Проверяем, есть ли уже запись на выбранную дату и время суток
       const existingEntries = entries.filter(entry => {
         const entryDate = typeof entry.date === 'string' 
-          ? new Date(entry.date).toISOString().split('T')[0] 
-          : (entry.date as Date).toISOString().split('T')[0];
+          ? toLocalYmd(new Date(entry.date)) 
+          : toLocalYmd(entry.date as Date);
         return entryDate === formattedDate && entry.timeOfDay === timeOfDay;
       });
       
@@ -667,7 +733,7 @@ const MoodTracker = () => {
     
       // Создаем объект с данными для API
       const newEntry = {
-        date: formattedDate,
+        date: entryDate.toISOString(),
         timeOfDay,
         mood,
         energy,
@@ -683,7 +749,7 @@ const MoodTracker = () => {
       let savedEntry = moodRepository.create({
         ...newEntry,
         id: tempId,
-        date: selectedDate // Для локального хранилища используем объект Date
+        date: entryDate // Для локального хранилища используем объект Date
       } as any);
       
       console.log("Локальная запись создана с ID:", savedEntry.id);
@@ -1144,8 +1210,8 @@ const MoodTracker = () => {
       .filter(entry => {
         // Формируем уникальный ключ для комбинации дата+время
         const dateStr = typeof entry.date === 'string' 
-          ? new Date(entry.date).toISOString().split('T')[0] 
-          : (entry.date as any).toISOString().split('T')[0];
+          ? toLocalYmd(new Date(entry.date)) 
+          : toLocalYmd(entry.date as any);
         const key = `${dateStr}_${entry.timeOfDay}`;
         
         // Получаем ID записи или генерируем его
@@ -1167,6 +1233,21 @@ const MoodTracker = () => {
     if (!entries || entries.length === 0) return "-";
     const sum = entries.reduce((acc, entry) => acc + entry[field], 0);
     return (sum / entries.length).toFixed(1);
+  };
+
+  const getEntryUserName = (entry: any): string => {
+    const candidate = entry?.userId || entry?.user || entry?.player || entry?.playerId || entry?.author;
+    if (typeof candidate === "string") return candidate;
+    if (candidate && typeof candidate === "object") {
+      if (candidate.name) return candidate.name;
+      if (candidate.username) return candidate.username;
+    }
+    return entry?.name || "Player";
+  };
+
+  const formatEntryMeta = (entry: MoodEntryWithTimeOfDay): string => {
+    const timestamp = getEntryTimestamp(entry);
+    return `${formatDate(timestamp, "d MMMM")} • ${formatDate(timestamp, "HH:mm")} • ${formatTimeOfDay(entry.timeOfDay)}`;
   };
 
   return (
@@ -1224,6 +1305,66 @@ const MoodTracker = () => {
               </Card>
               
               {/* Отображение карточек игроков */}
+              
+              <Card style={cardStyle}>
+                <CardHeader className="pb-2">
+                  <CardTitle style={titleStyle}>Recent entries</CardTitle>
+                  <CardDescription style={descriptionStyle}>
+                    Latest mood and energy updates from players
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isLoadingRecentEntries ? (
+                    <div className="flex justify-center py-6">
+                      <div className="h-6 w-6 animate-spin rounded-full border-b-2 border-t-2 border-primary"></div>
+                    </div>
+                  ) : recentEntries.length > 0 ? (
+                    <div className="space-y-3">
+                      {recentEntries.map(entry => (
+                        <div
+                          key={entry.id}
+                          className="flex items-start justify-between p-3 rounded-md"
+                          style={{
+                            backgroundColor: "rgba(22, 25, 37, 0.7)",
+                            border: `1px solid ${COLORS.borderColor}`
+                          }}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div
+                              className="w-9 h-9 rounded-full flex items-center justify-center"
+                              style={{ backgroundColor: COLORS.primary }}
+                            >
+                              <User className="h-4 w-4 text-white" />
+                            </div>
+                            <div>
+                              <div className="font-medium" style={titleStyle}>
+                                {getEntryUserName(entry)}
+                              </div>
+                              <div className="text-xs" style={descriptionStyle}>
+                                {formatEntryMeta(entry)}
+                              </div>
+                              {entry.comment && (
+                                <div className="text-sm mt-1" style={descriptionStyle}>
+                                  {entry.comment}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-right text-sm" style={descriptionStyle}>
+                            <div>Mood {entry.mood}/10</div>
+                            <div>Energy {entry.energy}/10</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="py-6 text-center" style={descriptionStyle}>
+                      No recent entries yet
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {playerStats.map(player => (
                   <Card key={player.userId} style={cardStyle}>

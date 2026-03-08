@@ -1,6 +1,7 @@
 import React, { useState, useEffect, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { PlayerType } from "@/types";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -37,6 +38,7 @@ interface RegisterFormState {
   name: string;
   role: UserRole;
   faceitUrl: string;
+  playerType: PlayerType;
 }
 
 /**
@@ -58,7 +60,8 @@ const Index: React.FC = () => {
     password: "",
     name: "",
     role: "player",
-    faceitUrl: ""
+    faceitUrl: "",
+    playerType: "team"
   });
 
   /**
@@ -117,7 +120,7 @@ const Index: React.FC = () => {
   const handleRegister = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
     
-    const { email, password, name, role, faceitUrl } = registerForm;
+    const { email, password, name, role, faceitUrl, playerType } = registerForm;
     
     if (!email.trim() || !password || !name.trim()) {
       toast.error("Пожалуйста, заполните все поля");
@@ -131,7 +134,7 @@ const Index: React.FC = () => {
     
     try {
       setLoading(true);
-      await register({ name, email, password, role, faceitUrl: faceitUrl.trim() || undefined });
+      await register({ name, email, password, role, playerType, faceitUrl: faceitUrl.trim() || undefined });
     } catch (error) {
       console.error('Ошибка регистрации:', error);
       toast.error("Не удалось зарегистрироваться. Попробуйте позже или обратитесь в поддержку.");
@@ -284,8 +287,35 @@ const Index: React.FC = () => {
                       </div>
                     </div>
                     {registerForm.role === "player" && (
-                      <div className="space-y-2">
-                        <Label htmlFor="register-faceit">Ссылка Faceit</Label>
+  <div className="space-y-2">
+    <Label>Тип игрока</Label>
+    <div className="flex space-x-4">
+      <label className="flex items-center space-x-2">
+        <input
+          type="radio"
+          checked={registerForm.playerType === "team"}
+          onChange={() => updateRegisterField('playerType', "team")}
+          className="h-4 w-4"
+          disabled={loading}
+        />
+        <span>Член команды</span>
+      </label>
+      <label className="flex items-center space-x-2">
+        <input
+          type="radio"
+          checked={registerForm.playerType === "solo"}
+          onChange={() => updateRegisterField('playerType', "solo")}
+          className="h-4 w-4"
+          disabled={loading}
+        />
+        <span>Одиночный игрок</span>
+      </label>
+    </div>
+  </div>
+)}
+                    {registerForm.role === "player" && (
+  <div className="space-y-2">
+    <Label htmlFor="register-faceit">Ссылка Faceit</Label>
                         <Input
                           id="register-faceit"
                           placeholder="https://www.faceit.com/en/players/your_nickname"
@@ -316,3 +346,14 @@ const Index: React.FC = () => {
 };
 
 export default Index;
+
+
+
+
+
+
+
+
+
+
+

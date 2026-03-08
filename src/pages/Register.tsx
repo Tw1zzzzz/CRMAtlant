@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
+import { PlayerType } from "@/types";
 import { toast } from "react-hot-toast";
 
 /**
@@ -22,6 +23,7 @@ interface RegisterFormState {
   password: string;
   role: UserRole;
   faceitUrl: string;
+  playerType: PlayerType;
   isLoading: boolean;
 }
 
@@ -36,6 +38,7 @@ const Register: React.FC = () => {
     password: "",
     role: "player",
     faceitUrl: "",
+    playerType: "team",
     isLoading: false
   });
   
@@ -68,7 +71,7 @@ const Register: React.FC = () => {
   const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
     
-    const { name, email, password, role, faceitUrl } = formState;
+    const { name, email, password, role, faceitUrl, playerType } = formState;
     
     // Валидация полей перед отправкой
     if (!name.trim() || !email.trim() || !password) {
@@ -85,7 +88,7 @@ const Register: React.FC = () => {
     setFormState(prevState => ({ ...prevState, isLoading: true }));
     
     try {
-      const result = await register({ name, email, password, role, faceitUrl: faceitUrl.trim() || undefined });
+      const result = await register({ name, email, password, role, playerType, faceitUrl: faceitUrl.trim() || undefined });
       
       if (result.success) {
         toast.success("Регистрация прошла успешно");
@@ -102,7 +105,7 @@ const Register: React.FC = () => {
     }
   };
 
-  const { name, email, password, role, faceitUrl, isLoading } = formState;
+  const { name, email, password, role, faceitUrl, playerType, isLoading } = formState;
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -176,6 +179,26 @@ const Register: React.FC = () => {
 
             {role === "player" && (
               <div className="space-y-2">
+                <Label>Тип игрока</Label>
+                <RadioGroup 
+                  defaultValue="team" 
+                  value={playerType} 
+                  onValueChange={(value) => setFormState(prevState => ({ ...prevState, playerType: value as PlayerType }))}
+                  disabled={isLoading}
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="team" id="player-team" />
+                    <Label htmlFor="player-team">Член команды</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="solo" id="player-solo" />
+                    <Label htmlFor="player-solo">Одиночный игрок</Label>
+                  </div>
+                </RadioGroup>
+              </div>
+            )}
+            {role === "player" && (
+              <div className="space-y-2">
                 <Label htmlFor="faceitUrl">Ссылка Faceit</Label>
                 <Input
                   id="faceitUrl"
@@ -212,3 +235,4 @@ const Register: React.FC = () => {
 };
 
 export default Register;
+

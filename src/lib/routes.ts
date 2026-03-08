@@ -8,12 +8,12 @@ export const ROUTES = {
   MOOD_TRACKER: '/mood',
   TEST_TRACKER: '/tests',
   STATISTICS: '/stats',
+  GAME_STATS: '/game-stats',
   PROFILE: '/profile',
   TOP_PLAYERS: '/top-players',
   ANALYTICS: '/analytics',
   NEW_ANALYTICS: '/new-analytics',
   CS2_EXCEL_IMPORT: '/cs2-excel-import',
-  FILE_STORAGE: '/file-storage',
   ACTIVITY_HISTORY: '/history',
   
   // Маршруты для игроков

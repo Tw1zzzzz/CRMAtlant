@@ -6,6 +6,7 @@ interface UserDocument extends mongoose.Document {
   email: string;
   password: string;
   role: string;
+  playerType?: string;
   avatar?: string;
   faceitAccountId?: mongoose.Types.ObjectId;
   privilegeKey?: string;
@@ -45,6 +46,11 @@ const userSchema = new mongoose.Schema(
       type: String,
       enum: ["player", "staff"],
       default: "player",
+    },
+    playerType: {
+      type: String,
+      enum: ["solo", "team"],
+      default: "team",
     },
     avatar: {
       type: String,

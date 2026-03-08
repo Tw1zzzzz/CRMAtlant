@@ -1,7 +1,7 @@
 import express from 'express';
 import { registerUser, loginUser, getCurrentUser } from '../controllers/authController';
 import { protect } from '../middleware/authMiddleware';
-import { avatarUpload } from '../controllers/fileController';
+import { avatarUpload } from '../controllers/avatarController';
 import User from '../models/User';
 import fs from 'fs';
 import path from 'path';

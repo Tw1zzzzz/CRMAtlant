@@ -1479,6 +1479,7 @@ const safeDeletePlayerCard = async (
         
         // Обновляем время последнего обновления в кэше
         lastUpdated.current[selectedPlayerId] = Date.now();
+        await fetchPlayerCard(selectedPlayerId, true);
       } else {
         // В случае ошибки возвращаем предыдущее состояние
         toast.error(result.error || "Не удалось обновить контакты");

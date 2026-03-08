@@ -104,6 +104,8 @@ interface GameStatsFormProps {
   loadingPlayers?: boolean;
   isLoading?: boolean;
   initialData?: Partial<GameStatsFormData>;
+  allowTeamMode?: boolean;
+  showPlayerSelect?: boolean;
 }
 
 const defaultSideStats: SideStatsData = {
@@ -127,7 +129,9 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
   onSelectedPlayerChange,
   loadingPlayers = false,
   isLoading = false,
-  initialData = {}
+  initialData = {},
+  allowTeamMode = true,
+  showPlayerSelect = true
 }) => {
   const { toast } = useToast();
   
@@ -156,8 +160,11 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
 
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
-  // Обработчик изменения режима анализа
+  // РћР±СЂР°Р±РѕС‚С‡РёРє РёР·РјРµРЅРµРЅРёСЏ СЂРµР¶РёРјР° Р°РЅР°Р»РёР·Р°
   const handleAnalysisModeChange = (mode: 'team' | 'individual') => {
+    if (!allowTeamMode && mode === 'team') {
+      return;
+    }
     onAnalysisModeChange(mode);
     
     if (mode === 'team') {
@@ -166,13 +173,13 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
     }
   };
 
-  // Обработчик выбора игрока
+  // РћР±СЂР°Р±РѕС‚С‡РёРє РІС‹Р±РѕСЂР° РёРіСЂРѕРєР°
   const handlePlayerSelect = (playerId: string) => {
     onSelectedPlayerChange(playerId);
     setFormData(prev => ({ ...prev, userId: playerId }));
   };
 
-  // Функция для расчета статистики одной стороны
+  // Р¤СѓРЅРєС†РёСЏ РґР»СЏ СЂР°СЃС‡РµС‚Р° СЃС‚Р°С‚РёСЃС‚РёРєРё РѕРґРЅРѕР№ стороны
   const calculateSideStats = (sideData: SideStatsData): CalculatedSideStats => {
     const winRate = sideData.totalMatches > 0 
       ? Math.round((sideData.wins / sideData.totalMatches) * 100 * 100) / 100 
@@ -204,12 +211,12 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
     };
   };
 
-  // Расчет всех показателей
+  // Р Р°СЃС‡РµС‚ РІСЃРµС… РїРѕРєР°Р·Р°С‚РµР»РµР№
   const calculatedStats: CalculatedStats = React.useMemo(() => {
     const ctCalculated = calculateSideStats(formData.ctSide);
     const tCalculated = calculateSideStats(formData.tSide);
 
-    // Общая статистика
+    // РћР±С‰Р°СЏ СЃС‚Р°С‚РёСЃС‚РёРєР°
     const totalMatches = ctCalculated.totalMatches + tCalculated.totalMatches;
     const wins = ctCalculated.wins + tCalculated.wins;
     const losses = ctCalculated.losses + tCalculated.losses;
@@ -253,21 +260,21 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
     };
   }, [formData]);
 
-  // Валидация формы
+  // Р’Р°Р»РёРґР°ция формы
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
 
-    // Проверяем выбор игрока для staff в индивидуальном режиме
-    if (analysisMode === 'individual' && !selectedPlayerId) {
+    // РџСЂРѕРІРµСЂСЏРµРј РІС‹Р±РѕСЂ РёРіСЂРѕРєР° РґР»СЏ staff РІ РёРЅРґРёРІРёРґСѓР°Р»СЊРЅРѕРј СЂРµР¶РёРјРµ
+    if (showPlayerSelect && analysisMode === 'individual' && !selectedPlayerId) {
       errors.playerSelection = 'Необходимо выбрать игрока для индивидуальной статистики';
     }
 
-    // Валидация даты
+    // Р’Р°Р»РёРґР°С†РёСЏ РґР°ты
     if (!formData.date) {
       errors.date = 'Необходимо указать дату';
     }
 
-    // Валидация CT Side (только если есть данные)
+    // Р’Р°Р»РёРґР°С†РёСЏ CT Side (С‚РѕР»СЊРєРѕ РµСЃР»Рё РµСЃС‚СЊ РґР°РЅРЅС‹Рµ)
     const { ctSide } = formData;
     if (ctSide.totalMatches > 0) {
       if (ctSide.wins + ctSide.losses + ctSide.draws !== ctSide.totalMatches) {
@@ -283,7 +290,7 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
       errors.ctPistol = 'CT: Выигранные пистолетные раунды не могут превышать общее количество';
     }
 
-    // Валидация T Side (только если есть данные)
+    // Р’Р°Р»РёРґР°С†РёСЏ T Side (С‚РѕР»СЊРєРѕ РµСЃР»Рё РµСЃС‚СЊ РґР°РЅРЅС‹Рµ)
     const { tSide } = formData;
     if (tSide.totalMatches > 0) {
       if (tSide.wins + tSide.losses + tSide.draws !== tSide.totalMatches) {
@@ -347,13 +354,13 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
     }
 
     try {
-      // Подготавливаем данные для отправки
+      // РџРѕРґРіРѕС‚Р°РІР»РёРІР°РµРј РґР°РЅРЅС‹Рµ РґР»СЏ РѕС‚РїСЂР°вки
       const submitData = {
         ...formData,
         userId: analysisMode === 'individual' ? selectedPlayerId : undefined
       };
       
-      console.log('Отправляем данные игровых показателей:', submitData);
+      console.log('РћС‚РїСЂР°РІР»СЏРµРј РґР°РЅРЅС‹Рµ РёРіСЂРѕРІС‹С… РїРѕРєР°Р·Р°С‚РµР»РµР№:', submitData);
       
       await onSubmit(submitData);
       
@@ -362,7 +369,7 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
         description: "Игровые показатели сохранены",
       });
       
-      // Сбрасываем форму после успешного сохранения
+      // РЎР±СЂР°СЃС‹РІР°РµРј С„РѕСЂРјСѓ РїРѕСЃР»Рµ СѓСЃРїРµС€РЅРѕРіРѕ СЃРѕС…СЂР°РЅРµния
       if (analysisMode === 'individual') {
         onSelectedPlayerChange('');
         setFormData(prev => ({ 
@@ -403,7 +410,7 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Выбор режима и игрока */}
+      {/* Р’С‹Р±РѕСЂ СЂРµР¶РёРјР° Рё РёРіСЂРѕРєР° */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -417,18 +424,18 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label className="text-base font-medium">Режим анализа</Label>
-            <Select value={analysisMode} onValueChange={handleAnalysisModeChange}>
+            <Select value={analysisMode} onValueChange={handleAnalysisModeChange} disabled={!allowTeamMode}>
               <SelectTrigger>
                 <SelectValue placeholder="Выберите режим анализа" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="individual">Индивидуальная статистика</SelectItem>
-                <SelectItem value="team">Командная статистика</SelectItem>
+                {allowTeamMode && <SelectItem value="team">Командная статистика</SelectItem>}
               </SelectContent>
             </Select>
           </div>
 
-          {analysisMode === 'individual' && (
+          {analysisMode === 'individual' && showPlayerSelect && (
             <div className="space-y-2">
               <Label className="text-base font-medium">Выберите игрока</Label>
               <Select 
@@ -474,11 +481,11 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
         </CardContent>
       </Card>
 
-      {/* Основные данные */}
+      {/* РћСЃРЅРѕРІРЅС‹Рµ РґР°РЅРЅС‹Рµ */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Trophy className="h-5 w-5" />
+            <Trophy className="h-5 w-5 text-white" />
             Основные данные
           </CardTitle>
         </CardHeader>
@@ -502,7 +509,7 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
         </CardContent>
       </Card>
 
-      {/* K/D Статистика */}
+      {/* K/D РЎС‚Р°С‚РёСЃС‚РёРєР° */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -544,7 +551,7 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
             </div>
           </div>
           
-          {/* Расчетные показатели K/D */}
+          {/* Р Р°СЃС‡РµС‚РЅС‹Рµ РїРѕРєР°Р·Р°С‚РµР»Рё K/D */}
           <div className="mt-4 p-3 bg-muted rounded-lg">
             <div className="text-sm font-medium mb-2">Автоматически рассчитывается:</div>
             <div className="grid grid-cols-1 gap-2">
@@ -557,11 +564,11 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
         </CardContent>
       </Card>
 
-      {/* CT Side Статистика */}
+      {/* CT Side РЎС‚Р°С‚РёСЃС‚РёРєР° */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Target className="h-5 w-5" />
+            <Target className="h-5 w-5 text-white" />
             Аналитические метрики игрока
           </CardTitle>
           <CardDescription>
@@ -626,7 +633,7 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
         </CardContent>
       </Card>
 
-      {/* CT Side Статистика */}
+      {/* CT Side РЎС‚Р°С‚РёСЃС‚РёРєР° */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -635,7 +642,7 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Матчи CT */}
+          {/* РњР°тчи CT */}
           <div>
             <h4 className="font-semibold mb-3">Матчи</h4>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -691,7 +698,7 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
 
           <Separator />
 
-          {/* Раунды CT */}
+          {/* Р Р°СѓРЅРґС‹ CT */}
           <div>
             <h4 className="font-semibold mb-3">Раунды</h4>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -736,7 +743,7 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
 
           <Separator />
 
-          {/* Пистолетные раунды CT */}
+          {/* РџРёСЃС‚РѕР»РµС‚РЅС‹Рµ СЂР°СѓРЅРґС‹ CT */}
           <div>
             <h4 className="font-semibold mb-3">Пистолетные раунды</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -768,7 +775,7 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
             )}
           </div>
 
-          {/* Расчетные показатели CT */}
+          {/* Р Р°СЃС‡РµС‚РЅС‹Рµ РїРѕРєР°Р·Р°С‚РµР»Рё CT */}
           <div className="p-3 bg-muted rounded-lg">
             <div className="text-sm font-medium mb-2">Автоматически рассчитывается:</div>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
@@ -797,16 +804,16 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
         </CardContent>
       </Card>
 
-      {/* T Side Статистика */}
+      {/* T Side РЎС‚Р°С‚РёСЃС‚РёРєР° */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Target className="h-5 w-5" />
+            <Target className="h-5 w-5 text-white" />
             T Side Статистика
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Матчи T */}
+          {/* РњР°тчи T */}
           <div>
             <h4 className="font-semibold mb-3">Матчи</h4>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -862,7 +869,7 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
 
           <Separator />
 
-          {/* Раунды T */}
+          {/* Р Р°СѓРЅРґС‹ T */}
           <div>
             <h4 className="font-semibold mb-3">Раунды</h4>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -907,7 +914,7 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
 
           <Separator />
 
-          {/* Пистолетные раунды T */}
+          {/* РџРёСЃС‚РѕР»РµС‚РЅС‹Рµ СЂР°СѓРЅРґС‹ T */}
           <div>
             <h4 className="font-semibold mb-3">Пистолетные раунды</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -939,7 +946,7 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
             )}
           </div>
 
-          {/* Расчетные показатели T */}
+          {/* Р Р°СЃС‡РµС‚РЅС‹Рµ РїРѕРєР°Р·Р°С‚РµР»Рё T */}
           <div className="p-3 bg-muted rounded-lg">
             <div className="text-sm font-medium mb-2">Автоматически рассчитывается:</div>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
@@ -968,7 +975,7 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
         </CardContent>
       </Card>
 
-      {/* Общая статистика */}
+      {/* РћР±С‰Р°СЏ СЃС‚Р°С‚РёСЃС‚РёРєР° */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -1048,7 +1055,7 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
         </CardContent>
       </Card>
 
-      {/* Кнопка отправки */}
+      {/* РљРЅРѕРїРєР° РѕС‚РїСЂР°вки */}
       <div className="flex justify-end">
         <Button 
           type="submit" 

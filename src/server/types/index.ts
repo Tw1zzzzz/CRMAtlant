@@ -11,6 +11,7 @@ export interface AuthRequest extends Request {
     role: string;
     name: string;
     email: string;
+    playerType?: string;
     faceitAccountId?: string;
   };
 }

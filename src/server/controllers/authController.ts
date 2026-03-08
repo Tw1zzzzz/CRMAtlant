@@ -1,4 +1,4 @@
-import User from '../models/User';
+﻿import User from '../models/User';
 import PlayerCard from '../models/PlayerCard';
 import FaceitAccount from '../models/FaceitAccount';
 import faceitService, { FaceitProfileInfo } from '../services/faceitService';
@@ -121,6 +121,7 @@ export const registerUser = async (req: any, res: any) => {
     const email = normalizeEmail(req.body.email);
     const faceitUrl = normalizeText(req.body.faceitUrl || req.body.faceit);
     const nickname = normalizeText(req.body.nickname);
+    const rawPlayerType = normalizeText(req.body.playerType || req.body.player_type);
     
     // Улучшенная валидация входных данных
     if (!name || !email || !password) {
@@ -142,7 +143,7 @@ export const registerUser = async (req: any, res: any) => {
     if (password.length < 6) {
       console.log('[AuthController] Ошибка: пароль слишком короткий');
       return res.status(400).json({ 
-        message: 'Пароль должен быть не менее 6 символов' 
+        message: "Пароль должен быть не менее 6 символов"
       });
     }
     
@@ -158,6 +159,8 @@ export const registerUser = async (req: any, res: any) => {
       console.log(`[AuthController] Недопустимая роль: ${role}, используем 'player' по умолчанию`);
     }
     const finalRole = validRoles.includes(role) ? role : 'player';
+    const validPlayerTypes = ['solo', 'team'];
+    const finalPlayerType = validPlayerTypes.includes(rawPlayerType) ? rawPlayerType : 'team';
 
     let resolvedFaceitProfile: FaceitProfileInfo | null = null;
     let faceitValidationWarning: string | null = null;
@@ -242,7 +245,8 @@ export const registerUser = async (req: any, res: any) => {
         name: name.trim(),
         email: email.trim().toLowerCase(),
         password,
-        role: finalRole
+        role: finalRole,
+        ...(finalRole === 'player' ? { playerType: finalPlayerType } : {}),
       };
       
       console.log(`[AuthController] Попытка создания пользователя с данными:`, {
@@ -328,6 +332,7 @@ export const registerUser = async (req: any, res: any) => {
             name: user.name,
             email: user.email,
             role: user.role,
+            playerType: user.playerType,
             avatar: user.avatar,
             createdAt: user.createdAt,
             faceitConnected: finalRole === 'player' ? Boolean(resolvedFaceitProfile) : false
@@ -417,6 +422,7 @@ export const loginUser = async (req: any, res: any) => {
       name: user.name,
       email: user.email,
       role: user.role,
+            playerType: user.playerType,
       avatar: user.avatar,
       createdAt: user.createdAt
     };
@@ -483,3 +489,8 @@ export const getCurrentUser = async (req: any, res: any) => {
     });
   }
 }; 
+
+
+
+
+

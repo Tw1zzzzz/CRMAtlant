@@ -10,15 +10,33 @@ export const getTopPlayers = async (req: Request, res: Response) => {
     const limit = parseInt(req.query.limit as string) || 10;
     
     console.log(`Fetching top players for period: ${period}, limit: ${limit}`);
+
+    // ????? ?????? ???????, ????????? ? ????????
+    const teamPlayers = await User.find({ role: 'player', playerType: 'team' })
+      .select('_id')
+      .lean();
+    const teamPlayerIds = teamPlayers.map(player => player._id);
+    if (!teamPlayerIds.length) {
+      return res.json({
+        players: [],
+        stats: {
+          totalPlayers: 0,
+          activePlayers: 0,
+          averageRating: 0,
+          monthlyTournaments: 6
+        }
+      });
+    }
+
     
     // Получаем рейтинги игроков с информацией о пользователе
-    let players = await PlayerRating.find()
-      .populate('userId', 'name avatar')
+    let players = await PlayerRating.find({ userId: { $in: teamPlayerIds } })
+      .populate('userId', 'name avatar playerType role')
       .sort({ rating: -1 })
       .limit(limit);
     
     // Фильтруем записи, где userId не был найден (пользователь удален)
-    players = players.filter(player => player.userId && (player.userId as any)?._id);
+    players = players.filter(player => player.userId && (player.userId as any)?._id && (player.userId as any)?.playerType === 'team');
       
     const formattedPlayers = players.map((player, index) => ({
       rank: index + 1,
@@ -36,9 +54,9 @@ export const getTopPlayers = async (req: Request, res: Response) => {
     return res.json({
       players: formattedPlayers,
       stats: {
-        totalPlayers: await PlayerRating.countDocuments(),
-        activePlayers: await PlayerRating.countDocuments({ updatedAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } }),
-        averageRating: (await PlayerRating.aggregate([{ $group: { _id: null, avg: { $avg: "$rating" } } }]))[0]?.avg.toFixed(0) || 0,
+        totalPlayers: await PlayerRating.countDocuments({ userId: { $in: teamPlayerIds } }),
+        activePlayers: await PlayerRating.countDocuments({ userId: { $in: teamPlayerIds }, updatedAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } }),
+        averageRating: (await PlayerRating.aggregate([{ $match: { userId: { $in: teamPlayerIds } } }, { $group: { _id: null, avg: { $avg: "$rating" } } }]))[0]?.avg?.toFixed(0) || 0,
         monthlyTournaments: 6 // TODO: Replace with actual count from tournament data
       }
     });
@@ -82,7 +100,11 @@ export const updatePlayerRating = async (req: Request, res: Response) => {
     }
     
     // Находим или создаем запись рейтинга игрока
-    let playerRating = await PlayerRating.findOne({ userId });
+        if (user.role !== 'player' || user.playerType !== 'team') {
+      return res.status(400).json({ message: '??????? ???????? ?????? ??? ??????? ? ????????' });
+    }
+
+let playerRating = await PlayerRating.findOne({ userId });
     
     if (!playerRating) {
       playerRating = new PlayerRating({ userId });

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from "react-router-dom";
 import { 
   Container, 
   Typography, 
@@ -88,7 +89,9 @@ const TopPlayers: React.FC = () => {
     operation: 'add'
   });
   const { user } = useAuth();
+  const navigate = useNavigate();
   const isStaff = user?.role === 'staff';
+  const isSoloPlayer = user?.role === 'player' && user.playerType === 'solo';
   const theme = useTheme();
   
   // URL бэкенда
@@ -113,7 +116,26 @@ const TopPlayers: React.FC = () => {
     
     fetchData();
   }, [period, API_URL]);
-  
+
+  if (isSoloPlayer) {
+    return (
+      <Container maxWidth="md" sx={{ mt: 6 }}>
+        <Box sx={{ p: 3, borderRadius: 2, backgroundColor: theme.palette.background.paper }}>
+          <Typography variant="h6" component="h2" gutterBottom color="text.primary">
+            Доступ ограничен
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            � ейтинг игроков доступен только для участников команд.
+          </Typography>
+          <Button variant="contained" onClick={() => navigate("/dashboard")}
+            sx={{ backgroundColor: '#3c83f6', '&:hover': { backgroundColor: '#2d6ad9' } }}
+          >
+            На главную
+          </Button>
+        </Box>
+      </Container>
+    );
+  }  
   // Обработчик изменения периода
   const handleTabChange = (event: React.SyntheticEvent, newValue: 'week' | 'month' | 'all') => {
     setPeriod(newValue);
@@ -576,3 +598,6 @@ const PlayersTable: React.FC<PlayersTableProps> = ({ players, isStaff, onEditCli
 };
 
 export default TopPlayers; 
+
+
+

@@ -1,4 +1,4 @@
-import express from 'express';
+﻿import express from 'express';
 import User from '../models/User';
 import MoodEntry from '../models/MoodEntry';
 import TestEntry from '../models/TestEntry';
@@ -12,7 +12,7 @@ router.get('/players', protect, isStaff, async (_req: any, res) => {
   try {
     console.log('Fetching all players');
     const players = await User.find({ role: 'player' })
-      .select('name email role completedTests completedBalanceWheel createdAt')
+      .select('name email role playerType completedTests completedBalanceWheel createdAt')
       .sort({ createdAt: -1 });
 
     console.log(`Found ${players.length} players`);
@@ -28,7 +28,7 @@ router.get('/players/:id/stats', protect, isStaff, async (req: any, res) => {
   try {
     console.log('Fetching stats for player:', req.params.id);
     const player = await User.findById(req.params.id)
-      .select('name email completedTests completedBalanceWheel createdAt')
+      .select('name email playerType completedTests completedBalanceWheel createdAt')
       .sort({ createdAt: -1 });
 
     if (!player) {
@@ -36,19 +36,20 @@ router.get('/players/:id/stats', protect, isStaff, async (req: any, res) => {
       return res.status(404).json({ message: 'Player not found' });
     }
 
-    // Добавляем получение данных о настроении и энергии
+    // Р”РѕР±Р°РІР»СЏРµРј РїРѕР»СѓС‡РµРЅРёРµ РґР°РЅРЅС‹С… Рѕ РЅР°СЃС‚СЂРѕРµРЅРёРё Рё СЌРЅРµСЂРіРёРё
     const moodEntries = await MoodEntry.find({ userId: req.params.id })
       .sort({ date: -1 });
     
-    // Добавляем получение данных о тестах
+    // Р”РѕР±Р°РІР»СЏРµРј РїРѕР»СѓС‡РµРЅРёРµ РґР°РЅРЅС‹С… Рѕ С‚РµСЃС‚Р°С…
     const testEntries = await TestEntry.find({ userId: req.params.id })
       .sort({ date: -1 });
 
-    // Формируем объект с полной статистикой игрока
+    // Р¤РѕСЂРјРёСЂСѓРµРј РѕР±СЉРµРєС‚ СЃ РїРѕР»РЅРѕР№ СЃС‚Р°С‚РёСЃС‚РёРєРѕР№ РёРіСЂРѕРєР°
     const playerData = {
       _id: player._id,
       name: player.name,
       email: player.email,
+      playerType: player.playerType,
       completedTests: player.completedTests,
       completedBalanceWheel: player.completedBalanceWheel,
       createdAt: player.createdAt,
@@ -70,26 +71,26 @@ router.delete('/players/:id', protect, isStaff, hasPrivilegeKey, async (req: any
     const { id } = req.params;
     
     if (!id || id === 'undefined' || id === 'null') {
-      return res.status(400).json({ message: 'Некорректный ID игрока' });
+      return res.status(400).json({ message: 'РќРµРєРѕСЂСЂРµРєС‚РЅС‹Р№ ID РёРіСЂРѕРєР°' });
     }
     
     console.log(`Attempting to delete player with ID: ${id}`);
     
-    // Проверяем, существует ли игрок
+    // РџСЂРѕРІРµСЂСЏРµРј, СЃСѓС‰РµСЃС‚РІСѓРµС‚ Р»Рё РёРіСЂРѕРє
     const player = await User.findById(id);
     if (!player) {
-      return res.status(404).json({ message: 'Игрок не найден' });
+      return res.status(404).json({ message: 'РРіСЂРѕРє РЅРµ РЅР°Р№РґРµРЅ' });
     }
     
-    // Проверяем, что удаляемый пользователь имеет роль 'player'
+    // РџСЂРѕРІРµСЂСЏРµРј, С‡С‚Рѕ СѓРґР°Р»СЏРµРјС‹Р№ РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ РёРјРµРµС‚ СЂРѕР»СЊ 'player'
     if (player.role !== 'player') {
-      return res.status(400).json({ message: 'Можно удалять только игроков' });
+      return res.status(400).json({ message: 'РњРѕР¶РЅРѕ СѓРґР°Р»СЏС‚СЊ С‚РѕР»СЊРєРѕ РёРіСЂРѕРєРѕРІ' });
     }
     
-    // Удаляем пользователя
+    // РЈРґР°Р»СЏРµРј РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ
     await User.findByIdAndDelete(id);
     
-    return res.json({ message: 'Игрок успешно удален' });
+    return res.json({ message: 'РРіСЂРѕРє СѓСЃРїРµС€РЅРѕ СѓРґР°Р»РµРЅ' });
   } catch (error) {
     console.error('Error deleting player:', error);
     return res.status(500).json({ message: 'Server error' });
@@ -131,23 +132,23 @@ router.delete('/players/:id/complete', protect, isStaff, hasPrivilegeKey, async 
     const { id } = req.params;
     
     if (!id || id === 'undefined' || id === 'null') {
-      return res.status(400).json({ message: 'Некорректный ID игрока' });
+      return res.status(400).json({ message: 'РќРµРєРѕСЂСЂРµРєС‚РЅС‹Р№ ID РёРіСЂРѕРєР°' });
     }
     
     console.log(`[CASCADE DELETE] Attempting to delete player with ID: ${id} and all related data`);
     
-    // Проверяем, существует ли игрок
+    // РџСЂРѕРІРµСЂСЏРµРј, СЃСѓС‰РµСЃС‚РІСѓРµС‚ Р»Рё РёРіСЂРѕРє
     const player = await User.findById(id);
     if (!player) {
-      return res.status(404).json({ message: 'Игрок не найден' });
+      return res.status(404).json({ message: 'РРіСЂРѕРє РЅРµ РЅР°Р№РґРµРЅ' });
     }
     
-    // Проверяем, что удаляемый пользователь имеет роль 'player'
+    // РџСЂРѕРІРµСЂСЏРµРј, С‡С‚Рѕ СѓРґР°Р»СЏРµРјС‹Р№ РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ РёРјРµРµС‚ СЂРѕР»СЊ 'player'
     if (player.role !== 'player') {
-      return res.status(400).json({ message: 'Можно удалять только игроков' });
+      return res.status(400).json({ message: 'РњРѕР¶РЅРѕ СѓРґР°Р»СЏС‚СЊ С‚РѕР»СЊРєРѕ РёРіСЂРѕРєРѕРІ' });
     }
     
-    // Удаляем все связанные данные
+    // РЈРґР°Р»СЏРµРј РІСЃРµ СЃРІСЏР·Р°РЅРЅС‹Рµ РґР°РЅРЅС‹Рµ
     console.log(`[CASCADE DELETE] Deleting mood entries for player: ${id}`);
     await MoodEntry.deleteMany({ userId: id });
     
@@ -157,19 +158,19 @@ router.delete('/players/:id/complete', protect, isStaff, hasPrivilegeKey, async 
     console.log(`[CASCADE DELETE] Deleting player ratings for player: ${id}`);
     await PlayerRating.deleteMany({ userId: id });
     
-    // Удаляем пользователя
+    // РЈРґР°Р»СЏРµРј РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ
     console.log(`[CASCADE DELETE] Deleting player: ${id}`);
     await User.findByIdAndDelete(id);
     
     return res.json({ 
-      message: 'Игрок и все связанные данные успешно удалены',
+      message: 'РРіСЂРѕРє Рё РІСЃРµ СЃРІСЏР·Р°РЅРЅС‹Рµ РґР°РЅРЅС‹Рµ СѓСЃРїРµС€РЅРѕ СѓРґР°Р»РµРЅС‹',
       deletedPlayerId: id,
       success: true
     });
   } catch (error) {
     console.error('[CASCADE DELETE] Error deleting player and related data:', error);
     return res.status(500).json({ 
-      message: 'Ошибка при удалении игрока и связанных данных',
+      message: 'РћС€РёР±РєР° РїСЂРё СѓРґР°Р»РµРЅРёРё РёРіСЂРѕРєР° Рё СЃРІСЏР·Р°РЅРЅС‹С… РґР°РЅРЅС‹С…',
       error: error.message
     });
   }
@@ -181,35 +182,35 @@ router.post('/update-privilege-key', protect, isStaff, async (req: any, res) => 
     console.log('Updating privilege key for staff user:', req.user._id);
     const { privilegeKey } = req.body;
 
-    // Проверяем, что пользователь может обновлять только свой ключ привилегий
+    // РџСЂРѕРІРµСЂСЏРµРј, С‡С‚Рѕ РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ РјРѕР¶РµС‚ РѕР±РЅРѕРІР»СЏС‚СЊ С‚РѕР»СЊРєРѕ СЃРІРѕР№ РєР»СЋС‡ РїСЂРёРІРёР»РµРіРёР№
     const userId = req.user._id;
     
-    // Получаем корректный ключ из переменных окружения или используем fallback значение
+    // РџРѕР»СѓС‡Р°РµРј РєРѕСЂСЂРµРєС‚РЅС‹Р№ РєР»СЋС‡ РёР· РїРµСЂРµРјРµРЅРЅС‹С… РѕРєСЂСѓР¶РµРЅРёСЏ РёР»Рё РёСЃРїРѕР»СЊР·СѓРµРј fallback Р·РЅР°С‡РµРЅРёРµ
     const validPrivilegeKey = process.env.STAFF_PRIVILEGE_KEY || 'ADMIN_ACCESS_2024_SECURE_KEY_xyz789';
     
-    // Детальное логирование для диагностики
+    // Р”РµС‚Р°Р»СЊРЅРѕРµ Р»РѕРіРёСЂРѕРІР°РЅРёРµ РґР»СЏ РґРёР°РіРЅРѕСЃС‚РёРєРё
     console.log('[PRIVILEGE DEBUG] NODE_ENV:', process.env.NODE_ENV);
-    console.log('[PRIVILEGE DEBUG] STAFF_PRIVILEGE_KEY загружен из env:', !!process.env.STAFF_PRIVILEGE_KEY);
-    console.log('[PRIVILEGE DEBUG] Используемый ключ (первые 10 символов):', validPrivilegeKey.substring(0, 10) + '...');
-    console.log('[PRIVILEGE DEBUG] Все env переменные (STAFF_*):', Object.keys(process.env).filter(key => key.includes('STAFF')));
+    console.log('[PRIVILEGE DEBUG] STAFF_PRIVILEGE_KEY Р·Р°РіСЂСѓР¶РµРЅ РёР· env:', !!process.env.STAFF_PRIVILEGE_KEY);
+    console.log('[PRIVILEGE DEBUG] РСЃРїРѕР»СЊР·СѓРµРјС‹Р№ РєР»СЋС‡ (РїРµСЂРІС‹Рµ 10 СЃРёРјРІРѕР»РѕРІ):', validPrivilegeKey.substring(0, 10) + '...');
+    console.log('[PRIVILEGE DEBUG] Р’СЃРµ env РїРµСЂРµРјРµРЅРЅС‹Рµ (STAFF_*):', Object.keys(process.env).filter(key => key.includes('STAFF')));
     
     if (!validPrivilegeKey) {
       console.error('[PRIVILEGE ERROR] STAFF_PRIVILEGE_KEY not configured and no fallback available');
       return res.status(500).json({ 
-        message: 'Ошибка конфигурации сервера: ключ привилегий не настроен',
+        message: 'РћС€РёР±РєР° РєРѕРЅС„РёРіСѓСЂР°С†РёРё СЃРµСЂРІРµСЂР°: РєР»СЋС‡ РїСЂРёРІРёР»РµРіРёР№ РЅРµ РЅР°СЃС‚СЂРѕРµРЅ',
         success: false 
       });
     }
 
-    // Проверяем введенный ключ привилегий
+    // РџСЂРѕРІРµСЂСЏРµРј РІРІРµРґРµРЅРЅС‹Р№ РєР»СЋС‡ РїСЂРёРІРёР»РµРіРёР№
     const isKeyValid = privilegeKey === validPrivilegeKey;
     
-    console.log(`[PRIVILEGE] Попытка обновления ключа для ${req.user.name}`);
-    console.log(`[PRIVILEGE] Введенный ключ: ${privilegeKey}`);
-    console.log(`[PRIVILEGE] Валидный ключ: ${validPrivilegeKey}`);
-    console.log(`[PRIVILEGE] Ключ валиден: ${isKeyValid}`);
+    console.log(`[PRIVILEGE] РџРѕРїС‹С‚РєР° РѕР±РЅРѕРІР»РµРЅРёСЏ РєР»СЋС‡Р° РґР»СЏ ${req.user.name}`);
+    console.log(`[PRIVILEGE] Р’РІРµРґРµРЅРЅС‹Р№ РєР»СЋС‡: ${privilegeKey}`);
+    console.log(`[PRIVILEGE] Р’Р°Р»РёРґРЅС‹Р№ РєР»СЋС‡: ${validPrivilegeKey}`);
+    console.log(`[PRIVILEGE] РљР»СЋС‡ РІР°Р»РёРґРµРЅ: ${isKeyValid}`);
     
-    // Обновляем ключ привилегий только если он валидный
+    // РћР±РЅРѕРІР»СЏРµРј РєР»СЋС‡ РїСЂРёРІРёР»РµРіРёР№ С‚РѕР»СЊРєРѕ РµСЃР»Рё РѕРЅ РІР°Р»РёРґРЅС‹Р№
     if (isKeyValid) {
       const updatedUser = await User.findByIdAndUpdate(
         userId,
@@ -219,7 +220,7 @@ router.post('/update-privilege-key', protect, isStaff, async (req: any, res) => 
 
       if (!updatedUser) {
         return res.status(404).json({ 
-          message: 'Пользователь не найден',
+          message: 'РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ РЅРµ РЅР°Р№РґРµРЅ',
           success: false 
         });
       }
@@ -227,7 +228,7 @@ router.post('/update-privilege-key', protect, isStaff, async (req: any, res) => 
       console.log('Privilege key updated successfully');
       return res.json({
         success: true,
-        message: 'Ключ привилегий успешно обновлен',
+        message: 'РљР»СЋС‡ РїСЂРёРІРёР»РµРіРёР№ СѓСЃРїРµС€РЅРѕ РѕР±РЅРѕРІР»РµРЅ',
         user: {
           id: updatedUser._id,
           name: updatedUser.name,
@@ -239,10 +240,10 @@ router.post('/update-privilege-key', protect, isStaff, async (req: any, res) => 
         }
       });
     } else {
-      // Если ключ неверный, возвращаем ошибку
+      // Р•СЃР»Рё РєР»СЋС‡ РЅРµРІРµСЂРЅС‹Р№, РІРѕР·РІСЂР°С‰Р°РµРј РѕС€РёР±РєСѓ
       return res.status(400).json({
         success: false,
-        message: 'Неверный ключ привилегий'
+        message: 'РќРµРІРµСЂРЅС‹Р№ РєР»СЋС‡ РїСЂРёРІРёР»РµРіРёР№'
       });
     }
   } catch (error) {
@@ -262,8 +263,8 @@ router.get('/check-privilege', protect, isStaff, async (req: any, res) => {
     return res.json({
       hasPrivilege,
       message: hasPrivilege 
-        ? 'У вас есть доступ к редактированию состава участников' 
-        : 'У вас нет доступа к редактированию состава участников'
+        ? 'РЈ РІР°СЃ РµСЃС‚СЊ РґРѕСЃС‚СѓРї Рє СЂРµРґР°РєС‚РёСЂРѕРІР°РЅРёСЋ СЃРѕСЃС‚Р°РІР° СѓС‡Р°СЃС‚РЅРёРєРѕРІ' 
+        : 'РЈ РІР°СЃ РЅРµС‚ РґРѕСЃС‚СѓРїР° Рє СЂРµРґР°РєС‚РёСЂРѕРІР°РЅРёСЋ СЃРѕСЃС‚Р°РІР° СѓС‡Р°СЃС‚РЅРёРєРѕРІ'
     });
   } catch (error) {
     console.error('Error checking privilege key:', error);
