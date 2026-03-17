@@ -7,6 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import GameStatsForm from '@/components/forms/GameStatsForm';
+import { Sparkles, LayoutGrid, Table2 } from 'lucide-react';
+import { COLORS } from '@/styles/theme';
 
 interface GameStatsFormData {
   date: string;
@@ -513,89 +515,192 @@ const GameStatsPage: React.FC = () => {
 
   const showPlayerSelect = isStaff;
   const allowTeamMode = isStaff;
+  const shellCardStyle = {
+    backgroundColor: COLORS.cardBackground,
+    borderColor: COLORS.borderColor,
+    boxShadow: '0 1px 20px 0 rgba(0,0,0,.1)'
+  };
+  const inputStyle = {
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    color: COLORS.textColor,
+    borderColor: 'rgba(255,255,255,0.08)'
+  };
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <Card className="overflow-hidden border-2 border-[#204f14]">
-        <CardHeader className="bg-[#204f14] text-[#e8f4df]">
-          <CardTitle>Игровые показатели</CardTitle>
-          <CardDescription className="text-[#cfe6bf]">
-            Рабочая таблица аналитика: вводите данные игрока ниже и сразу обновляйте общую витрину метрик.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4 bg-[#eef5e8] p-4">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-            <div className="space-y-2">
-              <Label>Режим</Label>
-              <Select
-                value={gameStatsMode}
-                onValueChange={(value: 'team' | 'individual') => setGameStatsMode(value)}
-                disabled={!allowTeamMode}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="individual">Один игрок</SelectItem>
-                  {allowTeamMode && <SelectItem value="team">Команда</SelectItem>}
-                </SelectContent>
-              </Select>
+    <div className="container mx-auto space-y-6 p-6">
+      <section
+        className="overflow-hidden rounded-[32px] border px-5 py-6 md:px-7"
+        style={{
+          background: 'linear-gradient(135deg, rgba(53, 144, 255, 0.18), rgba(0, 227, 150, 0.08) 48%, rgba(17, 24, 39, 0.96))',
+          borderColor: 'rgba(96, 165, 250, 0.3)',
+          boxShadow: '0 36px 100px -68px rgba(53, 144, 255, 0.9)'
+        }}
+      >
+        <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+          <div className="max-w-3xl space-y-4">
+            <div
+              className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-medium uppercase tracking-[0.28em]"
+              style={{
+                backgroundColor: 'rgba(11, 16, 32, 0.4)',
+                border: '1px solid rgba(125, 211, 252, 0.22)',
+                color: '#B6F0FF'
+              }}
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Performance Metrics
             </div>
-
             <div className="space-y-2">
-              <Label>Игрок</Label>
-              <Select
-                value={gameStatsPlayerId}
-                onValueChange={setGameStatsPlayerId}
-                disabled={!showPlayerSelect || gameStatsMode !== 'individual' || loadingPlayers}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={gameStatsMode === 'individual' ? 'Выберите игрока' : 'Только для режима игрока'} />
-                </SelectTrigger>
-                <SelectContent>
-                  {players.map((player) => (
-                    <SelectItem key={player._id} value={player._id}>
-                      {player.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>С даты</Label>
-              <Input type="date" value={gameStatsDateFrom} onChange={(e) => setGameStatsDateFrom(e.target.value)} />
-            </div>
-
-            <div className="space-y-2">
-              <Label>По дату</Label>
-              <Input type="date" value={gameStatsDateTo} onChange={(e) => setGameStatsDateTo(e.target.value)} />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Действие</Label>
-              <Button className="w-full" onClick={fetchGameStatsTemplate} disabled={gameStatsLoading}>
-                {gameStatsLoading ? 'Загрузка...' : 'Обновить таблицу'}
-              </Button>
+              <h1 className="text-3xl font-semibold md:text-4xl" style={{ color: COLORS.textColor }}>
+                Игровая статистика в более удобной аналитической витрине
+              </h1>
+              <p className="max-w-2xl text-sm leading-7 md:text-base" style={{ color: 'rgba(226, 232, 240, 0.82)' }}>
+                Тот же функционал ввода и та же логика расчётов, но с более понятной структурой: сверху фильтр и таблица для обзора, ниже форма для занесения матчевых показателей.
+              </p>
             </div>
           </div>
 
-          <div className="overflow-auto border border-[#204f14] rounded-md bg-[#dbe8d4]">
-            <table className="min-w-[980px] w-full border-collapse text-[#234b1a]">
+          <div className="grid grid-cols-2 gap-3 xl:min-w-[420px]">
+            <div className="rounded-[22px] border p-4" style={{ backgroundColor: 'rgba(9, 14, 26, 0.34)', borderColor: 'rgba(148, 163, 184, 0.18)' }}>
+              <div className="text-[11px] uppercase tracking-[0.22em]" style={{ color: 'rgba(191, 219, 254, 0.78)' }}>Режим</div>
+              <div className="mt-2 text-lg font-semibold" style={{ color: COLORS.textColor }}>
+                {gameStatsMode === 'team' ? 'Команда' : 'Игрок'}
+              </div>
+            </div>
+            <div className="rounded-[22px] border p-4" style={{ backgroundColor: 'rgba(9, 14, 26, 0.34)', borderColor: 'rgba(148, 163, 184, 0.18)' }}>
+              <div className="text-[11px] uppercase tracking-[0.22em]" style={{ color: 'rgba(191, 219, 254, 0.78)' }}>Период</div>
+              <div className="mt-2 text-lg font-semibold" style={{ color: COLORS.textColor }}>
+                {gameStatsDateFrom && gameStatsDateTo ? `${gameStatsDateFrom} - ${gameStatsDateTo}` : 'Не выбран'}
+              </div>
+            </div>
+            <div className="rounded-[22px] border p-4" style={{ backgroundColor: 'rgba(9, 14, 26, 0.34)', borderColor: 'rgba(148, 163, 184, 0.18)' }}>
+              <div className="text-[11px] uppercase tracking-[0.22em]" style={{ color: 'rgba(191, 219, 254, 0.78)' }}>Колонки</div>
+              <div className="mt-2 text-lg font-semibold" style={{ color: COLORS.textColor }}>{gameStatsColumns.length || 0}</div>
+            </div>
+            <div className="rounded-[22px] border p-4" style={{ backgroundColor: 'rgba(9, 14, 26, 0.34)', borderColor: 'rgba(148, 163, 184, 0.18)' }}>
+              <div className="text-[11px] uppercase tracking-[0.22em]" style={{ color: 'rgba(191, 219, 254, 0.78)' }}>Строки</div>
+              <div className="mt-2 text-lg font-semibold" style={{ color: COLORS.textColor }}>{gameStatsRows.length || 0}</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <Card style={shellCardStyle}>
+        <CardHeader className="pb-3">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="space-y-2">
+              <div className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] uppercase tracking-[0.24em]" style={{ backgroundColor: 'rgba(255,255,255,0.05)', color: COLORS.textColorSecondary }}>
+                <Table2 className="h-3.5 w-3.5" />
+                Витрина метрик
+              </div>
+              <CardTitle style={{ color: COLORS.textColor }}>Сводная таблица игровых показателей</CardTitle>
+              <CardDescription style={{ color: COLORS.textColorSecondary }}>
+                Интерфейс обновлён только визуально: загрузка, режимы, игроки и шаблон таблицы работают по прежней логике.
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent className="space-y-5">
+          <div
+            className="rounded-[24px] border p-4 md:p-5"
+            style={{
+              background: 'linear-gradient(160deg, rgba(53, 144, 255, 0.08), rgba(17, 24, 39, 0.96) 68%)',
+              borderColor: 'rgba(96, 165, 250, 0.16)'
+            }}
+          >
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
+              <div className="space-y-2">
+                <Label style={{ color: COLORS.textColor }}>Режим</Label>
+                <Select
+                  value={gameStatsMode}
+                  onValueChange={(value: 'team' | 'individual') => setGameStatsMode(value)}
+                  disabled={!allowTeamMode}
+                >
+                  <SelectTrigger style={inputStyle}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor, color: COLORS.textColor }}>
+                    <SelectItem value="individual">Один игрок</SelectItem>
+                    {allowTeamMode && <SelectItem value="team">Команда</SelectItem>}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label style={{ color: COLORS.textColor }}>Игрок</Label>
+                <Select
+                  value={gameStatsPlayerId}
+                  onValueChange={setGameStatsPlayerId}
+                  disabled={!showPlayerSelect || gameStatsMode !== 'individual' || loadingPlayers}
+                >
+                  <SelectTrigger style={inputStyle}>
+                    <SelectValue placeholder={gameStatsMode === 'individual' ? 'Выберите игрока' : 'Только для режима игрока'} />
+                  </SelectTrigger>
+                  <SelectContent style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor, color: COLORS.textColor }}>
+                    {players.map((player) => (
+                      <SelectItem key={player._id} value={player._id}>
+                        {player.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label style={{ color: COLORS.textColor }}>С даты</Label>
+                <Input type="date" value={gameStatsDateFrom} onChange={(e) => setGameStatsDateFrom(e.target.value)} style={inputStyle} />
+              </div>
+
+              <div className="space-y-2">
+                <Label style={{ color: COLORS.textColor }}>По дату</Label>
+                <Input type="date" value={gameStatsDateTo} onChange={(e) => setGameStatsDateTo(e.target.value)} style={inputStyle} />
+              </div>
+
+              <div className="space-y-2">
+                <Label style={{ color: COLORS.textColor }}>Действие</Label>
+                <Button className="h-10 w-full rounded-2xl" onClick={fetchGameStatsTemplate} disabled={gameStatsLoading} style={{ backgroundColor: COLORS.primary, color: 'white' }}>
+                  {gameStatsLoading ? 'Загрузка...' : 'Обновить таблицу'}
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <div
+            className="flex items-start gap-3 rounded-[20px] border px-4 py-3 text-sm leading-6"
+            style={{
+              backgroundColor: 'rgba(0, 227, 150, 0.08)',
+              borderColor: 'rgba(0, 227, 150, 0.22)',
+              color: COLORS.textColorSecondary
+            }}
+          >
+            <LayoutGrid className="mt-0.5 h-4 w-4 shrink-0" style={{ color: '#7EF3D1' }} />
+            <span>
+              Сначала обновляйте таблицу сверху, затем вводите данные игрока ниже за одну тренировочную сессию или матч: верхняя таблица служит рабочей витриной для уже загруженных показателей.
+            </span>
+          </div>
+
+          <div
+            className="overflow-auto rounded-[24px] border"
+            style={{
+              borderColor: COLORS.borderColor,
+              background: 'linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.015))'
+            }}
+          >
+            <table className="min-w-[980px] w-full border-collapse">
               <thead>
-                <tr className="bg-[#204f14] text-[#e8f4df]">
-                  <th className="sticky left-0 z-20 min-w-[260px] border border-[#15360d] px-3 py-2 text-left text-xl font-semibold">
+                <tr style={{ backgroundColor: 'rgba(17, 24, 39, 0.96)' }}>
+                  <th className="sticky left-0 z-20 min-w-[260px] border px-4 py-3 text-left text-base font-semibold" style={{ borderColor: COLORS.borderColor, backgroundColor: 'rgba(15, 23, 42, 0.98)', color: COLORS.textColor }}>
                     Показатели
                   </th>
-                  <th className="sticky left-[260px] z-20 min-w-[170px] border border-[#15360d] px-3 py-2 text-left text-xl font-semibold">
+                  <th className="sticky left-[260px] z-20 min-w-[170px] border px-4 py-3 text-left text-base font-semibold" style={{ borderColor: COLORS.borderColor, backgroundColor: 'rgba(30, 41, 59, 0.98)', color: COLORS.textColor }}>
                     Данные
                   </th>
                   {gameStatsColumns.map((column, index) => {
                     const [main, meta] = column.split('\n');
                     return (
-                      <th key={index} className="min-w-[140px] border border-[#15360d] px-2 py-2 text-center font-semibold">
-                        <div>{main}</div>
-                        <div className="text-xs font-normal text-[#b8d7a6]">{meta}</div>
+                      <th key={index} className="min-w-[150px] border px-3 py-3 text-center align-top" style={{ borderColor: COLORS.borderColor, color: COLORS.textColor }}>
+                        <div className="text-sm font-semibold">{main}</div>
+                        <div className="mt-1 text-xs font-normal" style={{ color: COLORS.textColorSecondary }}>{meta}</div>
                       </th>
                     );
                   })}
@@ -604,21 +709,32 @@ const GameStatsPage: React.FC = () => {
               <tbody>
                 {gameStatsRows.length === 0 && !gameStatsLoading && (
                   <tr>
-                    <td colSpan={Math.max(2 + gameStatsColumns.length, 3)} className="px-4 py-8 text-center text-sm text-[#3a5e32]">
+                    <td
+                      colSpan={Math.max(2 + gameStatsColumns.length, 3)}
+                      className="px-4 py-10 text-center text-sm"
+                      style={{ color: COLORS.textColorSecondary }}
+                    >
                       Нажмите "Обновить таблицу", чтобы загрузить игровые показатели.
                     </td>
                   </tr>
                 )}
                 {gameStatsRows.map((row, rowIndex) => (
-                  <tr key={row.label} className={rowIndex % 2 === 0 ? 'bg-[#dbe8d4]' : 'bg-[#cfe0c8]'}>
-                    <td className="sticky left-0 z-10 border border-[#6d8a62] bg-[#204f14] px-3 py-2 text-lg font-semibold text-[#e8f4df]">
+                  <tr
+                    key={row.label}
+                    style={{ backgroundColor: rowIndex % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.045)' }}
+                  >
+                    <td className="sticky left-0 z-10 border px-4 py-3 text-sm font-semibold md:text-base" style={{ borderColor: COLORS.borderColor, backgroundColor: 'rgba(15, 23, 42, 0.98)', color: COLORS.textColor }}>
                       {row.label}
                     </td>
-                    <td className="sticky left-[260px] z-10 border border-[#6d8a62] bg-[#c4d6bd] px-3 py-2 text-lg font-bold">
+                    <td className="sticky left-[260px] z-10 border px-4 py-3 text-base font-bold" style={{ borderColor: COLORS.borderColor, backgroundColor: 'rgba(30, 41, 59, 0.98)', color: '#BFE7FF' }}>
                       {row.summary}
                     </td>
                     {row.values.map((value, valueIndex) => (
-                      <td key={`${row.label}-${valueIndex}`} className="border border-[#6d8a62] px-3 py-2 text-center text-lg">
+                      <td
+                        key={`${row.label}-${valueIndex}`}
+                        className="border px-3 py-3 text-center text-sm md:text-base"
+                        style={{ borderColor: COLORS.borderColor, color: COLORS.textColor }}
+                      >
                         {value}
                       </td>
                     ))}
@@ -630,7 +746,7 @@ const GameStatsPage: React.FC = () => {
         </CardContent>
       </Card>
 
-      <div className="flex justify-center">
+      <div className="rounded-[28px] border p-1" style={{ borderColor: 'rgba(96, 165, 250, 0.16)', backgroundColor: 'rgba(255,255,255,0.02)' }}>
         <GameStatsForm
           onSubmit={handleGameStatsSubmit}
           analysisMode={gameStatsMode}

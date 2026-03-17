@@ -1,0 +1,1 @@
+// Stub script - no-op

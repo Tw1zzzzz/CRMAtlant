@@ -1,4 +1,4 @@
-require('ts-node/register/transpile-only');
+require('./register-ts.cjs');
 const assert = require('assert');
 const path = require('path');
 

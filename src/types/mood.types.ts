@@ -20,6 +20,17 @@ export interface MoodEntry {
   updatedAt?: string;
 }
 
+/** Запись о сне */
+export interface SleepEntry {
+  readonly id: string;
+  date: string | Date;
+  hours: number;
+  comment?: string;
+  userId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 /** Данные для создания записи о настроении */
 export interface CreateMoodEntryDto {
   date: string;

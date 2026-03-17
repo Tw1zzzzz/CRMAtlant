@@ -136,6 +136,10 @@ router.post(
     const resolvedScreenTimeHours = screenTimeHours != null ? screenTimeHours : (hasBreakdown ? breakdownTotal : undefined);
 
     if (resolvedScreenTimeHours != null) {
+      if (hasBreakdown && breakdownTotal > resolvedScreenTimeHours) {
+        throw badRequest('Сумма детализации экранного времени не может превышать общее экранное время');
+      }
+
       ops.push(
         ScreenTime.findOneAndUpdate(
           { userId: targetUserId, date: day },

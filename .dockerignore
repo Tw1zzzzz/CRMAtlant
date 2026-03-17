@@ -13,6 +13,7 @@ coverage
 *.log
 dist
 src/server/dist
+src/server/node_modules
 uploads
 .DS_Store
 *.md
@@ -29,4 +30,8 @@ aanaliticaa
 *.sql
 *.sqlite
 .next
-out 
+out
+archive
+crm-demo
+crm-demo-frontend
+public/public

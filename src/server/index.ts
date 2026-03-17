@@ -10,14 +10,7 @@ console.log('[INDEX] Загрузка .env из:', envPath);
 // Проверяем существование файла
 if (fs.existsSync(envPath)) {
   console.log('[INDEX] .env файл найден');
-  
-  // Читаем содержимое файла для отладки (без утечки секретов)
-  const envContent = fs.readFileSync(envPath, 'utf8');
-  const masked = envContent
-    .replace(/^(JWT_SECRET|FACEIT_API_KEY|FACEIT_CLIENT_SECRET|STAFF_PRIVILEGE_KEY)\s*=\s*.*$/gmi, '$1=***');
-  console.log('[INDEX] Содержимое .env файла (masked):');
-  console.log(masked);
-  
+
   // Загружаем переменные окружения
   const envResult = dotenv.config({ path: envPath });
   if (envResult.error) {
@@ -53,9 +46,10 @@ import cron from 'node-cron';
 import PlayerRating from './models/PlayerRating';
 import User from './models/User';
 
-// Определяем порт
-const PORT = process.env.PORT || 5001;
-const HOST = process.env.HOST || '127.0.0.1';
+// Определяем порт (SERVER_PORT имеет приоритет, чтобы избежать конфликта с Vite)
+const PORT = process.env.SERVER_PORT || process.env.BACKEND_PORT || process.env.PORT || 5001;
+const HOST =
+  process.env.HOST || (process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1');
 
 // Запускаем сервер при установлении подключения к MongoDB
 mongoose.connection.once('open', () => {

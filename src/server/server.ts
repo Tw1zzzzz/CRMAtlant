@@ -1,10 +1,10 @@
 import express from 'express';
 import { UPLOAD_PATHS } from './middleware/fileUpload';
 import mongoose from 'mongoose';
-import { MongoMemoryServer } from 'mongodb-memory-server';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import path from 'path';
+import fs from 'fs';
 
 // Маршруты API
 import authRoutes from './routes/auth';
@@ -51,11 +51,44 @@ if (envResult.error) {
 const app = express();
 mongoose.set('bufferTimeoutMS', 3000);
 
+const resolveAllowedOrigins = () => {
+  const configuredOrigins = process.env.CORS_ORIGIN
+    ?.split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  if (configuredOrigins?.length) {
+    return configuredOrigins;
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    return ['http://5.129.198.32', 'https://5.129.198.32'];
+  }
+
+  return [
+    'http://localhost:8080',
+    'http://127.0.0.1:8080',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173'
+  ];
+};
+
+const resolveClientBuildPath = () => {
+  const candidates = [
+    path.resolve(__dirname, '..'),
+    path.resolve(__dirname, '../../dist'),
+    path.resolve(process.cwd(), 'dist'),
+    path.resolve(__dirname, '../../client/build')
+  ];
+
+  return candidates.find((candidate) => {
+    return fs.existsSync(path.join(candidate, 'index.html'));
+  });
+};
+
 // Middleware
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production'
-    ? ['http://5.129.198.32', 'https://5.129.198.32', '*']
-    : ['http://localhost:8080', 'http://127.0.0.1:8080', 'http://localhost:5173', 'http://127.0.0.1:5173'],
+  origin: resolveAllowedOrigins(),
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
@@ -111,6 +144,7 @@ const connectMongo = async () => {
     return;
   }
 
+  const { MongoMemoryServer } = await import('mongodb-memory-server');
   const memoryServer = await MongoMemoryServer.create();
   const memoryUri = memoryServer.getUri();
   await mongoose.connect(memoryUri);
@@ -189,11 +223,17 @@ app.get('/health-check', (_req, res) => {
 
 // Обслуживание статических файлов в production
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../../client/build')));
-  
-  app.get('*', (_req, res) => {
-    res.sendFile(path.resolve(__dirname, '../../client/build', 'index.html'));
-  });
+  const clientBuildPath = resolveClientBuildPath();
+
+  if (clientBuildPath) {
+    app.use(express.static(clientBuildPath));
+
+    app.get('*', (_req, res) => {
+      res.sendFile(path.join(clientBuildPath, 'index.html'));
+    });
+  } else {
+    console.warn('[SERVER] Не найден frontend build для production-режима');
+  }
 }
 
 // Глобальный обработчик ошибок (последним)

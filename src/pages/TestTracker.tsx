@@ -6,19 +6,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Link as LinkIcon, Calendar as CalendarIcon, Image, ExternalLink, Edit, Trash2 } from "lucide-react";
+import { Plus, Link as LinkIcon, Calendar as CalendarIcon, Image, ExternalLink, Edit, Trash2, Sparkles, ClipboardList, Clock3, Monitor, Brain, Gauge, CheckCheck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { TestEntry } from "@/types";
 import { testRepository } from "@/lib/dataRepository";
 import { createTestEntry, deleteTestEntry, getMyTestEntries, getTestsStateImpact } from "@/lib/api";
 import { formatDate, getCurrentWeekRange, getWeekLabel, getPrevWeek, getNextWeek } from "@/utils/dateUtils";
-import { fileToDataUrl, validateImageFile } from "@/utils/fileUtils";
-import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
-import { COLORS, COMPONENT_STYLES } from "@/styles/theme";
+import { COLORS } from "@/styles/theme";
 import axios from "axios";
 
 const predefinedTests = [
@@ -55,16 +50,11 @@ const TestTracker = () => {
   const [screenshotUrl, setScreenshotUrl] = useState<string>("");
   const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
   const [editingTest, setEditingTest] = useState<TestEntry | null>(null);
-  const [isDatePickerOpen, setIsDatePickerOpen] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<"weekly" | "questionnaire">("questionnaire");
-  const [isStaffView, setIsStaffView] = useState(false);
-  const [isAddingEntry, setIsAddingEntry] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
   // РћРїСЂРѕСЃРЅРёРє (РЅРѕРІР°СЏ Р»РѕРіРёРєР° С‚Рµстов)
   const [qDate, setQDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [qMood, setQMood] = useState<string>("");
-  const [qEnergy, setQEnergy] = useState<string>("");
   const [qSleepStart, setQSleepStart] = useState<string>("");
   const [qSleepEnd, setQSleepEnd] = useState<string>("");
   const [qSleep, setQSleep] = useState<string>("");
@@ -95,7 +85,6 @@ const TestTracker = () => {
   const [stateImpact, setStateImpact] = useState<StateImpactSummary | null>(null);
   
   const isStaff = user?.role === "staff";
-  const canEdit = user?.role === "player";
 
   const parseOptionalNumber = (value: string) => {
     if (!value.trim()) return undefined;
@@ -152,12 +141,19 @@ const TestTracker = () => {
       const breakdownSum = (entertainment || 0) + (communication || 0) + (browser || 0) + (study || 0);
       const totalScreenTime = parseOptionalNumber(qScreen) ?? (hasBreakdown ? Number(breakdownSum.toFixed(2)) : undefined);
 
+      if (totalScreenTime !== undefined && hasBreakdown && breakdownSum > totalScreenTime) {
+        toast({
+          title: "Ошибка экранного времени",
+          description: `Сумма подкатегорий (${breakdownSum.toFixed(1)} ч) превышает общее экранное время (${totalScreenTime.toFixed(1)} ч).`,
+          variant: "destructive"
+        });
+        return;
+      }
+
       await axios.post(
         "/api/questionnaires/daily",
         {
           date: qDate,
-          mood: parseOptionalNumber(qMood),
-          energy: parseOptionalNumber(qEnergy),
           sleepHours,
           sleepStartTime: qSleepStart || undefined,
           sleepEndTime: qSleepEnd || undefined,
@@ -352,7 +348,6 @@ const TestTracker = () => {
       // РћР±РЅРѕРІР»СЏРµРј СЃРїРёСЃРѕРє Р·Р°РїРёСЃРµР№
       await loadEntries();
       resetForm();
-      setIsAddingEntry(false);
       
       toast({
         title: "Запись добавлена",
@@ -458,585 +453,841 @@ const TestTracker = () => {
     return getWeekTests().filter((test) => test.isWeeklyTest);
   };
 
+  const filteredEntries = applyEntryFilters(entries);
+  const weeklyTests = getWeeklyTests().sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const recommendedWeeklyTests = predefinedTests.filter((test) => test.isWeeklyTest);
+  const recentTests = [...filteredEntries]
+    .sort((a, b) => {
+      const first = a.measuredAt ? new Date(a.measuredAt).getTime() : new Date(a.date).getTime();
+      const second = b.measuredAt ? new Date(b.measuredAt).getTime() : new Date(b.date).getTime();
+      return second - first;
+    })
+    .slice(0, 3);
+  const scoredEntries = filteredEntries.filter((test) => typeof test.scoreNormalized === "number");
+  const averageNormalizedScore = scoredEntries.length > 0
+    ? Number((scoredEntries.reduce((sum, test) => sum + (test.scoreNormalized || 0), 0) / scoredEntries.length).toFixed(1))
+    : null;
+  const currentWeekTestsCount = getWeekTests().length;
+  const questionnaireBreakdownSum = (parseFloat(qScreenEntertainment) || 0) +
+    (parseFloat(qScreenCommunication) || 0) +
+    (parseFloat(qScreenBrowser) || 0) +
+    (parseFloat(qScreenStudy) || 0);
+  const questionnaireTotalScreen = parseFloat(qScreen) || 0;
+  const hasQuestionnaireTotal = qScreen.trim() !== "";
+  const isQuestionnaireExceeded = hasQuestionnaireTotal && questionnaireBreakdownSum > questionnaireTotalScreen;
+  const selectedDateLabel = formatDate(new Date(date), "d MMMM yyyy");
+  const qDateLabel = formatDate(new Date(qDate), "d MMMM yyyy");
+  const fieldStyle = {
+    backgroundColor: "rgba(255,255,255,0.04)",
+    color: COLORS.textColor,
+    borderColor: "rgba(255,255,255,0.08)"
+  };
+
+  const getTestTypeLabel = (value?: string) => {
+    switch ((value || "generic").toLowerCase()) {
+      case "reaction":
+        return "Reaction";
+      case "aim":
+        return "Aim";
+      case "cognitive":
+        return "Cognitive";
+      default:
+        return value || "Generic";
+    }
+  };
+
   return (
-    <div className="container mx-auto py-4 performance-page">
-      <div className="flex flex-col space-y-6">
-        <Card className="performance-hero" style={COMPONENT_STYLES.card}>
-          <CardHeader>
-            <span className="performance-eyebrow">Performance Lab</span>
-            <CardTitle className="performance-title" style={COMPONENT_STYLES.text.title}>Тесты</CardTitle>
-            <CardDescription className="performance-subtitle" style={COMPONENT_STYLES.text.description}>
-              Управление результатами тестирования и опросов
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-              <div className="space-y-1">
-                <Label style={{ color: COLORS.textColor }}>Период</Label>
-                <select
-                  value={periodFilter}
-                  onChange={(e) => setPeriodFilter(e.target.value)}
-                  className="w-full rounded-md border px-3 py-2 bg-transparent performance-native-select"
-                >
-                  <option value="7">7 дней</option>
-                  <option value="30">30 дней</option>
-                  <option value="90">90 дней</option>
-                </select>
+    <div className="container mx-auto py-4">
+      <div className="space-y-6">
+        <section
+          className="overflow-hidden rounded-[32px] border px-5 py-6 md:px-7"
+          style={{
+            background: "linear-gradient(135deg, rgba(53, 144, 255, 0.18), rgba(0, 227, 150, 0.1) 45%, rgba(17, 24, 39, 0.96))",
+            borderColor: "rgba(96, 165, 250, 0.32)",
+            boxShadow: "0 36px 100px -68px rgba(53, 144, 255, 0.95)"
+          }}
+        >
+          <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+            <div className="max-w-3xl space-y-4">
+              <div
+                className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-medium uppercase tracking-[0.28em]"
+                style={{
+                  backgroundColor: "rgba(11, 16, 32, 0.38)",
+                  border: "1px solid rgba(125, 211, 252, 0.2)",
+                  color: "#B6F0FF"
+                }}
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                Performance Lab
               </div>
-              <div className="space-y-1">
-                <Label style={{ color: COLORS.textColor }}>Тип теста</Label>
-                <select
-                  value={testTypeFilter}
-                  onChange={(e) => setTestTypeFilter(e.target.value)}
-                  className="w-full rounded-md border px-3 py-2 bg-transparent performance-native-select"
-                >
-                  <option value="all">Все</option>
-                  <option value="generic">Generic</option>
-                  <option value="reaction">Reaction</option>
-                  <option value="aim">Aim</option>
-                  <option value="cognitive">Cognitive</option>
-                </select>
-              </div>
-              <div className="space-y-1">
-                <Label style={{ color: COLORS.textColor }}>Контекст / роль</Label>
-                <select
-                  value={contextRoleFilter}
-                  onChange={(e) => setContextRoleFilter(e.target.value)}
-                  className="w-full rounded-md border px-3 py-2 bg-transparent performance-native-select"
-                >
-                  <option value="all">Все</option>
-                  <option value="entry">Entry</option>
-                  <option value="support">Support</option>
-                  <option value="awp">AWP</option>
-                  <option value="igl">IGL</option>
-                </select>
+              <div className="space-y-2">
+                <h1 className="text-3xl font-semibold md:text-4xl" style={{ color: COLORS.textColor }}>
+                  Тесты и ежедневный self-check в одном рабочем контуре
+                </h1>
+                <p className="max-w-2xl text-sm leading-7 md:text-base" style={{ color: "rgba(226, 232, 240, 0.82)" }}>
+                  Здесь удобно вести результаты тестов, быстро возвращаться к еженедельным заданиям и фиксировать повседневный контекст, который потом влияет на аналитику.
+                </p>
               </div>
             </div>
 
-            {stateImpact && (
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6">
-                <Card style={COMPONENT_STYLES.card}>
-                  <CardContent className="pt-4">
-                    <p className="text-xs text-muted-foreground">Средний score</p>
-                    <p className="text-2xl font-semibold">{stateImpact.totals.avgScore}</p>
-                  </CardContent>
-                </Card>
-                <Card style={COMPONENT_STYLES.card}>
-                  <CardContent className="pt-4">
-                    <p className="text-xs text-muted-foreground">Индекс состояния</p>
-                    <p className="text-2xl font-semibold">{stateImpact.totals.avgStateIndex}</p>
-                  </CardContent>
-                </Card>
-                <Card style={COMPONENT_STYLES.card}>
-                  <CardContent className="pt-4">
-                    <p className="text-xs text-muted-foreground">Фокус (high)</p>
-                    <p className="text-2xl font-semibold">{stateImpact.stateToResult.focus.high}</p>
-                  </CardContent>
-                </Card>
-                <Card style={COMPONENT_STYLES.card}>
-                  <CardContent className="pt-4">
-                    <p className="text-xs text-muted-foreground">Усталость (high)</p>
-                    <p className="text-2xl font-semibold">{stateImpact.stateToResult.fatigue.high}</p>
-                  </CardContent>
-                </Card>
+            <div className="grid grid-cols-2 gap-3 xl:min-w-[420px]">
+              <div className="rounded-[22px] border p-4" style={{ backgroundColor: "rgba(9, 14, 26, 0.34)", borderColor: "rgba(148, 163, 184, 0.18)" }}>
+                <div className="text-[11px] uppercase tracking-[0.22em]" style={{ color: "rgba(191, 219, 254, 0.78)" }}>Записей</div>
+                <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{filteredEntries.length}</div>
+                <div className="mt-1 text-sm" style={{ color: "rgba(226, 232, 240, 0.68)" }}>за выбранный период</div>
               </div>
-            )}
+              <div className="rounded-[22px] border p-4" style={{ backgroundColor: "rgba(9, 14, 26, 0.34)", borderColor: "rgba(148, 163, 184, 0.18)" }}>
+                <div className="text-[11px] uppercase tracking-[0.22em]" style={{ color: "rgba(191, 219, 254, 0.78)" }}>Средний score</div>
+                <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{averageNormalizedScore ?? "-"}</div>
+                <div className="mt-1 text-sm" style={{ color: "rgba(226, 232, 240, 0.68)" }}>по сохранённым результатам</div>
+              </div>
+              <div className="rounded-[22px] border p-4" style={{ backgroundColor: "rgba(9, 14, 26, 0.34)", borderColor: "rgba(148, 163, 184, 0.18)" }}>
+                <div className="text-[11px] uppercase tracking-[0.22em]" style={{ color: "rgba(191, 219, 254, 0.78)" }}>Эта неделя</div>
+                <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{currentWeekTestsCount}</div>
+                <div className="mt-1 text-sm" style={{ color: "rgba(226, 232, 240, 0.68)" }}>тестов в текущем окне</div>
+              </div>
+              <div className="rounded-[22px] border p-4" style={{ backgroundColor: "rgba(9, 14, 26, 0.34)", borderColor: "rgba(148, 163, 184, 0.18)" }}>
+                <div className="text-[11px] uppercase tracking-[0.22em]" style={{ color: "rgba(191, 219, 254, 0.78)" }}>State index</div>
+                <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{stateImpact?.totals.avgStateIndex ?? "-"}</div>
+                <div className="mt-1 text-sm" style={{ color: "rgba(226, 232, 240, 0.68)" }}>связь состояния и результата</div>
+              </div>
+            </div>
+          </div>
+        </section>
 
-            <Tabs 
-              defaultValue="questionnaire" 
-              value={activeTab}
-              onValueChange={(value) => setActiveTab(value as "weekly" | "questionnaire")}
+        <section
+          className="rounded-[28px] border p-5 md:p-6"
+          style={{
+            background: "linear-gradient(160deg, rgba(26, 32, 44, 0.96), rgba(17, 24, 39, 0.96))",
+            borderColor: "rgba(96, 165, 250, 0.16)"
+          }}
+        >
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="space-y-2">
+              <div className="text-[11px] uppercase tracking-[0.24em]" style={{ color: COLORS.textColorSecondary }}>
+                Аналитический фильтр
+              </div>
+              <p className="text-sm leading-6" style={{ color: COLORS.textColorSecondary }}>
+                Отсекайте период, типы тестов и игровой контекст, чтобы быстрее находить полезные паттерны.
+              </p>
+            </div>
+            {!isStaff && (
+              <Button
+                onClick={() => {
+                  resetForm();
+                  setDate(new Date().toISOString().split("T")[0]);
+                  setIsDialogOpen(true);
+                }}
+                className="h-12 rounded-2xl px-5"
+                style={{ backgroundColor: COLORS.primary, color: "white" }}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Добавить тест
+              </Button>
+            )}
+          </div>
+
+          <div className="mt-5 grid gap-3 md:grid-cols-3">
+            <div className="space-y-2">
+              <Label style={{ color: COLORS.textColor }}>Период</Label>
+              <select
+                value={periodFilter}
+                onChange={(e) => setPeriodFilter(e.target.value)}
+                className="w-full rounded-2xl border px-4 py-3"
+                style={fieldStyle}
+              >
+                <option value="7">7 дней</option>
+                <option value="30">30 дней</option>
+                <option value="90">90 дней</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label style={{ color: COLORS.textColor }}>Тип теста</Label>
+              <select
+                value={testTypeFilter}
+                onChange={(e) => setTestTypeFilter(e.target.value)}
+                className="w-full rounded-2xl border px-4 py-3"
+                style={fieldStyle}
+              >
+                <option value="all">Все типы</option>
+                <option value="generic">Generic</option>
+                <option value="reaction">Reaction</option>
+                <option value="aim">Aim</option>
+                <option value="cognitive">Cognitive</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label style={{ color: COLORS.textColor }}>Контекст / роль</Label>
+              <select
+                value={contextRoleFilter}
+                onChange={(e) => setContextRoleFilter(e.target.value)}
+                className="w-full rounded-2xl border px-4 py-3"
+                style={fieldStyle}
+              >
+                <option value="all">Все роли</option>
+                <option value="entry">Entry</option>
+                <option value="support">Support</option>
+                <option value="awp">AWP</option>
+                <option value="igl">IGL</option>
+              </select>
+            </div>
+          </div>
+
+          {stateImpact && (
+            <div className="mt-5 grid gap-3 md:grid-cols-4">
+              <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em]" style={{ color: COLORS.textColorSecondary }}>
+                  <Gauge className="h-3.5 w-3.5" />
+                  Средний score
+                </div>
+                <div className="mt-3 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{stateImpact.totals.avgScore}</div>
+              </div>
+              <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em]" style={{ color: COLORS.textColorSecondary }}>
+                  <Brain className="h-3.5 w-3.5" />
+                  Индекс состояния
+                </div>
+                <div className="mt-3 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{stateImpact.totals.avgStateIndex}</div>
+              </div>
+              <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em]" style={{ color: COLORS.textColorSecondary }}>
+                  <CheckCheck className="h-3.5 w-3.5" />
+                  Фокус high
+                </div>
+                <div className="mt-3 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{stateImpact.stateToResult.focus.high}</div>
+              </div>
+              <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em]" style={{ color: COLORS.textColorSecondary }}>
+                  <Clock3 className="h-3.5 w-3.5" />
+                  Усталость high
+                </div>
+                <div className="mt-3 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{stateImpact.stateToResult.fatigue.high}</div>
+              </div>
+            </div>
+          )}
+        </section>
+
+        <Tabs
+          defaultValue="questionnaire"
+          value={activeTab}
+          onValueChange={(value) => setActiveTab(value as "weekly" | "questionnaire")}
+          className="space-y-5"
+        >
+          <TabsList
+            className="grid h-auto w-full grid-cols-2 rounded-[22px] border p-1.5 md:w-[420px]"
+            style={{ backgroundColor: "rgba(255,255,255,0.03)", borderColor: "rgba(255,255,255,0.08)" }}
+          >
+            <TabsTrigger
+              value="weekly"
+              className="rounded-[16px] px-4 py-3 text-sm"
+              style={{
+                color: activeTab === "weekly" ? COLORS.textColor : COLORS.textColorSecondary,
+                backgroundColor: activeTab === "weekly" ? "rgba(53, 144, 255, 0.18)" : "transparent"
+              }}
             >
-              <TabsList className="mb-4" style={COMPONENT_STYLES.tabs.list}>
-                <TabsTrigger 
-                  value="weekly"
-                  style={{ 
-                    color: activeTab === 'weekly' ? COLORS.textColor : COLORS.textColorSecondary, 
-                    backgroundColor: activeTab === 'weekly' ? COLORS.primary : 'transparent'
-                  }}
-                >
-                  Еженедельные тесты
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="questionnaire"
-                  style={{ 
-                    color: activeTab === 'questionnaire' ? COLORS.textColor : COLORS.textColorSecondary, 
-                    backgroundColor: activeTab === 'questionnaire' ? COLORS.primary : 'transparent'
-                  }}
-                >
-                  Опросник
-                </TabsTrigger>
-              </TabsList>
-              <TabsContent value="weekly">
-                <div className="mb-6">
-                  <h3 className="text-lg font-medium mb-2" style={{ color: COLORS.textColor }}>Рекомендуемые еженедельные тесты</h3>
-                  <Card style={COMPONENT_STYLES.card}>
-                    <Table>
-                      <TableHeader>
-                        <TableRow style={{ borderColor: COLORS.borderColor }}>
-                          <TableHead style={{ color: COLORS.textColor }}>Название теста</TableHead>
-                          <TableHead style={{ color: COLORS.textColor }}>Ссылка</TableHead>
-                          <TableHead style={{ color: COLORS.textColor }}>Действия</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {predefinedTests.filter(test => test.isWeeklyTest).map((test, index) => (
-                          <TableRow key={`weekly-${index}`} style={{ borderColor: COLORS.borderColor }}>
-                            <TableCell className="font-medium" style={{ color: COLORS.textColor }}>{test.name}</TableCell>
-                            <TableCell>
-                              <a
-                                href={test.link}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center"
-                                style={{ color: COLORS.primary }}
-                              >
-                                <ExternalLink className="h-4 w-4 mr-1 text-white" />
-                                Открыть тест
-                              </a>
-                            </TableCell>
-                            <TableCell>
-                              {!isStaff && (
-                                <Button 
-                                  variant="outline" 
-                                  size="sm"
-                                  style={{ borderColor: COLORS.borderColor, color: COLORS.primary }}
-                                  onClick={() => {
-                                    setName(test.name);
-                                    setLink(test.link);
-                                    setIsWeeklyTest(test.isWeeklyTest);
-                                    setDate(new Date().toISOString().split('T')[0]);
-                                    setIsDialogOpen(true);
-                                  }}
-                                >
-                                  <Plus className="h-4 w-4 mr-1 text-white" />
-                                  Добавить результат
-                                </Button>
-                              )}
-                              {isStaff && (
-                                <span className="text-sm" style={{ color: COLORS.textColorSecondary }}>Только для игроков</span>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </Card>
+              Еженедельные тесты
+            </TabsTrigger>
+            <TabsTrigger
+              value="questionnaire"
+              className="rounded-[16px] px-4 py-3 text-sm"
+              style={{
+                color: activeTab === "questionnaire" ? COLORS.textColor : COLORS.textColorSecondary,
+                backgroundColor: activeTab === "questionnaire" ? "rgba(0, 227, 150, 0.14)" : "transparent"
+              }}
+            >
+              Ежедневный опросник
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="weekly" className="space-y-5">
+            <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
+              <section
+                className="rounded-[28px] border p-5 md:p-6"
+                style={{
+                  background: "linear-gradient(150deg, rgba(53, 144, 255, 0.12), rgba(26, 32, 44, 0.95) 65%)",
+                  borderColor: "rgba(96, 165, 250, 0.2)"
+                }}
+              >
+                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <div className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] uppercase tracking-[0.24em]" style={{ backgroundColor: "rgba(255,255,255,0.05)", color: COLORS.textColorSecondary }}>
+                      <ClipboardList className="h-3.5 w-3.5" />
+                      Рабочая неделя
+                    </div>
+                    <h3 className="mt-3 text-2xl font-semibold" style={{ color: COLORS.textColor }}>
+                      Планируйте обязательные тесты без лишнего трения
+                    </h3>
+                    <p className="mt-2 max-w-xl text-sm leading-7" style={{ color: COLORS.textColorSecondary }}>
+                      В одном месте видны рекомендованные задания, текущая неделя и уже внесённые результаты. Это уменьшает шанс забыть weekly-check.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 rounded-full px-2 py-1.5" style={{ backgroundColor: "rgba(255,255,255,0.04)" }}>
+                    <Button variant="outline" size="sm" onClick={handlePrevWeek} className="rounded-full" style={{ borderColor: COLORS.borderColor, color: COLORS.primary, backgroundColor: "transparent" }}>
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      Назад
+                    </Button>
+                    <span className="px-2 text-sm font-medium" style={{ color: COLORS.textColor }}>{getWeekLabel(currentWeek)}</span>
+                    <Button variant="outline" size="sm" onClick={handleNextWeek} className="rounded-full" style={{ borderColor: COLORS.borderColor, color: COLORS.primary, backgroundColor: "transparent" }}>
+                      Вперёд
+                    </Button>
+                  </div>
                 </div>
 
-                {getWeeklyTests().length === 0 ? (
-                  <div className="text-center py-8 rounded-lg" style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor, border: `1px solid ${COLORS.borderColor}` }}>
-                    <Image className="h-12 w-12 mx-auto mb-2 text-white" />
-                    <p style={{ color: COLORS.textColorSecondary }}>Нет еженедельных тестов на эту неделю</p>
-                    {!isStaff && (
-                      <Button
-                        variant="outline"
-                        className="mt-4"
-                        style={{ borderColor: COLORS.borderColor, color: COLORS.primary }}
-                        onClick={() => {
-                          resetForm();
-                          setIsWeeklyTest(true);
-                          setIsDialogOpen(true);
-                        }}
-                      >
-                        <Plus className="mr-2 h-4 w-4 text-white" />
-                        Добавить еженедельный тест
-                      </Button>
-                    )}
+                <div className="mt-5 grid gap-3 md:grid-cols-3">
+                  <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                    <div className="text-[11px] uppercase tracking-[0.22em]" style={{ color: COLORS.textColorSecondary }}>В этой неделе</div>
+                    <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{currentWeekTestsCount}</div>
+                    <div className="mt-1 text-sm" style={{ color: COLORS.textColorSecondary }}>всего тестовых записей</div>
                   </div>
-                ) : (
-                  <div className="rounded-md" style={{ border: `1px solid ${COLORS.borderColor}` }}>
-                    <div className="grid grid-cols-12 p-4 font-medium" style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor }}>
-                      <div className="col-span-3">Дата</div>
-                      <div className="col-span-4">Название теста</div>
-                      <div className="col-span-3">Ссылка / Скриншот</div>
-                      <div className="col-span-2">Действия</div>
+                  <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                    <div className="text-[11px] uppercase tracking-[0.22em]" style={{ color: COLORS.textColorSecondary }}>Weekly</div>
+                    <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{weeklyTests.length}</div>
+                    <div className="mt-1 text-sm" style={{ color: COLORS.textColorSecondary }}>результатов за неделю</div>
+                  </div>
+                  <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                    <div className="text-[11px] uppercase tracking-[0.22em]" style={{ color: COLORS.textColorSecondary }}>Последний ввод</div>
+                    <div className="mt-2 text-base font-semibold" style={{ color: COLORS.textColor }}>
+                      {recentTests[0] ? formatDate(recentTests[0].date, "d MMMM") : "-"}
                     </div>
-                    
-                    {getWeeklyTests()
-                      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                      .map((test) => (
-                        <div
-                          key={test.id}
-                          className="grid grid-cols-12 p-4 items-center"
-                          style={{ borderTop: `1px solid ${COLORS.borderColor}`, color: COLORS.textColor }}
-                        >
-                          <div className="col-span-3 text-sm">
-                            {formatDate(test.date)}
+                    <div className="mt-1 text-sm" style={{ color: COLORS.textColorSecondary }}>самая свежая запись</div>
+                  </div>
+                </div>
+              </section>
+
+              <section
+                className="rounded-[28px] border p-5 md:p-6"
+                style={{
+                  background: "linear-gradient(150deg, rgba(0, 227, 150, 0.1), rgba(17, 24, 39, 0.95) 68%)",
+                  borderColor: "rgba(52, 211, 153, 0.2)"
+                }}
+              >
+                <div className="flex items-start gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl border" style={{ backgroundColor: "rgba(0, 227, 150, 0.12)", borderColor: "rgba(0, 227, 150, 0.26)", color: "#7EF3D1" }}>
+                    <Sparkles className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="text-[11px] uppercase tracking-[0.22em]" style={{ color: COLORS.textColorSecondary }}>Рекомендуемые weekly</div>
+                    <h3 className="mt-1 text-xl font-semibold" style={{ color: COLORS.textColor }}>Быстрый доступ к заданиям</h3>
+                  </div>
+                </div>
+
+                {recommendedWeeklyTests.length > 0 ? (
+                  <div className="mt-5 space-y-3">
+                    {recommendedWeeklyTests.map((test, index) => (
+                      <div key={`weekly-card-${index}`} className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                          <div>
+                            <div className="text-lg font-semibold" style={{ color: COLORS.textColor }}>{test.name}</div>
+                            <div className="mt-1 text-sm leading-6" style={{ color: COLORS.textColorSecondary }}>
+                              Откройте тест и сразу занесите результат в систему, чтобы weekly-ритм не терялся.
+                            </div>
                           </div>
-                          <div className="col-span-4 font-medium">
-                            {test.name}
-                          </div>
-                          <div className="col-span-3 flex space-x-2">
-                            <a
-                              href={test.link}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center"
-                              style={{ color: COLORS.primary }}
-                            >
-                              <ExternalLink className="h-4 w-4 text-white" />
+                          <div className="flex gap-2">
+                            <a href={test.link} target="_blank" rel="noopener noreferrer">
+                              <Button variant="ghost" className="rounded-2xl" style={{ border: `1px solid ${COLORS.borderColor}`, color: COLORS.primary, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                                <ExternalLink className="mr-2 h-4 w-4" />
+                                Открыть
+                              </Button>
                             </a>
-                            {test.screenshotUrl && (
-                              <Dialog>
-                                <DialogTrigger asChild>
-                                  <Button variant="ghost" size="icon" style={{ color: COLORS.primary }}>
-                                    <Image className="h-4 w-4 text-white" />
-                                  </Button>
-                                </DialogTrigger>
-                                <DialogContent style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor }}>
-                                  <DialogHeader>
-                                    <DialogTitle style={{ color: COLORS.textColor }}>Скриншот теста: {test.name}</DialogTitle>
-                                  </DialogHeader>
-                                  <img
-                                    src={test.screenshotUrl}
-                                    alt={test.name}
-                                    className="w-full h-auto rounded-md"
-                                  />
-                                </DialogContent>
-                              </Dialog>
-                            )}
-                          </div>
-                          <div className="col-span-2 flex space-x-2">
                             {!isStaff && (
-                              <>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  style={{ color: COLORS.primary }}
-                                  onClick={() => handleEdit(test)}
-                                >
-                                  <Edit className="h-4 w-4 text-white" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  style={{ color: COLORS.danger }}
-                                  onClick={() => handleDelete(test.id)}
-                                >
-                                  <Trash2 className="h-4 w-4 text-white" />
-                                </Button>
-                              </>
-                            )}
-                            {isStaff && (
-                              <span className="text-sm" style={{ color: COLORS.textColorSecondary }}>Просмотр</span>
+                              <Button
+                                className="rounded-2xl"
+                                style={{ backgroundColor: COLORS.primary, color: "white" }}
+                                onClick={() => {
+                                  setName(test.name);
+                                  setLink(test.link);
+                                  setIsWeeklyTest(true);
+                                  setDate(new Date().toISOString().split("T")[0]);
+                                  setIsDialogOpen(true);
+                                }}
+                              >
+                                <Plus className="mr-2 h-4 w-4" />
+                                Результат
+                              </Button>
                             )}
                           </div>
                         </div>
-                      ))}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-5 rounded-[22px] border border-dashed p-5" style={{ borderColor: "rgba(0, 227, 150, 0.22)", backgroundColor: "rgba(255,255,255,0.02)" }}>
+                    <p className="text-sm font-medium" style={{ color: COLORS.textColor }}>Список weekly-тестов пока не заполнен</p>
+                    <p className="mt-1 text-sm leading-6" style={{ color: COLORS.textColorSecondary }}>
+                      Пока можно заносить собственные еженедельные тесты вручную, а позже мы сможем оформить отдельный curated-набор.
+                    </p>
                   </div>
                 )}
-              </TabsContent>
+              </section>
+            </div>
 
-              <TabsContent value="questionnaire">
-                <Card style={COMPONENT_STYLES.card}>
-                  <CardHeader>
-                    <CardTitle style={COMPONENT_STYLES.text.title}>Ежедневный опросник</CardTitle>
-                    <CardDescription style={COMPONENT_STYLES.text.description}>
-                      Настроение, энергия, диапазон сна и детализация экранного времени
-                    </CardDescription>
+            {weeklyTests.length === 0 ? (
+              <section
+                className="rounded-[28px] border p-8 text-center"
+                style={{ backgroundColor: "rgba(255,255,255,0.03)", borderColor: COLORS.borderColor }}
+              >
+                <ClipboardList className="mx-auto h-12 w-12" style={{ color: COLORS.primary }} />
+                <h3 className="mt-4 text-xl font-semibold" style={{ color: COLORS.textColor }}>На эту неделю пока нет записанных weekly-тестов</h3>
+                <p className="mx-auto mt-2 max-w-xl text-sm leading-7" style={{ color: COLORS.textColorSecondary }}>
+                  Когда появятся первые результаты, они будут собраны здесь в более удобном карточном виде, а не в тяжёлой таблице.
+                </p>
+                {!isStaff && (
+                  <Button
+                    className="mt-5 rounded-2xl"
+                    style={{ backgroundColor: COLORS.primary, color: "white" }}
+                    onClick={() => {
+                      resetForm();
+                      setIsWeeklyTest(true);
+                      setIsDialogOpen(true);
+                    }}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Добавить weekly-тест
+                  </Button>
+                )}
+              </section>
+            ) : (
+              <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {weeklyTests.map((test) => (
+                  <article
+                    key={test.id}
+                    className="rounded-[26px] border p-5"
+                    style={{
+                      background: "linear-gradient(155deg, rgba(53, 144, 255, 0.1), rgba(17, 24, 39, 0.96) 70%)",
+                      borderColor: "rgba(96, 165, 250, 0.18)"
+                    }}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-[11px] uppercase tracking-[0.18em]" style={{ backgroundColor: "rgba(255,255,255,0.06)", color: COLORS.textColorSecondary }}>
+                          <CalendarIcon className="h-3.5 w-3.5" />
+                          {formatDate(test.date, "d MMMM")}
+                        </div>
+                        <h3 className="mt-3 text-lg font-semibold" style={{ color: COLORS.textColor }}>{test.name || "Без названия"}</h3>
+                      </div>
+                      <div className="rounded-full px-3 py-1 text-xs font-medium" style={{ backgroundColor: "rgba(0, 227, 150, 0.14)", color: "#7EF3D1" }}>
+                        {getTestTypeLabel(test.testType)}
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-3">
+                      <div className="rounded-[18px] border px-4 py-3" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                        <div className="text-[11px] uppercase tracking-[0.18em]" style={{ color: COLORS.textColorSecondary }}>Score</div>
+                        <div className="mt-1 text-xl font-semibold" style={{ color: COLORS.textColor }}>
+                          {typeof test.scoreNormalized === "number" ? `${test.scoreNormalized}${test.unit || "%"}` : "-"}
+                        </div>
+                      </div>
+                      <div className="rounded-[18px] border px-4 py-3" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                        <div className="text-[11px] uppercase tracking-[0.18em]" style={{ color: COLORS.textColorSecondary }}>Попыток</div>
+                        <div className="mt-1 text-xl font-semibold" style={{ color: COLORS.textColor }}>{test.attempts || 1}</div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap items-center gap-2 text-sm" style={{ color: COLORS.textColorSecondary }}>
+                      {test.durationSec && (
+                        <span className="rounded-full px-3 py-1" style={{ backgroundColor: "rgba(255,255,255,0.05)" }}>
+                          {Math.round(test.durationSec / 60)} мин
+                        </span>
+                      )}
+                      {test.context?.role && (
+                        <span className="rounded-full px-3 py-1" style={{ backgroundColor: "rgba(255,255,255,0.05)" }}>
+                          {test.context.role}
+                        </span>
+                      )}
+                      {test.context?.map && (
+                        <span className="rounded-full px-3 py-1" style={{ backgroundColor: "rgba(255,255,255,0.05)" }}>
+                          {test.context.map}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="mt-5 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {test.link && (
+                          <a href={test.link} target="_blank" rel="noopener noreferrer">
+                            <Button variant="ghost" size="icon" className="rounded-2xl" style={{ color: COLORS.primary, border: `1px solid ${COLORS.borderColor}`, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                              <ExternalLink className="h-4 w-4" />
+                            </Button>
+                          </a>
+                        )}
+                        {test.screenshotUrl && (
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button variant="ghost" size="icon" className="rounded-2xl" style={{ color: COLORS.primary, border: `1px solid ${COLORS.borderColor}`, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                                <Image className="h-4 w-4" />
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor }}>
+                              <DialogHeader>
+                                <DialogTitle style={{ color: COLORS.textColor }}>Скриншот теста: {test.name}</DialogTitle>
+                              </DialogHeader>
+                              <img src={test.screenshotUrl} alt={test.name} className="w-full rounded-md" />
+                            </DialogContent>
+                          </Dialog>
+                        )}
+                      </div>
+
+                      {!isStaff && (
+                        <div className="flex items-center gap-2">
+                          <Button variant="ghost" size="icon" className="rounded-2xl" style={{ color: COLORS.primary, border: `1px solid ${COLORS.borderColor}`, backgroundColor: "rgba(255,255,255,0.03)" }} onClick={() => handleEdit(test)}>
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="rounded-2xl" style={{ color: COLORS.danger, border: `1px solid ${COLORS.borderColor}`, backgroundColor: "rgba(255,255,255,0.03)" }} onClick={() => handleDelete(test.id)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </article>
+                ))}
+              </section>
+            )}
+          </TabsContent>
+
+          <TabsContent value="questionnaire" className="space-y-5">
+            <section
+              className="rounded-[28px] border p-5 md:p-6"
+              style={{
+                background: "linear-gradient(150deg, rgba(0, 227, 150, 0.1), rgba(17, 24, 39, 0.96) 68%)",
+                borderColor: "rgba(16, 185, 129, 0.2)"
+              }}
+            >
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+                <div className="space-y-3">
+                  <div className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] uppercase tracking-[0.24em]" style={{ backgroundColor: "rgba(255,255,255,0.05)", color: COLORS.textColorSecondary }}>
+                    <Brain className="h-3.5 w-3.5" />
+                    Daily self-check
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-semibold" style={{ color: COLORS.textColor }}>
+                      Ежедневный опросник без ощущения тяжёлой формы
+                    </h3>
+                    <p className="mt-2 max-w-2xl text-sm leading-7" style={{ color: COLORS.textColorSecondary }}>
+                      Разбил ввод на понятные блоки: сон, экранное время и итоговый контроль суммы. Так заполнять быстрее, а проверять себя проще.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 xl:min-w-[320px]">
+                  <div className="rounded-[20px] border px-4 py-3" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.04)" }}>
+                    <div className="text-[11px] uppercase tracking-[0.2em]" style={{ color: COLORS.textColorSecondary }}>Дата</div>
+                    <div className="mt-1 text-base font-semibold" style={{ color: COLORS.textColor }}>{qDateLabel}</div>
+                  </div>
+                  <div className="rounded-[20px] border px-4 py-3" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.04)" }}>
+                    <div className="text-[11px] uppercase tracking-[0.2em]" style={{ color: COLORS.textColorSecondary }}>Сон</div>
+                    <div className="mt-1 text-base font-semibold" style={{ color: COLORS.textColor }}>{qSleep || "-"}</div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className="grid gap-5 xl:grid-cols-[1.02fr_0.98fr]">
+              <div className="space-y-5">
+                <Card style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor, boxShadow: "0 1px 20px 0 rgba(0,0,0,.1)" }}>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl border" style={{ backgroundColor: "rgba(53, 144, 255, 0.12)", borderColor: "rgba(53, 144, 255, 0.26)", color: COLORS.primary }}>
+                        <Clock3 className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <CardTitle style={{ color: COLORS.textColor }}>Сон и восстановление</CardTitle>
+                        <CardDescription style={{ color: COLORS.textColorSecondary }}>
+                          Заполните диапазон сна или скорректируйте часы вручную.
+                        </CardDescription>
+                      </div>
+                    </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="space-y-2">
                       <Label style={{ color: COLORS.textColor }}>Дата</Label>
-                      <Input
-                        type="date"
-                        value={qDate}
-                        onChange={(e) => setQDate(e.target.value)}
-                        style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
-                      />
+                      <Input type="date" value={qDate} onChange={(e) => setQDate(e.target.value)} className="rounded-2xl" style={fieldStyle} />
                     </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label style={{ color: COLORS.textColor }}>Настроение (1-10)</Label>
-                        <Input
-                          value={qMood}
-                          onChange={(e) => setQMood(e.target.value)}
-                          inputMode="numeric"
-                          style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label style={{ color: COLORS.textColor }}>Энергия (1-10)</Label>
-                        <Input
-                          value={qEnergy}
-                          onChange={(e) => setQEnergy(e.target.value)}
-                          inputMode="numeric"
-                          style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
-                        />
-                      </div>
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                       <div className="space-y-2">
                         <Label style={{ color: COLORS.textColor }}>Сон: с</Label>
-                        <Input
-                          type="time"
-                          value={qSleepStart}
-                          onChange={(e) => setQSleepStart(e.target.value)}
-                          style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
-                        />
+                        <Input type="time" value={qSleepStart} onChange={(e) => setQSleepStart(e.target.value)} className="rounded-2xl" style={fieldStyle} />
                       </div>
                       <div className="space-y-2">
                         <Label style={{ color: COLORS.textColor }}>Сон: до</Label>
-                        <Input
-                          type="time"
-                          value={qSleepEnd}
-                          onChange={(e) => setQSleepEnd(e.target.value)}
-                          style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label style={{ color: COLORS.textColor }}>Сон (часы, авто/ручной)</Label>
-                        <Input
-                          value={qSleep}
-                          onChange={(e) => setQSleep(e.target.value)}
-                          inputMode="decimal"
-                          placeholder="Например: 7.5"
-                          style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label style={{ color: COLORS.textColor }}>Экранное время (часы, общее)</Label>
-                        <Input
-                          value={qScreen}
-                          onChange={(e) => setQScreen(e.target.value)}
-                          inputMode="decimal"
-                          placeholder="Можно оставить пустым, если заполнена детализация"
-                          style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
-                        />
+                        <Input type="time" value={qSleepEnd} onChange={(e) => setQSleepEnd(e.target.value)} className="rounded-2xl" style={fieldStyle} />
                       </div>
                     </div>
-
-                    <div className="space-y-2 pt-2">
-                      <Label style={{ color: COLORS.textColor }}>Экранное время: на что ушло время (часы)</Label>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Input
-                          value={qScreenEntertainment}
-                          onChange={(e) => setQScreenEntertainment(e.target.value)}
-                          inputMode="decimal"
-                          placeholder="Развлечения (игры, видео)"
-                          style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
-                        />
-                        <Input
-                          value={qScreenCommunication}
-                          onChange={(e) => setQScreenCommunication(e.target.value)}
-                          inputMode="decimal"
-                          placeholder="Общение (мессенджеры, соцсети)"
-                          style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
-                        />
-                        <Input
-                          value={qScreenBrowser}
-                          onChange={(e) => setQScreenBrowser(e.target.value)}
-                          inputMode="decimal"
-                          placeholder="Браузер"
-                          style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
-                        />
-                        <Input
-                          value={qScreenStudy}
-                          onChange={(e) => setQScreenStudy(e.target.value)}
-                          inputMode="decimal"
-                          placeholder="Учёба / работа"
-                          style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
-                        />
-                      </div>
+                    <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                      <Label style={{ color: COLORS.textColor }}>Сон (часы, авто или вручную)</Label>
+                      <Input
+                        value={qSleep}
+                        onChange={(e) => setQSleep(e.target.value)}
+                        inputMode="decimal"
+                        placeholder="Например: 7.5"
+                        className="mt-3 rounded-2xl"
+                        style={fieldStyle}
+                      />
+                      <p className="mt-3 text-sm leading-6" style={{ color: COLORS.textColorSecondary }}>
+                        Если вы задали время сна `с` и `до`, система уже подсказывает продолжительность. Поле можно оставить как есть или скорректировать вручную.
+                      </p>
                     </div>
                   </CardContent>
-                  <CardFooter>
-                    <Button onClick={submitQuestionnaire} disabled={qSubmitting}>
-                      {qSubmitting ? "Сохранение..." : "Сохранить"}
-                    </Button>
-                  </CardFooter>
                 </Card>
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
+
+                <Card style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor, boxShadow: "0 1px 20px 0 rgba(0,0,0,.1)" }}>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl border" style={{ backgroundColor: "rgba(0, 227, 150, 0.12)", borderColor: "rgba(0, 227, 150, 0.26)", color: "#7EF3D1" }}>
+                        <Monitor className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <CardTitle style={{ color: COLORS.textColor }}>Экранное время</CardTitle>
+                        <CardDescription style={{ color: COLORS.textColorSecondary }}>
+                          Общее время и аккуратная детализация по категориям.
+                        </CardDescription>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <Label style={{ color: COLORS.textColor }}>Общее экранное время</Label>
+                      <Input
+                        value={qScreen}
+                        onChange={(e) => setQScreen(e.target.value)}
+                        inputMode="decimal"
+                        placeholder="Можно оставить пустым, если заполнена детализация"
+                        className="rounded-2xl"
+                        style={fieldStyle}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <Input value={qScreenEntertainment} onChange={(e) => setQScreenEntertainment(e.target.value)} inputMode="decimal" placeholder="Развлечения" className="rounded-2xl" style={fieldStyle} />
+                      <Input value={qScreenCommunication} onChange={(e) => setQScreenCommunication(e.target.value)} inputMode="decimal" placeholder="Общение" className="rounded-2xl" style={fieldStyle} />
+                      <Input value={qScreenBrowser} onChange={(e) => setQScreenBrowser(e.target.value)} inputMode="decimal" placeholder="Браузер" className="rounded-2xl" style={fieldStyle} />
+                      <Input value={qScreenStudy} onChange={(e) => setQScreenStudy(e.target.value)} inputMode="decimal" placeholder="Учёба / работа" className="rounded-2xl" style={fieldStyle} />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor, boxShadow: "0 1px 20px 0 rgba(0,0,0,.1)" }}>
+                <CardHeader className="pb-2">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl border" style={{ backgroundColor: "rgba(164, 108, 255, 0.12)", borderColor: "rgba(164, 108, 255, 0.26)", color: "#C4A5FF" }}>
+                      <Gauge className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <CardTitle style={{ color: COLORS.textColor }}>Контроль заполнения</CardTitle>
+                      <CardDescription style={{ color: COLORS.textColorSecondary }}>
+                        Перед сохранением сразу видно итог по категориям и возможные ошибки.
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                    <div className="text-[11px] uppercase tracking-[0.2em]" style={{ color: COLORS.textColorSecondary }}>Сумма подкатегорий</div>
+                    <div className="mt-2 text-3xl font-semibold" style={{ color: COLORS.textColor }}>
+                      {questionnaireBreakdownSum > 0 ? `${questionnaireBreakdownSum.toFixed(1)} ч` : "-"}
+                    </div>
+                    <div className="mt-2 text-sm leading-6" style={{ color: COLORS.textColorSecondary }}>
+                      {hasQuestionnaireTotal
+                        ? `Общее время задано: ${questionnaireTotalScreen.toFixed(1)} ч`
+                        : "Можно не задавать общее время, если заполнена детализация по категориям."}
+                    </div>
+                  </div>
+
+                  <div
+                    className="rounded-[22px] border p-4"
+                    style={{
+                      borderColor: isQuestionnaireExceeded ? "rgba(255, 69, 96, 0.3)" : "rgba(0, 227, 150, 0.24)",
+                      backgroundColor: isQuestionnaireExceeded ? "rgba(255, 69, 96, 0.1)" : "rgba(0, 227, 150, 0.08)"
+                    }}
+                  >
+                    <div className="text-sm font-medium" style={{ color: COLORS.textColor }}>
+                      {questionnaireBreakdownSum === 0
+                        ? "Заполните хотя бы одну категорию или общее экранное время"
+                        : isQuestionnaireExceeded
+                          ? "Сумма подкатегорий превышает общее экранное время"
+                          : "Данные выглядят согласованно"}
+                    </div>
+                    <p className="mt-2 text-sm leading-6" style={{ color: COLORS.textColorSecondary }}>
+                      {questionnaireBreakdownSum === 0
+                        ? "Как только появятся данные, этот блок сразу покажет, всё ли логично сходится."
+                        : hasQuestionnaireTotal
+                          ? `${questionnaireBreakdownSum.toFixed(1)} ч из ${questionnaireTotalScreen.toFixed(1)} ч общего времени`
+                          : "Система будет использовать сумму категорий как итоговое экранное время."}
+                    </p>
+                  </div>
+
+                  <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                    <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.2em]" style={{ color: COLORS.textColorSecondary }}>
+                      <ClipboardList className="h-3.5 w-3.5" />
+                      Что мы сохраняем
+                    </div>
+                    <ul className="mt-3 space-y-2 text-sm leading-6" style={{ color: COLORS.textColorSecondary }}>
+                      <li>Дата среза: {qDateLabel}</li>
+                      <li>Сон: {qSleep || "не указан"}</li>
+                      <li>Экранное время: {qScreen || (questionnaireBreakdownSum > 0 ? `${questionnaireBreakdownSum.toFixed(1)} ч по детализации` : "не указано")}</li>
+                    </ul>
+                  </div>
+                </CardContent>
+                <CardFooter className="pt-0">
+                  <Button onClick={submitQuestionnaire} disabled={qSubmitting || isQuestionnaireExceeded} className="h-12 w-full rounded-2xl" style={{ backgroundColor: COLORS.primary, color: "white" }}>
+                    {qSubmitting ? "Сохранение..." : "Сохранить опросник"}
+                  </Button>
+                </CardFooter>
+              </Card>
+            </section>
+          </TabsContent>
+        </Tabs>
       </div>
       
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor }}>
-          <DialogHeader>
+        <DialogContent
+          className="flex max-h-[calc(100vh-2rem)] flex-col gap-0 overflow-hidden border p-0 sm:max-w-[760px]"
+          style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor }}
+        >
+          <div
+            className="absolute inset-x-0 top-0 h-40"
+            style={{ background: "linear-gradient(180deg, rgba(53, 144, 255, 0.18), rgba(53, 144, 255, 0))" }}
+          />
+          <DialogHeader className="relative space-y-3 border-b px-6 pb-4 pt-6" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
+            <div className="inline-flex w-fit items-center gap-2 rounded-full px-3 py-1 text-[11px] uppercase tracking-[0.24em]" style={{ backgroundColor: "rgba(255,255,255,0.05)", color: COLORS.textColorSecondary }}>
+              <CalendarIcon className="h-3.5 w-3.5" />
+              {selectedDateLabel}
+            </div>
             <DialogTitle style={{ color: COLORS.textColor }}>
               {editingTest ? "Редактировать тест" : "Добавить тест"}
             </DialogTitle>
             <DialogDescription style={{ color: COLORS.textColorSecondary }}>
-              {editingTest ? "Измените информацию о пройденном тесте" : "Заполните информацию о пройденном тесте"}
+              {editingTest
+                ? "Обновите результат, метрики и контекст, чтобы аналитика оставалась чистой."
+                : "Соберите тест в одном месте: базовая информация, score, состояние и игровой контекст."}
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="name" className="text-right" style={{ color: COLORS.textColor }}>
-                Название
-              </Label>
-              <Input
-                id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="col-span-3"
-                style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="link" className="text-right" style={{ color: COLORS.textColor }}>
-                Ссылка
-              </Label>
-              <Input
-                id="link"
-                value={link}
-                onChange={(e) => setLink(e.target.value)}
-                className="col-span-3"
-                style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="date" className="text-right" style={{ color: COLORS.textColor }}>
-                Дата
-              </Label>
-              <Input
-                id="date"
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="col-span-3"
-                style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label
-                htmlFor="weekly-test"
-                className="text-right"
-                style={{ color: COLORS.textColor }}
-              >
-                Еженедельный тест
-              </Label>
-              <div className="flex items-center space-x-2 col-span-3">
-                <Switch
-                  id="weekly-test"
-                  checked={isWeeklyTest}
-                  onCheckedChange={setIsWeeklyTest}
-                />
-                <Label htmlFor="weekly-test" style={{ color: COLORS.textColorSecondary }}>
-                  {isWeeklyTest ? "Еженедельный" : "Ежедневный"}
-                </Label>
+
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+            <div className="space-y-5">
+              <div className="grid gap-5 lg:grid-cols-[1.02fr_0.98fr]">
+                <div className="space-y-5">
+                  <div className="rounded-[24px] border p-5" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl border" style={{ backgroundColor: "rgba(53, 144, 255, 0.12)", borderColor: "rgba(53, 144, 255, 0.26)", color: COLORS.primary }}>
+                        <ClipboardList className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <div className="text-lg font-semibold" style={{ color: COLORS.textColor }}>Базовая информация</div>
+                        <p className="mt-1 text-sm leading-6" style={{ color: COLORS.textColorSecondary }}>
+                          Что за тест, когда проходили и относится ли он к weekly-ритму.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-5 space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="name" style={{ color: COLORS.textColor }}>Название теста</Label>
+                        <Input id="name" value={name} onChange={(e) => setName(e.target.value)} className="rounded-2xl" style={fieldStyle} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="link" style={{ color: COLORS.textColor }}>Ссылка</Label>
+                        <Input id="link" value={link} onChange={(e) => setLink(e.target.value)} className="rounded-2xl" style={fieldStyle} />
+                      </div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="date" style={{ color: COLORS.textColor }}>Дата</Label>
+                          <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded-2xl" style={fieldStyle} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="testType" style={{ color: COLORS.textColor }}>Тип теста</Label>
+                          <Input id="testType" value={testType} onChange={(e) => setTestType(e.target.value)} className="rounded-2xl" style={fieldStyle} />
+                        </div>
+                      </div>
+                      <div className="rounded-[20px] border px-4 py-3" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-medium" style={{ color: COLORS.textColor }}>Еженедельный тест</div>
+                            <div className="mt-1 text-sm" style={{ color: COLORS.textColorSecondary }}>
+                              {isWeeklyTest ? "Запись попадёт в weekly-контур." : "Запись останется обычным тестом."}
+                            </div>
+                          </div>
+                          <Switch id="weekly-test" checked={isWeeklyTest} onCheckedChange={setIsWeeklyTest} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[24px] border p-5" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl border" style={{ backgroundColor: "rgba(0, 227, 150, 0.12)", borderColor: "rgba(0, 227, 150, 0.26)", color: "#7EF3D1" }}>
+                        <Gauge className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <div className="text-lg font-semibold" style={{ color: COLORS.textColor }}>Результат теста</div>
+                        <p className="mt-1 text-sm leading-6" style={{ color: COLORS.textColorSecondary }}>
+                          Основные метрики, которые потом участвуют в сравнении и аналитике.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-5 grid gap-4 md:grid-cols-2">
+                      <Input placeholder="Raw score" value={rawScore} onChange={(e) => setRawScore(e.target.value)} inputMode="decimal" className="rounded-2xl" style={fieldStyle} />
+                      <Input placeholder="Score normalized (0-100)" value={scoreNormalized} onChange={(e) => setScoreNormalized(e.target.value)} inputMode="decimal" className="rounded-2xl" style={fieldStyle} />
+                      <Input placeholder="Unit (%)" value={unit} onChange={(e) => setUnit(e.target.value)} className="rounded-2xl" style={fieldStyle} />
+                      <Input placeholder="Duration sec" value={durationSec} onChange={(e) => setDurationSec(e.target.value)} inputMode="numeric" className="rounded-2xl" style={fieldStyle} />
+                      <Input placeholder="Attempts" value={attempts} onChange={(e) => setAttempts(e.target.value)} inputMode="numeric" className="rounded-2xl md:col-span-2" style={fieldStyle} />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-5">
+                  <div className="rounded-[24px] border p-5" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl border" style={{ backgroundColor: "rgba(164, 108, 255, 0.12)", borderColor: "rgba(164, 108, 255, 0.26)", color: "#C4A5FF" }}>
+                        <Brain className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <div className="text-lg font-semibold" style={{ color: COLORS.textColor }}>Срез состояния</div>
+                        <p className="mt-1 text-sm leading-6" style={{ color: COLORS.textColorSecondary }}>
+                          Что было с ресурсом и концентрацией в момент выполнения.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-5 grid gap-4 md:grid-cols-3">
+                      <Input placeholder="Fatigue (0-10)" value={fatigue} onChange={(e) => setFatigue(e.target.value)} inputMode="decimal" className="rounded-2xl" style={fieldStyle} />
+                      <Input placeholder="Focus (0-10)" value={focus} onChange={(e) => setFocus(e.target.value)} inputMode="decimal" className="rounded-2xl" style={fieldStyle} />
+                      <Input placeholder="Stress (0-10)" value={stress} onChange={(e) => setStress(e.target.value)} inputMode="decimal" className="rounded-2xl" style={fieldStyle} />
+                      <Input placeholder="Sleep hours" value={sleepHours} onChange={(e) => setSleepHours(e.target.value)} inputMode="decimal" className="rounded-2xl" style={fieldStyle} />
+                      <Input placeholder="Mood (0-10)" value={snapshotMood} onChange={(e) => setSnapshotMood(e.target.value)} inputMode="decimal" className="rounded-2xl" style={fieldStyle} />
+                      <Input placeholder="Energy (0-10)" value={snapshotEnergy} onChange={(e) => setSnapshotEnergy(e.target.value)} inputMode="decimal" className="rounded-2xl" style={fieldStyle} />
+                    </div>
+                  </div>
+
+                  <div className="rounded-[24px] border p-5" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl border" style={{ backgroundColor: "rgba(253, 186, 116, 0.12)", borderColor: "rgba(253, 186, 116, 0.26)", color: "#FDBA74" }}>
+                        <LinkIcon className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <div className="text-lg font-semibold" style={{ color: COLORS.textColor }}>Игровой контекст</div>
+                        <p className="mt-1 text-sm leading-6" style={{ color: COLORS.textColorSecondary }}>
+                          Если тест связан с конкретной ролью, картой или типом игры, лучше зафиксировать это сразу.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-5 grid gap-4">
+                      <Input placeholder="Match type" value={matchType} onChange={(e) => setMatchType(e.target.value)} className="rounded-2xl" style={fieldStyle} />
+                      <Input placeholder="Map" value={contextMap} onChange={(e) => setContextMap(e.target.value)} className="rounded-2xl" style={fieldStyle} />
+                      <Input placeholder="Role" value={contextRole} onChange={(e) => setContextRole(e.target.value)} className="rounded-2xl" style={fieldStyle} />
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="testType" className="text-right" style={{ color: COLORS.textColor }}>
-                Тип теста
-              </Label>
-              <Input
-                id="testType"
-                value={testType}
-                onChange={(e) => setTestType(e.target.value)}
-                className="col-span-3"
-                style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <Input
-                placeholder="Raw score"
-                value={rawScore}
-                onChange={(e) => setRawScore(e.target.value)}
-                inputMode="decimal"
-                style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
-              />
-              <Input
-                placeholder="Score normalized (0-100)"
-                value={scoreNormalized}
-                onChange={(e) => setScoreNormalized(e.target.value)}
-                inputMode="decimal"
-                style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
-              />
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              <Input
-                placeholder="Unit (%)"
-                value={unit}
-                onChange={(e) => setUnit(e.target.value)}
-                style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
-              />
-              <Input
-                placeholder="Duration sec"
-                value={durationSec}
-                onChange={(e) => setDurationSec(e.target.value)}
-                inputMode="numeric"
-                style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
-              />
-              <Input
-                placeholder="Attempts"
-                value={attempts}
-                onChange={(e) => setAttempts(e.target.value)}
-                inputMode="numeric"
-                style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
-              />
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              <Input
-                placeholder="Fatigue (0-10)"
-                value={fatigue}
-                onChange={(e) => setFatigue(e.target.value)}
-                inputMode="decimal"
-                style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
-              />
-              <Input
-                placeholder="Focus (0-10)"
-                value={focus}
-                onChange={(e) => setFocus(e.target.value)}
-                inputMode="decimal"
-                style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
-              />
-              <Input
-                placeholder="Stress (0-10)"
-                value={stress}
-                onChange={(e) => setStress(e.target.value)}
-                inputMode="decimal"
-                style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
-              />
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              <Input
-                placeholder="Sleep hours"
-                value={sleepHours}
-                onChange={(e) => setSleepHours(e.target.value)}
-                inputMode="decimal"
-                style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
-              />
-              <Input
-                placeholder="Mood (0-10)"
-                value={snapshotMood}
-                onChange={(e) => setSnapshotMood(e.target.value)}
-                inputMode="decimal"
-                style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
-              />
-              <Input
-                placeholder="Energy (0-10)"
-                value={snapshotEnergy}
-                onChange={(e) => setSnapshotEnergy(e.target.value)}
-                inputMode="decimal"
-                style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
-              />
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              <Input
-                placeholder="Match type"
-                value={matchType}
-                onChange={(e) => setMatchType(e.target.value)}
-                style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
-              />
-              <Input
-                placeholder="Map"
-                value={contextMap}
-                onChange={(e) => setContextMap(e.target.value)}
-                style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
-              />
-              <Input
-                placeholder="Role"
-                value={contextRole}
-                onChange={(e) => setContextRole(e.target.value)}
-                style={{ backgroundColor: COLORS.backgroundColor, color: COLORS.textColor, borderColor: COLORS.borderColor }}
-              />
-            </div>
           </div>
-          <DialogFooter>
+
+          <DialogFooter
+            className="border-t px-6 py-4"
+            style={{
+              borderColor: "rgba(255,255,255,0.06)",
+              backgroundColor: "rgba(11, 16, 32, 0.72)",
+              backdropFilter: "blur(16px)"
+            }}
+          >
             <Button 
               type="button" 
               variant="outline" 
@@ -1048,7 +1299,8 @@ const TestTracker = () => {
             <Button 
               type="submit" 
               onClick={handleSubmit}
-              style={{ backgroundColor: COLORS.primary, color: COLORS.textColor }}
+              className="rounded-2xl"
+              style={{ backgroundColor: COLORS.primary, color: "white" }}
             >
               {editingTest ? "Сохранить" : "Добавить"}
             </Button>

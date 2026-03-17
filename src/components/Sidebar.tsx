@@ -11,109 +11,27 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { COLORS } from "@/styles/theme";
-import ROUTES from "@/lib/routes";
+import {
+  getSidebarNavItems,
+  type SidebarIconKey,
+  type SidebarPlayerType,
+  type SidebarRole
+} from "@/lib/sidebarNavigation";
 import { CSSProperties } from "react";
 
-type UserRole = "player" | "staff" | null;
-type PlayerType = "solo" | "team" | null;
-
-type NavItem = {
-  title: string;
-  href: string;
-  icon: React.ReactNode;
-};
-
-/**
- * Генерирует список навигационных элементов на основе роли пользователя
-
- */
-const getNavItems = (role: UserRole, playerType: PlayerType): NavItem[] => {
-  // Базовые элементы, доступные для всех пользователей
-  const baseItems: NavItem[] = [
-    {
-      title: "Обзор",
-      href: "/",
-      icon: <Home className="h-5 w-5" />,
-    },
-    {
-      title: "Настроение и Энергия",
-      href: "/mood",
-      icon: <Calendar className="h-5 w-5" />,
-    },
-    {
-      title: "Тесты",
-      href: "/tests",
-      icon: <ListTodo className="h-5 w-5" />,
-    },
-    {
-      title: "Статистика",
-      href: "/stats",
-      icon: <BarChart2 className="h-5 w-5" />,
-    },
-    {
-      title: "Корреляционный анализ",
-      href: "/correlation-analysis",
-      icon: <TrendingUp className="h-5 w-5" />,
-    },
-    {
-      title: "Игровая статистика",
-      href: ROUTES.GAME_STATS,
-      icon: <LineChart className="h-5 w-5" />,
-    },
-  ];
-
-  // Добавляем раздел колеса баланса с разными путями в зависимости от роли
-  if (role === "player") {
-    baseItems.push({
-      title: "Колесо баланса",
-      href: "/balance-wheel",
-      icon: <CircleDot className="h-5 w-5" />,
-    });
-  } else if (role === "staff") {
-    baseItems.push({
-      title: "Колесо баланса",
-      href: "/staff-balance-wheel",
-      icon: <CircleDot className="h-5 w-5" />,
-    });
-  }
-  
-  // Элементы, доступные всем аутентифицированным пользователям
-  if (role) {
-    baseItems.push(
-      {
-        title: "Топ игроков",
-        href: "/top-players",
-        icon: <Trophy className="h-5 w-5" />,
-      },
-
-      {
-        title: "Управление игроками",
-        href: "/players",
-        icon: <Users className="h-5 w-5" />,
-      },
-      {
-        title: "Управление персоналом",
-        href: "/staff-roster",
-        icon: <UserPlus className="h-5 w-5" />,
-      },
-      {
-        title: "Карточки игроков",
-        href: "/player-card",
-        icon: <CreditCard className="h-5 w-5 text-primary" />,
-      },
-    );
-  }
-
-  // Профиль для всех аутентифицированных пользователей
-  if (role) {
-    baseItems.push({
-      title: "Профиль",
-      href: "/profile",
-      icon: <User className="h-5 w-5" />,
-    });
-  }
-
-  return baseItems;
+const navIcons: Record<SidebarIconKey, React.ReactNode> = {
+  home: <Home className="h-5 w-5" />,
+  calendar: <Calendar className="h-5 w-5" />,
+  tests: <ListTodo className="h-5 w-5" />,
+  stats: <BarChart2 className="h-5 w-5" />,
+  correlation: <TrendingUp className="h-5 w-5" />,
+  gameStats: <LineChart className="h-5 w-5" />,
+  balanceWheel: <CircleDot className="h-5 w-5" />,
+  topPlayers: <Trophy className="h-5 w-5" />,
+  players: <Users className="h-5 w-5" />,
+  staff: <UserPlus className="h-5 w-5" />,
+  playerCard: <CreditCard className="h-5 w-5" />,
+  profile: <User className="h-5 w-5" />,
 };
 
 /**
@@ -123,7 +41,10 @@ const getNavItems = (role: UserRole, playerType: PlayerType): NavItem[] => {
 const Sidebar: React.FC = () => {
   const location = useLocation();
   const { user, logout } = useAuth();
-  const navItems = getNavItems(user?.role as UserRole || null, (user?.playerType as PlayerType) || null);
+  const navItems = getSidebarNavItems(
+    (user?.role as SidebarRole) || null,
+    (user?.playerType as SidebarPlayerType) || null
+  );
 
   // Стили для компонентов
   const styles: Record<string, CSSProperties> = {
@@ -132,19 +53,40 @@ const Sidebar: React.FC = () => {
       color: COLORS.textColor,
       borderRight: `1px solid ${COLORS.borderColor}`
     },
-    logo: { 
+    brandPanel: {
+      background: "linear-gradient(180deg, rgba(11, 27, 47, 0.9) 0%, rgba(17, 24, 39, 0.82) 100%)",
+      border: `1px solid ${COLORS.borderColor}`,
+      borderRadius: "16px",
+      padding: "10px 12px",
+      boxShadow: "0 16px 24px -24px rgba(7, 17, 31, 0.9)"
+    },
+    brandEyebrow: {
       color: COLORS.primary,
-      fontWeight: 'bold',
-      letterSpacing: '1px',
-      textTransform: 'uppercase' as 'uppercase'
+      fontSize: "9px",
+      fontWeight: 700,
+      letterSpacing: "0.18em",
+      textTransform: "uppercase" as const
+    },
+    brandTitle: {
+      color: COLORS.textColor,
+      fontSize: "20px",
+      fontWeight: 800,
+      letterSpacing: "0.02em",
+      lineHeight: 1.05
+    },
+    brandSubtitle: {
+      color: COLORS.textColorSecondary,
+      fontSize: "10px",
+      letterSpacing: "0.12em",
+      textTransform: "uppercase" as const
     },
     badge: { 
       color: COLORS.textColorSecondary, 
       borderColor: COLORS.borderColor,
-      backgroundColor: COLORS.backgroundColor,
-      fontSize: '10px',
+      backgroundColor: "rgba(255, 255, 255, 0.04)",
+      fontSize: '9px',
       fontWeight: 'bold',
-      letterSpacing: '0.5px',
+      letterSpacing: '0.4px',
       textTransform: 'uppercase' as 'uppercase'
     },
     tooltip: {
@@ -157,6 +99,15 @@ const Sidebar: React.FC = () => {
     },
     logoutButton: { 
       color: COLORS.textColorSecondary 
+    },
+    navIconWrap: {
+      width: "28px",
+      height: "28px",
+      borderRadius: "8px",
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      flexShrink: 0
     }
   };
 
@@ -167,7 +118,16 @@ const Sidebar: React.FC = () => {
   const renderNavItem = (item: NavItem) => {
     const isActive = location.pathname === item.href;
     const buttonStyle = {
-      backgroundColor: isActive ? COLORS.primary + "20" : "transparent",
+      background: isActive
+        ? "linear-gradient(90deg, rgba(53, 144, 255, 0.22) 0%, rgba(53, 144, 255, 0.12) 100%)"
+        : "transparent",
+      color: isActive ? "#F8FBFF" : COLORS.textColorSecondary,
+      border: isActive ? "1px solid rgba(53, 144, 255, 0.18)" : "1px solid transparent",
+      boxShadow: isActive ? "inset 0 1px 0 rgba(255,255,255,0.03)" : "none"
+    };
+    const iconWrapStyle = {
+      ...styles.navIconWrap,
+      backgroundColor: isActive ? "rgba(53, 144, 255, 0.14)" : "transparent",
       color: isActive ? COLORS.primary : COLORS.textColorSecondary
     };
 
@@ -180,15 +140,17 @@ const Sidebar: React.FC = () => {
                 <Button
                   variant="ghost"
                   className={cn(
-                    "w-full justify-start h-10",
+                    "w-full justify-start h-12 rounded-xl px-3 text-[14px] font-medium transition-all",
                     isActive 
                       ? "text-primary" 
-                      : "text-secondary hover:text-primary-foreground"
+                      : "text-secondary hover:text-white"
                   )}
                   style={buttonStyle}
                 >
-                  {item.icon}
-                  <span className="ml-2">{item.title}</span>
+                  <span style={iconWrapStyle}>
+                    {navIcons[item.icon]}
+                  </span>
+                  <span className="ml-2.5">{item.title}</span>
                 </Button>
               </Link>
             </TooltipTrigger>
@@ -203,13 +165,15 @@ const Sidebar: React.FC = () => {
 
   return (
     <aside className="h-screen w-64 flex flex-col" style={styles.sidebar}>
-      {/* Логотип */}
-      <div className="p-4 pt-5 mt-0.5">
-        <div className="flex flex-col">
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl font-bold font-heading" style={styles.logo}>
-              Tracker
-            </h2>
+      {/* Бренд-блок */}
+      <div className="p-4 pt-4 mt-0.5">
+        <div style={styles.brandPanel}>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p style={styles.brandEyebrow}>ATLANT</p>
+              <p style={styles.brandTitle}>Technology</p>
+              <p className="mt-0.5" style={styles.brandSubtitle}>Performance Coach CRM</p>
+            </div>
             <span className="text-xs px-1.5 py-0.5 rounded-md border" style={styles.badge}>
               beta v_1.02
             </span>
@@ -246,13 +210,10 @@ const Sidebar: React.FC = () => {
       
       {/* Копирайт */}
       <div className="p-4 text-sm" style={styles.copyright}>
-        <p>© 2023 Tracker</p>
+        <p>© 2026 ATLANT Technology</p>
       </div>
     </aside>
   );
 };
 
 export default Sidebar;
-
-
-

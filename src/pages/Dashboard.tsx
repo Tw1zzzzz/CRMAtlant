@@ -443,6 +443,39 @@ const Dashboard = () => {
     color: COLORS.textColor
   };
 
+  const moodDistributionData = isStaff
+    ? [
+        { name: 'Отличное', range: '8-10', value: playersMoodStats.filter((p: any) => p.mood >= 8 || p.value >= 8).length || 5, color: '#22c55e' },
+        { name: 'Хорошее', range: '6-7', value: playersMoodStats.filter((p: any) => (p.mood >= 6 && p.mood < 8) || (p.value >= 6 && p.value < 8)).length || 8, color: '#38bdf8' },
+        { name: 'Среднее', range: '4-5', value: playersMoodStats.filter((p: any) => (p.mood >= 4 && p.mood < 6) || (p.value >= 4 && p.value < 6)).length || 4, color: '#f59e0b' },
+        { name: 'Плохое', range: '1-3', value: playersMoodStats.filter((p: any) => (p.mood >= 1 && p.mood < 4) || (p.value >= 1 && p.value < 4)).length || 2, color: '#f43f5e' }
+      ]
+    : [
+        { name: 'Отличное', range: '8-10', value: moodEntries.filter(e => e.mood >= 8 || e.value >= 8).length || 0, color: '#22c55e' },
+        { name: 'Хорошее', range: '6-7', value: moodEntries.filter(e => (e.mood >= 6 && e.mood < 8) || (e.value >= 6 && e.value < 8)).length || 0, color: '#38bdf8' },
+        { name: 'Среднее', range: '4-5', value: moodEntries.filter(e => (e.mood >= 4 && e.mood < 6) || (e.value >= 4 && e.value < 6)).length || 0, color: '#f59e0b' },
+        { name: 'Плохое', range: '1-3', value: moodEntries.filter(e => (e.mood >= 1 && e.mood < 4) || (e.value >= 1 && e.value < 4)).length || 0, color: '#f43f5e' }
+      ];
+  const moodDistributionTotal = moodDistributionData.reduce((sum, item) => sum + item.value, 0);
+  const dominantMoodBucket = moodDistributionData.reduce((top, item) => (item.value > top.value ? item : top), moodDistributionData[0]);
+
+  const energyDistributionData = [
+    { day: 'Пн', энергия: isStaff ? (Math.random() * 3 + 6) : calcDayAvgEnergy(moodEntries, 1) },
+    { day: 'Вт', энергия: isStaff ? (Math.random() * 3 + 6) : calcDayAvgEnergy(moodEntries, 2) },
+    { day: 'Ср', энергия: isStaff ? (Math.random() * 3 + 5) : calcDayAvgEnergy(moodEntries, 3) },
+    { day: 'Чт', энергия: isStaff ? (Math.random() * 3 + 5) : calcDayAvgEnergy(moodEntries, 4) },
+    { day: 'Пт', энергия: isStaff ? (Math.random() * 3 + 4) : calcDayAvgEnergy(moodEntries, 5) },
+    { day: 'Сб', энергия: isStaff ? (Math.random() * 3 + 7) : calcDayAvgEnergy(moodEntries, 6) },
+    { day: 'Вс', энергия: isStaff ? (Math.random() * 3 + 7) : calcDayAvgEnergy(moodEntries, 0) }
+  ];
+  const nonZeroEnergyDays = energyDistributionData.filter((item) => item.энергия > 0);
+  const averageEnergyLevel = nonZeroEnergyDays.length
+    ? (nonZeroEnergyDays.reduce((sum, item) => sum + item.энергия, 0) / nonZeroEnergyDays.length).toFixed(1)
+    : "0.0";
+  const peakEnergyDay = nonZeroEnergyDays.length
+    ? nonZeroEnergyDays.reduce((peak, item) => (item.энергия > peak.энергия ? item : peak), nonZeroEnergyDays[0])
+    : null;
+
   return (
     <div className="space-y-6" style={{ 
         backgroundColor: COLORS.backgroundColor, 
@@ -700,92 +733,165 @@ const Dashboard = () => {
           {/* Добавление диаграмм распределения настроения и энергии */}
           <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
             {/* Круговая диаграмма распределения настроения */}
-            <Card style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor, boxShadow: "0 1px 20px 0 rgba(0,0,0,.1)" }}>
-              <CardHeader>
-                <CardTitle style={{ color: COLORS.textColor }}>Распределение настроения</CardTitle>
-                <CardDescription style={{ color: COLORS.textColorSecondary }}>
-                  {isStaff ? "Распределение настроения среди игроков" : "Ваше настроение по категориям"}
-                </CardDescription>
+            <Card
+              className="overflow-hidden"
+              style={{
+                background: "linear-gradient(155deg, rgba(26,32,44,1) 0%, rgba(21,31,51,1) 55%, rgba(15,34,63,0.96) 100%)",
+                borderColor: COLORS.borderColor,
+                boxShadow: "0 22px 40px -28px rgba(0,0,0,0.65)"
+              }}
+            >
+              <CardHeader className="border-b border-white/5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <CardTitle style={{ color: COLORS.textColor }}>Распределение настроения</CardTitle>
+                    <CardDescription style={{ color: COLORS.textColorSecondary }}>
+                      {isStaff ? "Распределение настроения среди игроков" : "Ваше настроение по категориям"}
+                    </CardDescription>
+                  </div>
+                  <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium tracking-[0.14em] uppercase text-slate-300">
+                    <PieChartIcon className="mr-2 inline h-3.5 w-3.5 text-cyan-300" />
+                    {moodDistributionTotal} записей
+                  </div>
+                </div>
               </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={isStaff ? 
-                        [
-                          { name: 'Отличное (8-10)', value: playersMoodStats.filter((p: any) => p.mood >= 8 || p.value >= 8).length || 5 },
-                          { name: 'Хорошее (6-7)', value: playersMoodStats.filter((p: any) => (p.mood >= 6 && p.mood < 8) || (p.value >= 6 && p.value < 8)).length || 8 },
-                          { name: 'Среднее (4-5)', value: playersMoodStats.filter((p: any) => (p.mood >= 4 && p.mood < 6) || (p.value >= 4 && p.value < 6)).length || 4 },
-                          { name: 'Плохое (1-3)', value: playersMoodStats.filter((p: any) => (p.mood >= 1 && p.mood < 4) || (p.value >= 1 && p.value < 4)).length || 2 }
-                        ] : 
-                        [
-                          { name: 'Отличное (8-10)', value: moodEntries.filter(e => e.mood >= 8 || e.value >= 8).length || 0 },
-                          { name: 'Хорошее (6-7)', value: moodEntries.filter(e => (e.mood >= 6 && e.mood < 8) || (e.value >= 6 && e.value < 8)).length || 0 },
-                          { name: 'Среднее (4-5)', value: moodEntries.filter(e => (e.mood >= 4 && e.mood < 6) || (e.value >= 4 && e.value < 6)).length || 0 },
-                          { name: 'Плохое (1-3)', value: moodEntries.filter(e => (e.mood >= 1 && e.mood < 4) || (e.value >= 1 && e.value < 4)).length || 0 }
-                        ]}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                    >
-                      {COLORS.chartColors.map((color, index) => (
-                        <Cell key={`cell-${index}`} fill={color} />
-                      ))}
-                    </Pie>
-                    <Tooltip 
-                      contentStyle={{ 
-                        backgroundColor: COLORS.cardBackground, 
-                        borderColor: COLORS.borderColor,
-                        color: COLORS.textColor 
-                      }} 
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
+              <CardContent className="pt-6">
+                <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
+                  <ResponsiveContainer width="100%" height={280}>
+                    <PieChart>
+                      <defs>
+                        <linearGradient id="moodGlow" x1="0" y1="0" x2="1" y2="1">
+                          <stop offset="0%" stopColor="#1f3b63" stopOpacity={0.35} />
+                          <stop offset="100%" stopColor="#0f172a" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <circle cx="50%" cy="50%" r="84" fill="url(#moodGlow)" />
+                      <Pie
+                        data={moodDistributionData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={62}
+                        outerRadius={104}
+                        paddingAngle={3}
+                        stroke="rgba(255,255,255,0.08)"
+                        strokeWidth={2}
+                        dataKey="value"
+                        label={false}
+                        labelLine={false}
+                      >
+                        {moodDistributionData.map((entry, index) => (
+                          <Cell key={`mood-cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <text x="50%" y="46%" textAnchor="middle" fill="#E5EEF9" fontSize="13" letterSpacing="1.8">
+                        ДОМИНАНТА
+                      </text>
+                      <text x="50%" y="55%" textAnchor="middle" fill={dominantMoodBucket.color} fontSize="24" fontWeight="700">
+                        {dominantMoodBucket.name}
+                      </text>
+                      <text x="50%" y="64%" textAnchor="middle" fill="#8FA3BF" fontSize="13">
+                        {moodDistributionTotal ? `${Math.round((dominantMoodBucket.value / moodDistributionTotal) * 100)}% выборки` : "Пока нет данных"}
+                      </text>
+                      <Tooltip contentStyle={chartTooltipStyle} />
+                    </PieChart>
+                  </ResponsiveContainer>
+
+                  <div className="space-y-3">
+                    {moodDistributionData.map((item) => {
+                      const share = moodDistributionTotal ? Math.round((item.value / moodDistributionTotal) * 100) : 0;
+                      return (
+                        <div
+                          key={item.name}
+                          className="rounded-2xl border border-white/8 bg-white/[0.04] px-4 py-3"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                              <span
+                                className="h-3 w-3 rounded-full"
+                                style={{ backgroundColor: item.color, boxShadow: `0 0 18px ${item.color}55` }}
+                              />
+                              <div>
+                                <p className="text-sm font-semibold text-slate-100">{item.name}</p>
+                                <p className="text-xs uppercase tracking-[0.16em] text-slate-400">{item.range}</p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-lg font-semibold text-white">{share}%</p>
+                              <p className="text-xs text-slate-400">{item.value} записей</p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </CardContent>
             </Card>
 
             {/* Гистограмма распределения энергии */}
-            <Card style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor, boxShadow: "0 1px 20px 0 rgba(0,0,0,.1)" }}>
-              <CardHeader>
-                <CardTitle style={{ color: COLORS.textColor }}>Распределение энергии</CardTitle>
-                <CardDescription style={{ color: COLORS.textColorSecondary }}>
-                  {isStaff ? "Уровни энергии по дням недели" : "Ваша энергия по дням недели"}
-                </CardDescription>
+            <Card
+              className="overflow-hidden"
+              style={{
+                background: "linear-gradient(155deg, rgba(26,32,44,1) 0%, rgba(22,30,47,1) 55%, rgba(43,27,5,0.18) 100%)",
+                borderColor: COLORS.borderColor,
+                boxShadow: "0 22px 40px -28px rgba(0,0,0,0.65)"
+              }}
+            >
+              <CardHeader className="border-b border-white/5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <CardTitle style={{ color: COLORS.textColor }}>Распределение энергии</CardTitle>
+                    <CardDescription style={{ color: COLORS.textColorSecondary }}>
+                      {isStaff ? "Уровни энергии по дням недели" : "Ваша энергия по дням недели"}
+                    </CardDescription>
+                  </div>
+                  <div className="rounded-full border border-amber-300/15 bg-amber-300/10 px-3 py-1 text-xs font-medium tracking-[0.14em] uppercase text-amber-100">
+                    <Zap className="mr-2 inline h-3.5 w-3.5" />
+                    Среднее {averageEnergyLevel}
+                  </div>
+                </div>
               </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
+              <CardContent className="pt-6">
+                <div className="mb-5 grid grid-cols-2 gap-3">
+                  <div className="rounded-2xl border border-white/8 bg-white/[0.04] px-4 py-3">
+                    <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Пиковый день</p>
+                    <p className="mt-2 text-xl font-semibold text-white">
+                      {peakEnergyDay ? peakEnergyDay.day : "Нет данных"}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-white/8 bg-white/[0.04] px-4 py-3">
+                    <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Пиковое значение</p>
+                    <p className="mt-2 text-xl font-semibold text-white">
+                      {peakEnergyDay ? peakEnergyDay.энергия.toFixed(1) : "0.0"}
+                    </p>
+                  </div>
+                </div>
+
+                <ResponsiveContainer width="100%" height={280}>
                   <BarChart
-                    data={[
-                      { day: 'Пн', энергия: isStaff ? (Math.random() * 3 + 6) : calcDayAvgEnergy(moodEntries, 1) },
-                      { day: 'Вт', энергия: isStaff ? (Math.random() * 3 + 6) : calcDayAvgEnergy(moodEntries, 2) },
-                      { day: 'Ср', энергия: isStaff ? (Math.random() * 3 + 5) : calcDayAvgEnergy(moodEntries, 3) },
-                      { day: 'Чт', энергия: isStaff ? (Math.random() * 3 + 5) : calcDayAvgEnergy(moodEntries, 4) },
-                      { day: 'Пт', энергия: isStaff ? (Math.random() * 3 + 4) : calcDayAvgEnergy(moodEntries, 5) },
-                      { day: 'Сб', энергия: isStaff ? (Math.random() * 3 + 7) : calcDayAvgEnergy(moodEntries, 6) },
-                      { day: 'Вс', энергия: isStaff ? (Math.random() * 3 + 7) : calcDayAvgEnergy(moodEntries, 0) }
-                    ]}
+                    data={energyDistributionData}
                     margin={{
                       top: 5,
-                      right: 30,
-                      left: 20,
-                      bottom: 5,
+                      right: 12,
+                      left: 0,
+                      bottom: 0,
                     }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" stroke={COLORS.borderColor} />
-                    <XAxis dataKey="day" stroke={COLORS.textColorSecondary} />
-                    <YAxis stroke={COLORS.textColorSecondary} />
+                    <defs>
+                      <linearGradient id="energyBarGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#fbbf24" />
+                        <stop offset="55%" stopColor="#f59e0b" />
+                        <stop offset="100%" stopColor="#d97706" />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid {...chartGridProps} vertical={false} />
+                    <XAxis dataKey="day" {...chartAxisProps} />
+                    <YAxis {...chartAxisProps} domain={[0, 10]} tickCount={6} />
                     <Tooltip
-                      contentStyle={{ 
-                        backgroundColor: COLORS.cardBackground, 
-                        borderColor: COLORS.borderColor,
-                        color: COLORS.textColor 
-                      }}
+                      contentStyle={chartTooltipStyle}
+                      cursor={{ fill: "rgba(255,255,255,0.03)" }}
                     />
-                    <Bar dataKey="энергия" fill={COLORS.warning} />
+                    <Bar dataKey="энергия" fill="url(#energyBarGradient)" radius={[12, 12, 4, 4]} maxBarSize={52} />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>

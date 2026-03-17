@@ -1,6 +1,7 @@
 ﻿import express from 'express';
 import User from '../models/User';
 import MoodEntry from '../models/MoodEntry';
+import SleepEntry from '../models/SleepEntry';
 import TestEntry from '../models/TestEntry';
 import PlayerRating from '../models/PlayerRating';
 import { protect, isStaff, hasPrivilegeKey } from '../middleware/auth';
@@ -43,6 +44,8 @@ router.get('/players/:id/stats', protect, isStaff, async (req: any, res) => {
     // Р”РѕР±Р°РІР»СЏРµРј РїРѕР»СѓС‡РµРЅРёРµ РґР°РЅРЅС‹С… Рѕ С‚РµСЃС‚Р°С…
     const testEntries = await TestEntry.find({ userId: req.params.id })
       .sort({ date: -1 });
+    const sleepEntries = await SleepEntry.find({ userId: req.params.id })
+      .sort({ date: -1 });
 
     // Р¤РѕСЂРјРёСЂСѓРµРј РѕР±СЉРµРєС‚ СЃ РїРѕР»РЅРѕР№ СЃС‚Р°С‚РёСЃС‚РёРєРѕР№ РёРіСЂРѕРєР°
     const playerData = {
@@ -54,6 +57,7 @@ router.get('/players/:id/stats', protect, isStaff, async (req: any, res) => {
       completedBalanceWheel: player.completedBalanceWheel,
       createdAt: player.createdAt,
       moodEntries,
+      sleepEntries,
       testEntries
     };
 
@@ -154,6 +158,9 @@ router.delete('/players/:id/complete', protect, isStaff, hasPrivilegeKey, async 
     
     console.log(`[CASCADE DELETE] Deleting test entries for player: ${id}`);
     await TestEntry.deleteMany({ userId: id });
+
+    console.log(`[CASCADE DELETE] Deleting sleep entries for player: ${id}`);
+    await SleepEntry.deleteMany({ userId: id });
     
     console.log(`[CASCADE DELETE] Deleting player ratings for player: ${id}`);
     await PlayerRating.deleteMany({ userId: id });

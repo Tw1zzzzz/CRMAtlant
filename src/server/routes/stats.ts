@@ -1,6 +1,7 @@
 import express from 'express';
 import BalanceWheel from '../models/BalanceWheel';
 import MoodEntry from '../models/MoodEntry';
+import SleepEntry from '../models/SleepEntry';
 import TestEntry from '../models/TestEntry';
 import User from '../models/User';
 import { protect, isStaff } from '../middleware/authMiddleware';
@@ -38,6 +39,21 @@ router.get('/tests', protect, async (req: any, res) => {
   } catch (error) {
     console.error('Error fetching test stats:', error);
     return res.status(500).json({ message: 'Error fetching test stats' });
+  }
+});
+
+// Получить статистику сна для текущего пользователя
+router.get('/sleep', protect, async (req: any, res) => {
+  try {
+    console.log('Fetching sleep stats for user:', req.user._id);
+
+    const userSleepEntries = await SleepEntry.find({ userId: req.user._id }).sort({ date: -1 });
+    console.log(`Found ${userSleepEntries.length} sleep entries for user ${req.user._id}`);
+
+    return res.json(userSleepEntries);
+  } catch (error) {
+    console.error('Error fetching sleep stats:', error);
+    return res.status(500).json({ message: 'Error fetching sleep stats' });
   }
 });
 
@@ -104,6 +120,62 @@ router.get('/players/mood', protect, isStaff, async (_req: any, res) => {
   } catch (error) {
     console.error('Error fetching all players mood stats:', error);
     return res.status(500).json({ message: 'Error fetching all players mood stats' });
+  }
+});
+
+// Для сотрудников: получить статистику сна всех игроков
+router.get('/players/sleep', protect, isStaff, async (_req: any, res) => {
+  try {
+    console.log('Fetching sleep stats for all players (staff only)');
+
+    const allSleepEntries = await SleepEntry.find().populate('userId', 'name email');
+    console.log(`Found ${allSleepEntries.length} total sleep entries`);
+
+    const userSleepMap = new Map();
+
+    allSleepEntries.forEach(entry => {
+      if (!entry.userId) return;
+
+      const userId = entry.userId.toString();
+      const userName = (entry.userId as any).name || 'Неизвестный игрок';
+
+      if (!userSleepMap.has(userId)) {
+        userSleepMap.set(userId, {
+          userId,
+          name: userName,
+          sleepValues: [],
+          lastEntry: null
+        });
+      }
+
+      const userData = userSleepMap.get(userId);
+      userData.sleepValues.push(entry.hours);
+
+      const entryDate = new Date(entry.date);
+      if (!userData.lastEntry || entryDate > userData.lastEntry) {
+        userData.lastEntry = entryDate;
+      }
+    });
+
+    const result = Array.from(userSleepMap.values()).map(userData => {
+      const sleepSum = userData.sleepValues.reduce((sum: number, value: number) => sum + value, 0);
+
+      return {
+        userId: userData.userId,
+        name: userData.name,
+        avgSleep: userData.sleepValues.length > 0
+          ? parseFloat((sleepSum / userData.sleepValues.length).toFixed(1))
+          : 0,
+        entries: userData.sleepValues.length,
+        lastEntry: userData.lastEntry
+      };
+    });
+
+    console.log(`Processed sleep stats for ${result.length} players`);
+    return res.json(result);
+  } catch (error) {
+    console.error('Error fetching all players sleep stats:', error);
+    return res.status(500).json({ message: 'Error fetching all players sleep stats' });
   }
 });
 

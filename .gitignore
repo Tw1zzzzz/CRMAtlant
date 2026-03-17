@@ -8,12 +8,18 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+**/node_modules
 dist
+**/dist
 .env
 .env.*
 uploads
 dist-ssr
 *.local
+coverage
+archive
+crm-demo
+crm-demo-frontend
 
 # Editor directories and files
 .vscode/*

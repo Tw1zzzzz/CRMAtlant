@@ -1,5 +1,11 @@
 import axios from 'axios';
 import ROUTES from './routes';
+import {
+  buildTeamReportsPath,
+  buildTestsStateImpactPath,
+  extractPlayerId,
+  normalizeBalanceWheelResponse
+} from './apiHelpers';
 
 // Создаем экземпляр axios с базовыми настройками
 const api = axios.create({
@@ -121,66 +127,6 @@ interface AnalyticsMetricsData {
 }
 
 // Вспомогательная функция для извлечения ID из объекта или строки
-const extractPlayerId = (playerId: string | any): string => {
-  // Логгируем входные данные для отладки
-  console.log('[API] extractPlayerId получил:', typeof playerId, playerId);
-  
-  // Случай 1: Объект игрока
-  if (typeof playerId === 'object' && playerId !== null) {
-    // Если объект содержит ObjectId, извлекаем из него строку
-    if (playerId._id && typeof playerId._id === 'object' && playerId._id.toString) {
-      const id = playerId._id.toString();
-      console.log(`[API] Извлечено ID из объекта с ObjectId:`, id);
-      return id;
-    }
-    // Иначе ищем ID в других свойствах объекта
-    const id = playerId._id || playerId.userId || playerId.id;
-    if (id) {
-      console.log(`[API] Извлечено ID из объекта:`, id);
-      return id;
-    }
-  }
-  
-  // Случай 2: Строка, которая может содержать объект
-  if (typeof playerId === 'string') {
-    // Пытаемся найти ID в формате MongoDB ObjectId
-    // Например: new ObjectId("67e857c1c92acc6a7c9bfe5e")
-    const objectIdMatch = playerId.match(/ObjectId\(['"]([0-9a-fA-F]{24})['"]\)/);
-    if (objectIdMatch && objectIdMatch[1]) {
-      console.log('[API] Извлечено ID из ObjectId строки:', objectIdMatch[1]);
-      return objectIdMatch[1];
-    }
-    
-    // Пытаемся найти ID в формате JSON с _id полем
-    const jsonIdMatch = playerId.match(/_id['":\s]+(['"])([0-9a-fA-F]{24})(['"])/);
-    if (jsonIdMatch && jsonIdMatch[2]) {
-      console.log('[API] Извлечено ID из JSON строки:', jsonIdMatch[2]);
-      return jsonIdMatch[2];
-    }
-    
-    // Если строка сама является валидным MongoDB ObjectId
-    if (/^[0-9a-fA-F]{24}$/.test(playerId)) {
-      return playerId;
-    }
-    
-    // Попытка разобрать JSON
-    try {
-      if (playerId.includes('{') && playerId.includes('}')) {
-        const jsonObj = JSON.parse(playerId.replace(/ObjectId\(['"]([0-9a-fA-F]{24})['"]\)/g, '"$1"'));
-        if (jsonObj && jsonObj._id) {
-          console.log('[API] Извлечено ID из разобранного JSON:', jsonObj._id);
-          return jsonObj._id;
-        }
-      }
-    } catch (error) {
-      console.error('[API] Ошибка при разборе JSON строки:', error);
-    }
-  }
-  
-  // Возвращаем исходное значение, если не удалось извлечь ID
-  return playerId;
-};
-
 // API для работы с игроками (для staff)
 export const getPlayers = () => retryRequest(() => api.get('/users/players'));
 export const getPlayerStats = (playerId: string | any) => 
@@ -208,30 +154,9 @@ export const getPlayerBalanceWheels = async (playerId: string | any) => {
   try {
     console.log(`[API] Запрос данных колеса баланса для игрока: ${actualPlayerId}`);
     const response = await retryRequest(() => api.get(`/balance-wheel/player/${actualPlayerId}`));
-    
-    // Проверяем и нормализуем формат данных
-    if (response.data && typeof response.data === 'object') {
-      // Если ответ в формате { data: [...] }
-      if (Array.isArray(response.data.data)) {
-        console.log(`[API] Получены данные колеса баланса (${response.data.data.length} записей) в формате data.data`);
-        return { data: response.data.data };
-      } 
-      // Если ответ сам является массивом
-      else if (Array.isArray(response.data)) {
-        console.log(`[API] Получены данные колеса баланса (${response.data.length} записей) в формате data`);
-        return { data: response.data };
-      } 
-      // Если ответ в другом формате - преобразуем в массив из одного элемента
-      else {
-        console.log(`[API] Получены данные колеса баланса в нестандартном формате, преобразуем`);
-        const normalizedData = response.data.wheels || response.data.data || [response.data];
-        return { data: Array.isArray(normalizedData) ? normalizedData : [normalizedData] };
-      }
-    }
-    
-    // Если данных нет или неверный формат, возвращаем пустой массив
-    console.log(`[API] Получен пустой или некорректный ответ, возвращаем пустой массив`);
-    return { data: [] };
+    const normalized = normalizeBalanceWheelResponse(response.data);
+    console.log(`[API] Получены данные колеса баланса (${normalized.data.length} записей)`);
+    return normalized;
   } catch (error) {
     console.error(`[API] Ошибка при получении данных колеса баланса:`, error);
     
@@ -247,8 +172,10 @@ export const getPlayerBalanceWheels = async (playerId: string | any) => {
 
 // API для работы со статистикой
 export const getMoodStats = () => retryRequest(() => api.get('/stats/mood'));
+export const getSleepStats = () => retryRequest(() => api.get('/stats/sleep'));
 export const getTestStats = () => retryRequest(() => api.get('/stats/tests'));
 export const getAllPlayersMoodStats = () => retryRequest(() => api.get('/stats/players/mood'));
+export const getAllPlayersSleepStats = () => retryRequest(() => api.get('/stats/players/sleep'));
 export const getAllPlayersTestStats = () => retryRequest(() => api.get('/stats/players/tests'));
 export const getAllPlayersBalanceWheelStats = () => retryRequest(() => api.get('/stats/players/balance-wheel'));
 export const getPlayerMoodChartData = (playerId: string | any) => 
@@ -343,18 +270,7 @@ export const getTestsStateImpact = (params?: {
   matchType?: string;
   map?: string;
   role?: string;
-}) => {
-  const search = new URLSearchParams();
-  if (params?.from) search.append('from', params.from);
-  if (params?.to) search.append('to', params.to);
-  if (params?.testType) search.append('testType', params.testType);
-  if (params?.matchType) search.append('matchType', params.matchType);
-  if (params?.map) search.append('map', params.map);
-  if (params?.role) search.append('role', params.role);
-
-  const query = search.toString();
-  return retryRequest(() => api.get(`/stats/tests/state-impact${query ? `?${query}` : ''}`));
-};
+}) => retryRequest(() => api.get(buildTestsStateImpactPath(params)));
 
 export const getNotifications = () => retryRequest(() => api.get('/notifications'));
 
@@ -447,16 +363,7 @@ export interface TeamReportFilters {
 
 // API функции для работы с отчетами команды
 export const getTeamReports = (filters?: TeamReportFilters) => {
-  const params = new URLSearchParams();
-  if (filters) {
-    Object.entries(filters).forEach(([key, value]) => {
-      if (value !== undefined && value !== '') {
-        params.append(key, value.toString());
-      }
-    });
-  }
-  const queryString = params.toString();
-  return retryRequest(() => api.get(`/team-reports${queryString ? `?${queryString}` : ''}`));
+  return retryRequest(() => api.get(buildTeamReportsPath(filters)));
 };
 
 export const getTeamReportById = (reportId: string) => 
@@ -590,6 +497,64 @@ export interface CorrelationStats {
   lastAnalysisDate: string;
 }
 
+export interface CorrelationAssistantSummaryCard {
+  title: string;
+  value: string;
+}
+
+export interface CorrelationAssistantMetricSummary {
+  metric: string;
+  label: string;
+  points: number;
+  average: number;
+  min: number;
+  max: number;
+  firstValue: number;
+  lastValue: number;
+  absoluteChange: number;
+  percentChange: number | null;
+  trend: 'upward' | 'downward' | 'stable';
+  forecastNext7Days: number | null;
+}
+
+export interface CorrelationAssistantCorrelationPair {
+  leftMetric: string;
+  leftLabel: string;
+  rightMetric: string;
+  rightLabel: string;
+  coefficient: number;
+  sampleSize: number;
+  strength: 'high' | 'medium' | 'low';
+  direction: 'positive' | 'negative';
+}
+
+export interface CorrelationAssistantRequest {
+  analysisMode: 'team' | 'individual';
+  currentElo: number | null;
+  dateFrom: string;
+  dateTo: string;
+  faceitMetricsStatus: 'ok' | 'partial' | 'unavailable';
+  playerName?: string;
+  selectedMetrics: string[];
+  summaryCards: CorrelationAssistantSummaryCard[];
+  totalRows: number;
+  metricSummaries: CorrelationAssistantMetricSummary[];
+  strongestCorrelations: CorrelationAssistantCorrelationPair[];
+}
+
+export interface CorrelationAssistantResponse {
+  trend: string;
+  forecast: string;
+  conclusion: string;
+  keySignals: string[];
+  risks: string[];
+  recommendedFocus: string[];
+  confidence: number;
+  model: string;
+  fallbackUsed?: boolean;
+  generatedAt: string;
+}
+
 // API функции для корреляционного анализа
 
 /**
@@ -661,6 +626,13 @@ export const getComprehensiveCorrelationAnalysis = async (params?: {
  */
 export const getCorrelationStats = async (): Promise<{ data: CorrelationStats; meta: any }> => {
   const response = await retryRequest(() => api.get('/correlations/stats'));
+  return response.data;
+};
+
+export const getCorrelationAssistantInsight = async (
+  payload: CorrelationAssistantRequest,
+): Promise<{ data: CorrelationAssistantResponse; meta: any }> => {
+  const response = await retryRequest(() => api.post('/correlations/ai-assistant', payload));
   return response.data;
 };
 

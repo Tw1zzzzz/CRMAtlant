@@ -9,10 +9,12 @@ import { COLORS } from "@/styles/theme";
 
 interface PlayersStatsProps {
   playersMoodStats: any[];
+  playersSleepStats: any[];
   playersTestStats: any[];
   averagePlayerStats: {
     avgMood: number;
     avgEnergy: number;
+    avgSleep: number;
     completedTests: number;
     totalPlayers: number;
   };
@@ -30,6 +32,7 @@ interface PlayersStatsProps {
  */
 const PlayersStats = ({
   playersMoodStats,
+  playersSleepStats,
   playersTestStats,
   averagePlayerStats,
   players,
@@ -41,6 +44,13 @@ const PlayersStats = ({
   loadingError
 }: PlayersStatsProps) => {
   const [statsView, setStatsView] = useState<"mood" | "tests">("mood");
+  const combinedMoodStats = playersMoodStats.map((player) => {
+    const sleepStats = playersSleepStats.find((entry) => entry.userId === player.userId);
+    return {
+      ...player,
+      sleepHours: typeof sleepStats?.avgSleep === "number" ? sleepStats.avgSleep : undefined
+    };
+  });
 
   return (
     <div className="space-y-6">
@@ -51,7 +61,7 @@ const PlayersStats = ({
             <CardDescription className="text-gray-400">Средние показатели настроения и энергии игроков</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <div className="bg-[#14162D] p-4 rounded-lg">
                 <p className="text-sm text-gray-400">Среднее настроение</p>
                 <p className="text-2xl font-bold text-white">{averagePlayerStats.avgMood.toFixed(1)}</p>
@@ -59,6 +69,10 @@ const PlayersStats = ({
               <div className="bg-[#14162D] p-4 rounded-lg">
                 <p className="text-sm text-gray-400">Средняя энергия</p>
                 <p className="text-2xl font-bold text-white">{averagePlayerStats.avgEnergy.toFixed(1)}</p>
+              </div>
+              <div className="bg-[#14162D] p-4 rounded-lg">
+                <p className="text-sm text-gray-400">Средний сон</p>
+                <p className="text-2xl font-bold text-white">{averagePlayerStats.avgSleep.toFixed(1)}ч</p>
               </div>
               <div className="bg-[#14162D] p-4 rounded-lg">
                 <p className="text-sm text-gray-400">Выполнено тестов</p>
@@ -97,10 +111,10 @@ const PlayersStats = ({
         <Card className="bg-[#1C1F3B] border-[#293056] shadow-none">
           <CardHeader>
             <CardTitle className="text-white">Статистика настроения игроков</CardTitle>
-            <CardDescription className="text-gray-400">Средние показатели настроения и энергии по всем игрокам</CardDescription>
+            <CardDescription className="text-gray-400">Средние показатели настроения, энергии и сна по всем игрокам</CardDescription>
           </CardHeader>
           <CardContent>
-            <MoodChart data={playersMoodStats} height={400} />
+            <MoodChart data={combinedMoodStats} height={400} />
           </CardContent>
         </Card>
       ) : (

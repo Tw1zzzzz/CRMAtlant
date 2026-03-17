@@ -16,6 +16,24 @@ export interface FaceitProfileInfo {
   rawData: any;
 }
 
+export interface FaceitDailyStatsPoint {
+  date: string;
+  matches: number;
+  elo: number | null;
+  eloChange: number | null;
+  kdRatio: number | null;
+  adr: number | null;
+  kast: number | null;
+  kr: number | null;
+  hsPercent: number | null;
+  winRate: number | null;
+  kills: number | null;
+  deaths: number | null;
+  assists: number | null;
+}
+
+type FaceitStatsRecord = Record<string, unknown>;
+
 const hasFaceitApiKey = (): boolean => {
   const normalized = FACEIT_API_KEY.trim();
   if (!normalized) {
@@ -28,10 +46,17 @@ const hasFaceitApiKey = (): boolean => {
 
 const normalizeFaceitInput = (value: string): string => value.trim();
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const extractIdentifierFromFaceitInput = (value: string): string | null => {
   const normalized = normalizeFaceitInput(value);
   if (!normalized) {
     return null;
+  }
+
+  // Если вход — UUID (faceitId), вернуть как есть
+  if (UUID_RE.test(normalized)) {
+    return normalized;
   }
 
   const tryParseUrl = (input: string): URL | null => {
@@ -89,6 +114,121 @@ const parseFaceitProfile = (data: any): FaceitProfileInfo => {
   };
 };
 
+const parseFaceitNumericValue = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value
+      .replace(/%/g, '')
+      .replace(/,/g, '.')
+      .trim();
+
+    if (!normalized || normalized === '-') {
+      return null;
+    }
+
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+};
+
+const normalizeFaceitStatKey = (value: string): string =>
+  value.toLowerCase().replace(/[^a-z0-9]+/g, '');
+
+const pickFaceitStatNumber = (stats: FaceitStatsRecord, keys: string[]): number | null => {
+  const normalizedEntries = Object.entries(stats).map(([key, value]) => ({
+    normalizedKey: normalizeFaceitStatKey(key),
+    value
+  }));
+
+  for (const key of keys) {
+    const parsed = parseFaceitNumericValue(stats[key]);
+    if (parsed !== null) {
+      return parsed;
+    }
+
+    const normalizedKey = normalizeFaceitStatKey(key);
+    const normalizedMatch = normalizedEntries.find((entry) => entry.normalizedKey === normalizedKey);
+    if (normalizedMatch) {
+      const normalizedParsed = parseFaceitNumericValue(normalizedMatch.value);
+      if (normalizedParsed !== null) {
+        return normalizedParsed;
+      }
+    }
+  }
+
+  return null;
+};
+
+const pickFaceitStatString = (stats: FaceitStatsRecord, keys: string[]): string | null => {
+  for (const key of keys) {
+    const value = stats[key];
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return null;
+};
+
+const resolveFaceitStatsObject = (item: any): FaceitStatsRecord => {
+  if (item?.stats && typeof item.stats === 'object') {
+    return item.stats as FaceitStatsRecord;
+  }
+
+  if (item?.player_stats && typeof item.player_stats === 'object') {
+    return item.player_stats as FaceitStatsRecord;
+  }
+
+  return {};
+};
+
+const resolveFaceitStatsDate = (item: any, stats: FaceitStatsRecord): Date | null => {
+  const candidates = [
+    item?.played,
+    item?.finished_at,
+    item?.started_at,
+    item?.played_at,
+    item?.date,
+    stats['Match Finished At'],
+    stats['Date'],
+    stats['Played'],
+    stats['Updated At']
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === 'number' && Number.isFinite(candidate)) {
+      const value = candidate > 1_000_000_000_000 ? candidate : candidate * 1000;
+      const date = new Date(value);
+      if (!Number.isNaN(date.getTime())) {
+        return date;
+      }
+    }
+
+    if (typeof candidate === 'string' && candidate.trim()) {
+      const numericCandidate = Number(candidate);
+      if (Number.isFinite(numericCandidate)) {
+        const value = numericCandidate > 1_000_000_000_000 ? numericCandidate : numericCandidate * 1000;
+        const date = new Date(value);
+        if (!Number.isNaN(date.getTime())) {
+          return date;
+        }
+      }
+
+      const date = new Date(candidate);
+      if (!Number.isNaN(date.getTime())) {
+        return date;
+      }
+    }
+  }
+
+  return null;
+};
+
 // API клиент для запросов к Faceit
 const faceitApiClient = axios.create({
   baseURL: FACEIT_API_URL,
@@ -113,15 +253,20 @@ export const resolveFaceitProfile = async (faceitInput: string): Promise<FaceitP
     throw new Error('Некорректная ссылка или идентификатор Faceit');
   }
 
-  try {
-    const byNickname = await faceitApiClient.get('/players', {
-      params: { nickname: identifier }
-    });
-    return parseFaceitProfile(byNickname.data);
-  } catch (error: any) {
-    const status = error?.response?.status;
-    if (status && status !== 404) {
-      throw new Error('Не удалось получить данные Faceit по нику');
+  const isUuid = UUID_RE.test(identifier);
+
+  // Если UUID — сразу ищем по ID (пропускаем поиск по нику)
+  if (!isUuid) {
+    try {
+      const byNickname = await faceitApiClient.get('/players', {
+        params: { nickname: identifier }
+      });
+      return parseFaceitProfile(byNickname.data);
+    } catch (error: any) {
+      const status = error?.response?.status;
+      if (status && status !== 404) {
+        throw new Error('Не удалось получить данные Faceit по нику');
+      }
     }
   }
 
@@ -239,15 +384,15 @@ export const getUserInfo = async (accessToken: string): Promise<any> => {
  * @param limit - Лимит матчей (по умолчанию 20)
  * @returns Список матчей
  */
-export const getPlayerMatchHistory = async (faceitId: string, limit: number = 20): Promise<any> => {
+export const getPlayerMatchHistory = async (faceitId: string, limit: number = 20, game: string = 'cs2'): Promise<any> => {
   try {
     if (!hasFaceitApiKey()) {
       throw new Error('FACEIT_API_KEY не настроен на сервере');
     }
     const response = await faceitApiClient.get(`/players/${faceitId}/history`, {
-      params: { limit }
+      params: { limit, game }
     });
-    
+
     return response.data;
   } catch (error) {
     console.error('Ошибка при получении истории матчей:', error);
@@ -289,6 +434,265 @@ export const getMatchStats = async (matchId: string): Promise<any> => {
     console.error('Ошибка при получении статистики матча:', error);
     throw new Error('Не удалось получить статистику матча Faceit');
   }
+};
+
+/**
+ * Получает матч-статы игрока по игре и периоду
+ * @param faceitId - ID игрока на Faceit
+ * @param game - Игра (по умолчанию cs2)
+ * @param fromDate - Начало периода
+ * @param toDate - Конец периода
+ * @returns Сырые элементы матч-статы Faceit
+ */
+export const getPlayerGameStats = async (
+  faceitId: string,
+  game: string = 'cs2',
+  fromDate?: Date,
+  toDate?: Date
+): Promise<any[]> => {
+  try {
+    if (!hasFaceitApiKey()) {
+      throw new Error('FACEIT_API_KEY не настроен на сервере');
+    }
+
+    const limit = 100;
+    const maxItems = 500;
+    const items: any[] = [];
+    let offset = 0;
+
+    while (offset < maxItems) {
+      const response = await faceitApiClient.get(`/players/${faceitId}/games/${game}/stats`, {
+        params: {
+          limit,
+          offset,
+          from: fromDate ? fromDate.getTime() : undefined,
+          to: toDate ? toDate.getTime() : undefined
+        }
+      });
+
+      const chunk = Array.isArray(response.data?.items) ? response.data.items : [];
+      items.push(...chunk);
+
+      if (chunk.length < limit) {
+        break;
+      }
+
+      offset += limit;
+    }
+
+    return items;
+  } catch (error) {
+    console.error('Ошибка при получении статистики игрока Faceit:', error);
+    throw new Error('Не удалось получить статистику игрока Faceit');
+  }
+};
+
+/**
+ * Собирает дневные агрегаты Faceit по матч-статам игрока
+ * @param faceitId - ID игрока на Faceit
+ * @param fromDate - Начало периода
+ * @param toDate - Конец периода
+ * @param game - Игра (по умолчанию cs2)
+ * @returns Дневные агрегаты по матчам
+ */
+export const getPlayerDailyStats = async (
+  faceitId: string,
+  fromDate?: Date,
+  toDate?: Date,
+  game: string = 'cs2'
+): Promise<FaceitDailyStatsPoint[]> => {
+  const items = await getPlayerGameStats(faceitId, game, fromDate, toDate);
+
+  const dataByDate = new Map<string, {
+    date: string;
+    matches: number;
+    latestTimestamp: number;
+    latestElo: number | null;
+    eloChangeSum: number;
+    eloChangeCount: number;
+    kills: number;
+    deaths: number;
+    assists: number;
+    kdRatioSum: number;
+    kdRatioCount: number;
+    adrSum: number;
+    adrCount: number;
+    kastSum: number;
+    kastCount: number;
+    krSum: number;
+    krCount: number;
+    hsPercentSum: number;
+    hsPercentCount: number;
+    winRateSum: number;
+    winRateCount: number;
+  }>();
+
+  items.forEach((item: any) => {
+    const stats = resolveFaceitStatsObject(item);
+    const matchDate = resolveFaceitStatsDate(item, stats);
+    if (!matchDate) {
+      return;
+    }
+
+    const dateKey = matchDate.toISOString().split('T')[0];
+    if (!dataByDate.has(dateKey)) {
+      dataByDate.set(dateKey, {
+        date: dateKey,
+        matches: 0,
+        latestTimestamp: 0,
+        latestElo: null,
+        eloChangeSum: 0,
+        eloChangeCount: 0,
+        kills: 0,
+        deaths: 0,
+        assists: 0,
+        kdRatioSum: 0,
+        kdRatioCount: 0,
+        adrSum: 0,
+        adrCount: 0,
+        kastSum: 0,
+        kastCount: 0,
+        krSum: 0,
+        krCount: 0,
+        hsPercentSum: 0,
+        hsPercentCount: 0,
+        winRateSum: 0,
+        winRateCount: 0
+      });
+    }
+
+    const bucket = dataByDate.get(dateKey)!;
+    bucket.matches += 1;
+
+    const kills = pickFaceitStatNumber(stats, ['Kills', 'Average Kills']);
+    const deaths = pickFaceitStatNumber(stats, ['Deaths', 'Average Deaths']);
+    const assists = pickFaceitStatNumber(stats, ['Assists', 'Average Assists']);
+    const kdRatio = pickFaceitStatNumber(stats, [
+      'K/D Ratio',
+      'Average K/D Ratio',
+      'Average K/D',
+      'KDRatio',
+      'AverageKDRatio'
+    ]);
+    const adr = pickFaceitStatNumber(stats, [
+      'ADR',
+      'Average ADR',
+      'Average Damage per Round',
+      'AverageDamagePerRound'
+    ]);
+    const kast = pickFaceitStatNumber(stats, [
+      'KAST',
+      'KAST %',
+      'Average KAST',
+      'Average KAST %'
+    ]);
+    const kr = pickFaceitStatNumber(stats, [
+      'K/R Ratio',
+      'K/R',
+      'Kills per Round',
+      'Average K/R Ratio',
+      'Average K/R',
+      'Average Kills per Round'
+    ]);
+    const hsPercent = pickFaceitStatNumber(stats, [
+      'Headshots %',
+      'HS%',
+      'Headshot Percentage',
+      'Average Headshots %',
+      'Average HS%'
+    ]);
+    const winRate = pickFaceitStatNumber(stats, [
+      'Win Rate %',
+      'Win Rate',
+      'Win Percentage',
+      'Average Win Rate'
+    ]);
+    const elo = pickFaceitStatNumber(stats, [
+      'ELO',
+      'Elo',
+      'Faceit ELO',
+      'Faceit Elo'
+    ]);
+    const eloChange = pickFaceitStatNumber(stats, [
+      'ELO Change',
+      'Elo Change',
+      'ELO change',
+      'Elo change',
+      'Faceit ELO Change',
+      'Faceit Elo Change'
+    ]);
+    const result = pickFaceitStatString(stats, ['Result', 'Match Result']);
+    const timestamp = matchDate.getTime();
+
+    if (elo !== null && timestamp >= bucket.latestTimestamp) {
+      bucket.latestTimestamp = timestamp;
+      bucket.latestElo = elo;
+    }
+    if (eloChange !== null) {
+      bucket.eloChangeSum += eloChange;
+      bucket.eloChangeCount += 1;
+    }
+
+    if (kills !== null) {
+      bucket.kills += kills;
+    }
+    if (deaths !== null) {
+      bucket.deaths += deaths;
+    }
+    if (assists !== null) {
+      bucket.assists += assists;
+    }
+    if (kdRatio !== null) {
+      bucket.kdRatioSum += kdRatio;
+      bucket.kdRatioCount += 1;
+    }
+    if (adr !== null) {
+      bucket.adrSum += adr;
+      bucket.adrCount += 1;
+    }
+    if (kast !== null) {
+      bucket.kastSum += kast;
+      bucket.kastCount += 1;
+    }
+    if (kr !== null) {
+      bucket.krSum += kr;
+      bucket.krCount += 1;
+    }
+    if (hsPercent !== null) {
+      bucket.hsPercentSum += hsPercent;
+      bucket.hsPercentCount += 1;
+    }
+    if (winRate !== null) {
+      bucket.winRateSum += winRate;
+      bucket.winRateCount += 1;
+    } else if (result) {
+      const normalized = result.toLowerCase();
+      if (normalized.includes('win') || normalized === '1') {
+        bucket.winRateSum += 100;
+        bucket.winRateCount += 1;
+      } else if (normalized.includes('loss') || normalized === '0') {
+        bucket.winRateCount += 1;
+      }
+    }
+  });
+
+  return Array.from(dataByDate.values())
+    .map((day) => ({
+      date: day.date,
+      matches: day.matches,
+      elo: day.latestElo,
+      eloChange: day.eloChangeCount ? Number(day.eloChangeSum.toFixed(0)) : null,
+      kdRatio: day.kdRatioCount ? Number((day.kdRatioSum / day.kdRatioCount).toFixed(2)) : null,
+      adr: day.adrCount ? Number((day.adrSum / day.adrCount).toFixed(1)) : null,
+      kast: day.kastCount ? Number((day.kastSum / day.kastCount).toFixed(1)) : null,
+      kr: day.krCount ? Number((day.krSum / day.krCount).toFixed(2)) : null,
+      hsPercent: day.hsPercentCount ? Number((day.hsPercentSum / day.hsPercentCount).toFixed(1)) : null,
+      winRate: day.winRateCount ? Number((day.winRateSum / day.winRateCount).toFixed(1)) : null,
+      kills: Number(day.kills.toFixed(1)),
+      deaths: Number(day.deaths.toFixed(1)),
+      assists: Number(day.assists.toFixed(1))
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
 };
 
 /**
@@ -364,37 +768,56 @@ export const importMatches = async (faceitAccountId: string | Types.ObjectId): P
     const matches = matchHistory.items || [];
     
     let importedCount = 0;
-    
-    // Импортируем каждый матч
+
+    // Импортируем каждый матч (upsert — корректируем уже сохранённые записи при повторном импорте)
     for (const matchData of matches) {
-      // Проверяем, существует ли уже матч в базе
-      const existingMatch = await Match.findOne({ matchId: matchData.match_id });
-      
-      if (!existingMatch) {
-        // Определяем результат матча
-        let result = 'draw';
-        if (matchData.results && matchData.results.length > 0) {
-          const playerResult = matchData.results.find((r: any) => r.player_id === faceitAccount.faceitId);
-          if (playerResult) {
-            result = playerResult.outcome === 'win' ? 'win' : 'loss';
+      if (!matchData.match_id) continue;
+
+      // Определяем результат матча.
+      // FACEIT history API возвращает results как объект { winner: 'factionN', score: {...} },
+      // а игроки находятся в teams.factionN.players[].player_id
+      let result = 'draw';
+      if (matchData.results?.winner && matchData.teams) {
+        const winner: string = matchData.results.winner;
+        let playerFaction: string | null = null;
+        for (const [factionName, faction] of Object.entries(matchData.teams as Record<string, any>)) {
+          const players: any[] = faction.players || [];
+          if (players.some((p: any) => p.player_id === faceitAccount.faceitId)) {
+            playerFaction = factionName;
+            break;
           }
         }
-        
-        // Создаем новую запись о матче
-        await Match.create({
-          faceitAccountId: faceitAccount._id,
-          matchId: matchData.match_id,
-          gameType: matchData.game_type || 'unknown',
-          map: matchData.map || 'unknown',
-          result,
-          eloBefore: matchData.elo_before || 0,
-          eloAfter: matchData.elo_after || 0,
-          playedAt: new Date(matchData.played_at * 1000 || Date.now()),
-          rawData: matchData
-        });
-        
-        importedCount++;
+        if (playerFaction) {
+          result = playerFaction === winner ? 'win' : 'loss';
+        }
       }
+
+      // FACEIT history API использует started_at/finished_at (Unix секунды), поля played_at нет.
+      // elo_before/elo_after отсутствуют в Open Data API истории — оставляем 0.
+      const playedAtMs = (matchData.started_at || matchData.finished_at || 0) * 1000;
+      const playedAt = playedAtMs > 0 ? new Date(playedAtMs) : new Date();
+
+      const wasNew = !(await Match.exists({ matchId: matchData.match_id }));
+
+      await Match.findOneAndUpdate(
+        { matchId: matchData.match_id },
+        {
+          $set: {
+            faceitAccountId: faceitAccount._id,
+            matchId: matchData.match_id,
+            gameType: matchData.game_id || 'unknown',
+            map: matchData.map || 'unknown',
+            result,
+            eloBefore: matchData.elo_before || 0,
+            eloAfter: matchData.elo_after || 0,
+            playedAt,
+            rawData: matchData
+          }
+        },
+        { upsert: true }
+      );
+
+      if (wasNew) importedCount++;
     }
     
     return importedCount;
@@ -413,6 +836,8 @@ export default {
   getPlayerMatchHistory,
   getMatchDetails,
   getMatchStats,
+  getPlayerGameStats,
+  getPlayerDailyStats,
   saveFaceitAccount,
   importMatches
-}; 
+};

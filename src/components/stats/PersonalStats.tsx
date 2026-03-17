@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MoodEntry, TestEntry, StatsData } from "@/types";
+import { MoodEntry, SleepEntry, TestEntry, StatsData } from "@/types";
 import MoodChart from "@/components/charts/MoodChart";
 import TestChart from "@/components/charts/TestChart";
 import TestDistributionChart from "@/components/charts/TestDistributionChart";
@@ -13,6 +13,7 @@ interface PersonalStatsProps {
   testData: any[];
   testDistribution: any[];
   moodEntries: MoodEntry[];
+  sleepEntries: SleepEntry[];
   testEntries: TestEntry[];
   timeRange: "week" | "month" | "3months";
   onTimeRangeChange: (value: "week" | "month" | "3months") => void;
@@ -26,6 +27,7 @@ const PersonalStats = ({
   testData,
   testDistribution,
   moodEntries,
+  sleepEntries,
   testEntries,
   timeRange,
   onTimeRangeChange
@@ -52,18 +54,21 @@ const PersonalStats = ({
     
     return {
       avgMood: count ? +(totalMood / count).toFixed(1) : 0,
-      avgEnergy: count ? +(totalEnergy / count).toFixed(1) : 0
+      avgEnergy: count ? +(totalEnergy / count).toFixed(1) : 0,
+      avgSleep: sleepEntries.length
+        ? +(sleepEntries.reduce((sum, entry) => sum + Number(entry.hours || 0), 0) / sleepEntries.length).toFixed(1)
+        : 0
     };
   };
   
   // Получаем среднее количество выполненных тестов
   const getCompletedTests = () => {
-    const testTypes = [...new Set(testEntries.map(t => t.type))];
+    const testTypes = [...new Set(testEntries.map(t => (t.testType ?? 'generic')))];
     let results: Record<string, { count: number, avgScore: number }> = {};
-    
+
     testTypes.forEach(type => {
-      const typeTests = testEntries.filter(t => t.type === type);
-      const totalScore = typeTests.reduce((sum, test) => sum + test.score, 0);
+      const typeTests = testEntries.filter(t => (t.testType ?? 'generic') === type);
+      const totalScore = typeTests.reduce((sum, test) => sum + (test.scoreNormalized ?? 0), 0);
       
       results[type] = {
         count: typeTests.length,
@@ -81,7 +86,7 @@ const PersonalStats = ({
   const completedTests = getCompletedTests();
 
   // Проверка наличия данных
-  const hasAnyData = moodEntries.length > 0 || testEntries.length > 0;
+  const hasAnyData = moodEntries.length > 0 || sleepEntries.length > 0 || testEntries.length > 0;
 
   return (
     <div className="space-y-6">
@@ -111,7 +116,7 @@ const PersonalStats = ({
             <CardDescription className="text-gray-400">Ваши средние показатели настроения и энергии</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <div className="bg-[#14162D] p-4 rounded-lg">
                 <p className="text-sm text-gray-400">Среднее настроение</p>
                 <p className="text-2xl font-bold text-white">{avgStats.avgMood}</p>
@@ -119,6 +124,10 @@ const PersonalStats = ({
               <div className="bg-[#14162D] p-4 rounded-lg">
                 <p className="text-sm text-gray-400">Средняя энергия</p>
                 <p className="text-2xl font-bold text-white">{avgStats.avgEnergy}</p>
+              </div>
+              <div className="bg-[#14162D] p-4 rounded-lg">
+                <p className="text-sm text-gray-400">Средний сон</p>
+                <p className="text-2xl font-bold text-white">{avgStats.avgSleep > 0 ? `${avgStats.avgSleep}ч` : "0ч"}</p>
               </div>
               <div className="bg-[#14162D] p-4 rounded-lg">
                 <p className="text-sm text-gray-400">Выполнено тестов</p>
@@ -228,14 +237,29 @@ const PersonalStats = ({
                         <th className="text-left p-2 text-white">День недели</th>
                         <th className="text-center p-2 text-white">Настроение</th>
                         <th className="text-center p-2 text-white">Энергия</th>
+                        <th className="text-center p-2 text-white">Сон</th>
                       </tr>
                     </thead>
                     <tbody>
                       {moodByDayOfWeek.map((day, idx) => (
-                        <tr key={day.day} className={idx % 2 === 0 ? 'bg-[#14162D]/60' : ''}>
-                          <td className="p-2 text-white">{day.day}</td>
+                        <tr key={day.name} className={idx % 2 === 0 ? 'bg-[#14162D]/60' : ''}>
+                          <td className="p-2 text-white">{day.name}</td>
                           <td className="text-center p-2 text-white">{day.mood}</td>
                           <td className="text-center p-2 text-white">{day.energy}</td>
+                          <td className="text-center p-2 text-white">
+                            {(() => {
+                              const daySleepEntries = sleepEntries.filter((entry) => {
+                                const date = new Date(entry.date);
+                                const weekDayIndex = date.getDay() === 0 ? 6 : date.getDay() - 1;
+                                const dayIndex = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'].indexOf(day.name);
+                                return weekDayIndex === dayIndex;
+                              });
+
+                              if (!daySleepEntries.length) return '0';
+                              const averageSleep = daySleepEntries.reduce((sum, entry) => sum + Number(entry.hours || 0), 0) / daySleepEntries.length;
+                              return `${averageSleep.toFixed(1)}ч`;
+                            })()}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -267,8 +291,8 @@ const PersonalStats = ({
                     </thead>
                     <tbody>
                       {testsByDayOfWeek.map((day, idx) => (
-                        <tr key={day.day} className={idx % 2 === 0 ? 'bg-[#14162D]/60' : ''}>
-                          <td className="p-2 text-white">{day.day}</td>
+                        <tr key={day.name} className={idx % 2 === 0 ? 'bg-[#14162D]/60' : ''}>
+                          <td className="p-2 text-white">{day.name}</td>
                           <td className="text-center p-2 text-white">{day.count}</td>
                           <td className="text-center p-2 text-white">{day.average}</td>
                         </tr>

@@ -1,82 +1,179 @@
-const fs = require('fs');
-const path = require('path');
 const assert = require('assert');
+const path = require('path');
+const { pathToFileURL } = require('url');
 
 const projectRoot = path.resolve(__dirname, '..');
 
-const read = (relativePath) => fs.readFileSync(path.join(projectRoot, relativePath), 'utf8');
+let passed = 0;
+let failed = 0;
 
-const sidebarSource = read('src/components/Sidebar.tsx');
-const dashboardSource = read('src/pages/Dashboard.tsx');
-const profileSource = read('src/pages/Profile.tsx');
-const notificationsSource = read('src/components/NotificationsPanel.tsx');
-
-const collectSourceFiles = (dir) => {
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
-  const files = [];
-
-  for (const entry of entries) {
-    const fullPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      if (fullPath.includes(`${path.sep}src${path.sep}server`)) {
-        continue;
-      }
-      files.push(...collectSourceFiles(fullPath));
-      continue;
-    }
-
-    if (!/\.(ts|tsx|js|jsx)$/.test(entry.name)) {
-      continue;
-    }
-
-    if (entry.name.includes('.backup')) {
-      continue;
-    }
-
-    files.push(fullPath);
+const runTest = (name, fn) => {
+  try {
+    fn();
+    passed += 1;
+    console.log(`[PASS] ${name}`);
+  } catch (error) {
+    failed += 1;
+    console.error(`[FAIL] ${name}`);
+    console.error(error.message);
   }
-
-  return files;
 };
 
-const sourceFiles = collectSourceFiles(path.join(projectRoot, 'src'));
-const hardcodedPortHits = sourceFiles
-  .map((filePath) => ({
-    filePath,
-    content: fs.readFileSync(filePath, 'utf8')
-  }))
-  .filter(({ content }) => content.includes('localhost:5000'));
+const importModule = async (relativePath) => {
+  const moduleUrl = pathToFileURL(path.join(projectRoot, relativePath)).href;
+  return import(moduleUrl);
+};
 
-assert(
-  sidebarSource.includes('href: "/new-analytics"'),
-  'Sidebar should route analytics entry to /new-analytics'
-);
+const main = async () => {
+  const routesModule = await importModule('src/lib/routes.ts');
+  const navigationModule = await importModule('src/lib/sidebarNavigation.ts');
+  const apiHelpersModule = await importModule('src/lib/apiHelpers.ts');
 
-assert(
-  !sidebarSource.includes('href: "/analytics"'),
-  'Sidebar should not expose /analytics in navigation'
-);
+  const {
+    ROUTES,
+    isProtectedRoute,
+    isStaffRoute,
+    isPlayerRoute,
+  } = routesModule;
+  const { getSidebarNavItems } = navigationModule;
+  const {
+    extractPlayerId,
+    normalizeBalanceWheelResponse,
+    buildTestsStateImpactPath,
+    buildTeamReportsPath,
+  } = apiHelpersModule;
 
-assert(
-  !dashboardSource.includes('StaffPrivilegeUpgrade'),
-  'Dashboard should not render StaffPrivilegeUpgrade'
-);
+  runTest('route guards classify public, player and staff routes correctly', () => {
+    assert.strictEqual(isProtectedRoute(ROUTES.WELCOME), false);
+    assert.strictEqual(isProtectedRoute(ROUTES.DASHBOARD), true);
+    assert.strictEqual(isPlayerRoute(ROUTES.BALANCE_WHEEL), true);
+    assert.strictEqual(isPlayerRoute(ROUTES.GAME_STATS), false);
+    assert.strictEqual(isStaffRoute(ROUTES.STAFF_BALANCE_WHEEL), true);
+    assert.strictEqual(isStaffRoute(ROUTES.ACTIVITY_HISTORY), false);
+  });
 
-assert(
-  profileSource.includes('Права и доступ') && profileSource.includes('StaffPrivilegeUpgrade'),
-  'Profile should include access section with StaffPrivilegeUpgrade'
-);
+  runTest('guest navigation keeps only common sections', () => {
+    const hrefs = getSidebarNavItems(null, null).map((item) => item.href);
 
-assert(
-  notificationsSource.includes('getNotifications()'),
-  'NotificationsPanel should load notifications from API'
-);
+    assert.deepStrictEqual(hrefs, [
+      '/',
+      '/mood',
+      '/tests',
+      '/stats',
+      '/correlation-analysis',
+      '/game-stats',
+    ]);
+  });
 
-assert(
-  hardcodedPortHits.length === 0,
-  `Source should not hardcode localhost:5000. Found in: ${hardcodedPortHits
-    .map(({ filePath }) => path.relative(projectRoot, filePath))
-    .join(', ')}`
-);
+  runTest('solo player navigation hides team management and keeps personal card', () => {
+    const items = getSidebarNavItems('player', 'solo');
+    const titles = items.map((item) => item.title);
+    const hrefs = items.map((item) => item.href);
 
-console.log('Frontend smoke tests passed');
+    assert(hrefs.includes('/balance-wheel'));
+    assert(!hrefs.includes('/staff-balance-wheel'));
+    assert(titles.includes('Моя карточка'));
+    assert(!titles.includes('Топ игроков'));
+    assert(!titles.includes('Управление игроками'));
+    assert(!titles.includes('Управление персоналом'));
+    assert(titles.includes('Профиль'));
+  });
+
+  runTest('staff navigation exposes staff balance wheel and team sections', () => {
+    const items = getSidebarNavItems('staff', null);
+    const titles = items.map((item) => item.title);
+    const hrefs = items.map((item) => item.href);
+
+    assert(hrefs.includes('/staff-balance-wheel'));
+    assert(!hrefs.includes('/balance-wheel'));
+    assert(titles.includes('Топ игроков'));
+    assert(titles.includes('Управление игроками'));
+    assert(titles.includes('Управление персоналом'));
+    assert(titles.includes('Моя карточка'));
+  });
+
+  runTest('extractPlayerId supports object, string and serialized ObjectId inputs', () => {
+    assert.strictEqual(
+      extractPlayerId({ _id: { toString: () => '507f1f77bcf86cd799439011' } }),
+      '507f1f77bcf86cd799439011'
+    );
+    assert.strictEqual(
+      extractPlayerId({ userId: '507f1f77bcf86cd799439012' }),
+      '507f1f77bcf86cd799439012'
+    );
+    assert.strictEqual(
+      extractPlayerId('ObjectId("507f1f77bcf86cd799439013")'),
+      '507f1f77bcf86cd799439013'
+    );
+    assert.strictEqual(
+      extractPlayerId('{"_id":"507f1f77bcf86cd799439014","name":"nbl"}'),
+      '507f1f77bcf86cd799439014'
+    );
+    assert.strictEqual(extractPlayerId('broken-value'), 'broken-value');
+  });
+
+  runTest('balance wheel response normalization tolerates multiple backend payload shapes', () => {
+    assert.deepStrictEqual(
+      normalizeBalanceWheelResponse([{ id: 1 }, { id: 2 }]),
+      { data: [{ id: 1 }, { id: 2 }] }
+    );
+    assert.deepStrictEqual(
+      normalizeBalanceWheelResponse({ data: [{ id: 3 }] }),
+      { data: [{ id: 3 }] }
+    );
+    assert.deepStrictEqual(
+      normalizeBalanceWheelResponse({ wheels: [{ id: 4 }] }),
+      { data: [{ id: 4 }] }
+    );
+    assert.deepStrictEqual(
+      normalizeBalanceWheelResponse({ id: 5 }),
+      { data: [{ id: 5 }] }
+    );
+    assert.deepStrictEqual(
+      normalizeBalanceWheelResponse(null),
+      { data: [] }
+    );
+  });
+
+  runTest('tests state impact path includes only provided filters', () => {
+    assert.strictEqual(
+      buildTestsStateImpactPath(),
+      '/stats/tests/state-impact'
+    );
+    assert.strictEqual(
+      buildTestsStateImpactPath({
+        from: '2026-03-01',
+        to: '2026-03-15',
+        testType: 'reaction',
+        map: 'Mirage',
+      }),
+      '/stats/tests/state-impact?from=2026-03-01&to=2026-03-15&testType=reaction&map=Mirage'
+    );
+  });
+
+  runTest('team reports path omits empty filters and stringifies numbers', () => {
+    assert.strictEqual(buildTeamReportsPath(), '/team-reports');
+    assert.strictEqual(
+      buildTeamReportsPath({
+        status: 'published',
+        page: 2,
+        limit: 20,
+        search: '',
+        createdBy: undefined,
+      }),
+      '/team-reports?status=published&page=2&limit=20'
+    );
+  });
+
+  if (failed > 0) {
+    console.error(`\nFrontend behavior tests failed: ${failed} of ${passed + failed}`);
+    process.exit(1);
+  }
+
+  console.log(`\nFrontend behavior tests passed: ${passed}/${passed + failed}`);
+};
+
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

@@ -3,6 +3,10 @@ import { registerUser, loginUser, getCurrentUser } from '../controllers/authCont
 import { protect } from '../middleware/authMiddleware';
 import { avatarUpload } from '../controllers/avatarController';
 import User from '../models/User';
+import PlayerCard from '../models/PlayerCard';
+import FaceitAccount from '../models/FaceitAccount';
+import faceitService from '../services/faceitService';
+import mongoose from 'mongoose';
 import fs from 'fs';
 import path from 'path';
 import { checkAndCreateDirectories, getAvatarFullPath, avatarExists } from '../utils/fileUtils';
@@ -314,6 +318,117 @@ router.post('/avatar/fix', protect, async (req, res) => {
     res.status(500).json({
       message: 'Ошибка при исправлении путей к аватарам',
       error: error instanceof Error ? error.message : 'Неизвестная ошибка'
+    });
+  }
+});
+
+// Получение текущей FACEIT ссылки пользователя
+// GET /api/auth/faceit-url
+router.get('/faceit-url', protect, async (req, res) => {
+  try {
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ success: false, message: 'Не авторизован' });
+    }
+
+    const card = await PlayerCard.findOne({ userId: req.user._id }).select('contacts.faceit').lean();
+    const faceitUrl = (card as any)?.contacts?.faceit || null;
+
+    return res.json({ success: true, faceitUrl });
+  } catch (error) {
+    console.error('[Auth] Ошибка при получении FACEIT ссылки:', error);
+    return res.status(500).json({ success: false, message: 'Внутренняя ошибка сервера' });
+  }
+});
+
+// Обновление FACEIT ссылки пользователя
+// PATCH /api/auth/update-faceit
+router.patch('/update-faceit', protect, async (req, res) => {
+  try {
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ success: false, message: 'Не авторизован' });
+    }
+
+    const { faceitUrl } = req.body;
+    if (!faceitUrl || typeof faceitUrl !== 'string') {
+      return res.status(400).json({ success: false, message: 'faceitUrl обязателен' });
+    }
+
+    const trimmedUrl = faceitUrl.trim();
+
+    // Валидация ссылки FACEIT
+    const isFaceitLink = /^https?:\/\/(www\.)?faceit\.com\//i.test(trimmedUrl);
+    if (!isFaceitLink) {
+      return res.status(400).json({
+        success: false,
+        message: 'Некорректная FACEIT ссылка. Ожидается https://faceit.com/...'
+      });
+    }
+
+    const userId = req.user._id as mongoose.Types.ObjectId;
+
+    // Разрешаем профиль FACEIT через сервис
+    let resolvedProfile: import('../services/faceitService').FaceitProfileInfo | null = null;
+    try {
+      resolvedProfile = await faceitService.resolveFaceitProfile(trimmedUrl);
+    } catch (err: any) {
+      return res.status(400).json({
+        success: false,
+        message: `Не удалось получить FACEIT профиль: ${err?.message || 'Неизвестная ошибка'}`
+      });
+    }
+
+    if (!resolvedProfile) {
+      return res.status(404).json({ success: false, message: 'FACEIT профиль не найден' });
+    }
+
+    // Проверяем, что аккаунт не привязан к другому пользователю
+    const existingOwner = await FaceitAccount.findOne({ faceitId: resolvedProfile.faceitId });
+    if (existingOwner && existingOwner.userId.toString() !== userId.toString()) {
+      return res.status(409).json({
+        success: false,
+        message: 'Этот FACEIT аккаунт уже привязан к другому игроку'
+      });
+    }
+
+    // Обновляем или создаём FaceitAccount
+    let faceitAccount = await FaceitAccount.findOne({ userId });
+    if (faceitAccount) {
+      faceitAccount.faceitId = resolvedProfile.faceitId;
+      await faceitAccount.save();
+    } else {
+      faceitAccount = await FaceitAccount.create({
+        userId,
+        faceitId: resolvedProfile.faceitId,
+        accessToken: '',
+        refreshToken: '',
+        tokenExpiresAt: new Date('2100-01-01T00:00:00.000Z')
+      });
+    }
+    // Гарантируем, что ссылка faceitAccountId в User всегда актуальна
+    await User.findByIdAndUpdate(userId, { faceitAccountId: faceitAccount._id });
+
+    // Обновляем PlayerCard.contacts.faceit
+    await PlayerCard.findOneAndUpdate(
+      { userId },
+      { $set: { 'contacts.faceit': trimmedUrl } },
+      { upsert: false }
+    );
+
+    // Запускаем импорт матчей в фоне
+    faceitService.importMatches(faceitAccount._id)
+      .then((count: number) => console.log(`[Auth] Импортировано ${count} матчей для пользователя ${userId}`))
+      .catch((err: any) => console.error(`[Auth] Ошибка импорта матчей для пользователя ${userId}:`, err));
+
+    return res.status(200).json({
+      success: true,
+      message: 'FACEIT ссылка успешно обновлена',
+      faceitId: resolvedProfile.faceitId
+    });
+  } catch (error) {
+    console.error('[Auth] Ошибка при обновлении FACEIT ссылки:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Внутренняя ошибка сервера'
     });
   }
 });

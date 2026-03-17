@@ -19,17 +19,17 @@ const FaceitAccountSchema: Schema = new Schema({
     type: String, 
     required: true 
   },
-  accessToken: { 
-    type: String, 
-    required: true 
+  accessToken: {
+    type: String,
+    default: ''
   },
-  refreshToken: { 
-    type: String, 
-    required: true 
+  refreshToken: {
+    type: String,
+    default: ''
   },
-  tokenExpiresAt: { 
-    type: Date, 
-    required: true 
+  tokenExpiresAt: {
+    type: Date,
+    default: () => new Date('2100-01-01T00:00:00.000Z')
   },
   createdAt: { 
     type: Date, 

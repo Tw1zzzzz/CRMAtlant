@@ -6,9 +6,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { useNavigate } from "react-router-dom";
-import { Camera, Upload } from "lucide-react";
+import { Camera, Upload, Pencil, X, Check } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
 import StaffPrivilegeUpgrade from "@/components/StaffPrivilegeUpgrade";
+import { toast } from "sonner";
 
 
 
@@ -30,7 +31,7 @@ const Profile: React.FC = () => {
   const { user, deleteAccount, updateAvatar, refreshUser } = useAuth();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+
   // Объединение связанных состояний в один объект
   const [state, setState] = useState<ProfileState>({
     isDeleting: false,
@@ -38,6 +39,68 @@ const Profile: React.FC = () => {
     isUploadingAvatar: false,
     lastAvatarUpdate: 0
   });
+
+  // Состояния для редактирования FACEIT ссылки
+  const [isEditingFaceit, setIsEditingFaceit] = useState(false);
+  const [faceitUrl, setFaceitUrl] = useState('');
+  const [currentFaceitUrl, setCurrentFaceitUrl] = useState<string | null>(null);
+  const [isSavingFaceit, setIsSavingFaceit] = useState(false);
+  const [loadingFaceit, setLoadingFaceit] = useState(false);
+
+  // Загружаем текущую FACEIT ссылку при монтировании
+  useEffect(() => {
+    if (!user) return;
+    setLoadingFaceit(true);
+    const token = localStorage.getItem('token');
+    fetch('/api/auth/faceit-url', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) setCurrentFaceitUrl(data.faceitUrl);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingFaceit(false));
+  }, [user]);
+
+  /**
+   * Сохранение новой FACEIT ссылки
+   */
+  const handleSaveFaceitUrl = async (): Promise<void> => {
+    if (!faceitUrl.trim()) {
+      toast.error('Введите ссылку FACEIT');
+      return;
+    }
+
+    setIsSavingFaceit(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/auth/update-faceit', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ faceitUrl: faceitUrl.trim() })
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        toast.success('FACEIT ссылка успешно обновлена');
+        setCurrentFaceitUrl(faceitUrl.trim());
+        setIsEditingFaceit(false);
+        await refreshUser();
+      } else {
+        toast.error(data.message || 'Не удалось обновить FACEIT ссылку');
+      }
+    } catch (error) {
+      console.error('Ошибка при обновлении FACEIT ссылки:', error);
+      toast.error('Ошибка при сохранении FACEIT ссылки');
+    } finally {
+      setIsSavingFaceit(false);
+    }
+  };
 
 
 
@@ -248,6 +311,82 @@ const Profile: React.FC = () => {
               </div>
             </div>
 
+            {/* Секция FACEIT профиля */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>FACEIT профиль</Label>
+                {!isEditingFaceit && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setFaceitUrl(currentFaceitUrl || '');
+                      setIsEditingFaceit(true);
+                    }}
+                  >
+                    <Pencil className="h-4 w-4 mr-1" />
+                    Изменить
+                  </Button>
+                )}
+              </div>
+
+              {isEditingFaceit ? (
+                <div className="space-y-2">
+                  <Input
+                    placeholder="https://www.faceit.com/en/players/ваш-никнейм"
+                    value={faceitUrl}
+                    onChange={(e) => setFaceitUrl(e.target.value)}
+                    disabled={isSavingFaceit}
+                    autoFocus
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={handleSaveFaceitUrl}
+                      disabled={isSavingFaceit}
+                    >
+                      {isSavingFaceit ? (
+                        <span className="flex items-center gap-1">
+                          <span className="animate-spin rounded-full h-3 w-3 border-t-2 border-white" />
+                          Сохранение...
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1">
+                          <Check className="h-4 w-4" />
+                          Сохранить
+                        </span>
+                      )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsEditingFaceit(false)}
+                      disabled={isSavingFaceit}
+                    >
+                      <X className="h-4 w-4 mr-1" />
+                      Отмена
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-2 bg-muted rounded text-sm break-all">
+                  {loadingFaceit ? (
+                    <span className="text-muted-foreground">Загрузка...</span>
+                  ) : currentFaceitUrl ? (
+                    <a
+                      href={currentFaceitUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline"
+                    >
+                      {currentFaceitUrl}
+                    </a>
+                  ) : (
+                    <span className="text-muted-foreground">Не указан</span>
+                  )}
+                </div>
+              )}
+            </div>
 
           </CardContent>
           <CardFooter>

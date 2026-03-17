@@ -4,6 +4,7 @@
 
 import { 
   MoodEntry, 
+  SleepEntry,
   TestEntry, 
   StatsData, 
   WeeklyData,
@@ -156,14 +157,15 @@ export const getTestsByDayOfWeek = (entries: TestEntry[]): ChartDataPoint[] => {
         const dayData = testsByDay[dayIndex];
         
         dayData.count += 1;
-        dayData.total += entry.score;
-        
+        dayData.total += (entry.scoreNormalized ?? 0);
+
         // Группировка по типам тестов
-        if (!dayData.byType[entry.type]) {
-          dayData.byType[entry.type] = { count: 0, total: 0 };
+        const entryTestType = entry.testType ?? 'generic';
+        if (!dayData.byType[entryTestType]) {
+          dayData.byType[entryTestType] = { count: 0, total: 0 };
         }
-        dayData.byType[entry.type].count += 1;
-        dayData.byType[entry.type].total += entry.score;
+        dayData.byType[entryTestType].count += 1;
+        dayData.byType[entryTestType].total += (entry.scoreNormalized ?? 0);
       }
     } catch (error) {
       console.warn('Некорректная дата в записи теста:', entry.date);
@@ -229,9 +231,10 @@ export const getPlayerActivityChartData = (playerData: any): ChartDataPoint[] =>
  */
 export const prepareMoodDataByTimeRange = (
   entries: MoodEntry[], 
-  timeRange: TimePeriod
+  timeRange: TimePeriod,
+  sleepEntries: SleepEntry[] = []
 ): StatsData[] => {
-  if (!entries.length) return [];
+  if (!entries.length && !sleepEntries.length) return [];
   
   const now = new Date();
   const startDate = dateHelpers.getStartDate(timeRange, now);
@@ -246,7 +249,9 @@ export const prepareMoodDataByTimeRange = (
     fullDate: format(date, 'yyyy-MM-dd'),
     mood: 0,
     energy: 0,
-    count: 0
+    count: 0,
+    sleepHours: 0,
+    sleepCount: 0
   }));
   
   // Фильтруем записи для выбранного периода
@@ -270,12 +275,32 @@ export const prepareMoodDataByTimeRange = (
       console.warn('Ошибка обработки записи настроения:', entry);
     }
   });
+
+  const filteredSleepEntries = sleepEntries.filter(entry =>
+    dateHelpers.isDateInPeriod(entry.date, timeRange, now)
+  );
+
+  filteredSleepEntries.forEach(entry => {
+    try {
+      const entryDate = new Date(entry.date);
+      const dateString = format(entryDate, dateFormat, { locale: ru });
+
+      const dataIndex = initialData.findIndex(item => item.date === dateString);
+      if (dataIndex !== -1) {
+        initialData[dataIndex].sleepHours += entry.hours;
+        initialData[dataIndex].sleepCount += 1;
+      }
+    } catch (error) {
+      console.warn('Ошибка обработки записи сна:', entry);
+    }
+  });
   
   // Рассчитываем средние значения
   return initialData.map(item => ({
     date: item.date,
     mood: item.count ? Number((item.mood / item.count).toFixed(1)) : 0,
-    energy: item.count ? Number((item.energy / item.count).toFixed(1)) : 0
+    energy: item.count ? Number((item.energy / item.count).toFixed(1)) : 0,
+    sleepHours: item.sleepCount ? Number((item.sleepHours / item.sleepCount).toFixed(1)) : undefined
   }));
 };
 
@@ -308,27 +333,28 @@ export const prepareTestDataByTimeRange = (
       if (!groupedTests[dateString]) {
         groupedTests[dateString] = {};
       }
-      
-      if (!groupedTests[dateString][entry.type]) {
-        groupedTests[dateString][entry.type] = { total: 0, count: 0 };
+
+      const testTypeKey = entry.testType ?? 'generic';
+      if (!groupedTests[dateString][testTypeKey]) {
+        groupedTests[dateString][testTypeKey] = { total: 0, count: 0 };
       }
-      
-      groupedTests[dateString][entry.type].total += entry.score;
-      groupedTests[dateString][entry.type].count += 1;
+
+      groupedTests[dateString][testTypeKey].total += (entry.scoreNormalized ?? 0);
+      groupedTests[dateString][testTypeKey].count += 1;
     } catch (error) {
       console.warn('Ошибка обработки записи теста:', entry);
     }
   });
   
   // Получаем все типы тестов
-  const testTypes = [...new Set(filteredEntries.map(entry => entry.type))];
+  const testTypes = [...new Set(filteredEntries.map(entry => (entry.testType ?? 'generic')))];
   
   // Преобразуем данные в формат для графика
   return Object.keys(groupedTests)
     .sort()
     .map(date => {
       const result: ChartDataPoint = { name: date, date };
-      
+
       testTypes.forEach(type => {
         const typeData = groupedTests[date]?.[type];
         if (typeData) {
@@ -351,8 +377,8 @@ export const prepareTestDistribution = (entries: TestEntry[]): ChartDataPoint[] 
   const testCounts: Record<string, number> = {};
   
   entries.forEach(entry => {
-    const testType = entry.type as TestType;
-    const label = TEST_TYPE_METADATA[testType]?.label || entry.type;
+    const testType = (entry.testType as TestType) ?? TestType.COGNITIVE;
+    const label = TEST_TYPE_METADATA[testType]?.label || entry.testType || 'generic';
     
     if (!testCounts[label]) {
       testCounts[label] = 0;

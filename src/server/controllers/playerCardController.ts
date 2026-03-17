@@ -47,11 +47,26 @@ export const upload = multer({
   fileFilter
 });
 
+/**
+ * Проверяет, имеет ли запрашивающий пользователь право доступа к карточке targetUserId.
+ * Стафф — доступ к любой карточке.
+ * Соло-игрок — только к своей карточке.
+ */
+const canAccessCard = (req: Request, targetUserId: string): boolean => {
+  const user = (req as any).user;
+  if (!user) return false;
+  if (user.role === 'staff') return true;
+  if (user.role === 'player' && user.playerType === 'solo') {
+    return user._id.toString() === targetUserId.toString();
+  }
+  return false;
+};
+
 // Получить карточку игрока
 export const getPlayerCard = async (req: Request, res: Response) => {
   try {
-    const userId = req.params.userId || req.user?._id;
-    
+    const userId = req.params.userId || (req as any).user?._id;
+
     if (!userId) {
       return res.status(400).json({ success: false, message: 'ID пользователя не указан' });
     }
@@ -59,6 +74,11 @@ export const getPlayerCard = async (req: Request, res: Response) => {
     // Проверка на валидный ObjectId
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({ success: false, message: 'Некорректный формат ID пользователя' });
+    }
+
+    // Соло-игрок может смотреть только свою карточку
+    if (!canAccessCard(req, userId)) {
+      return res.status(403).json({ success: false, message: 'Доступ разрешён только к собственной карточке' });
     }
 
     // Поиск пользователя
@@ -167,14 +187,26 @@ export const getAllPlayerCards = async (req: Request, res: Response) => {
 // Создать карточку игрока
 export const createPlayerCard = async (req: Request, res: Response) => {
   try {
-    const { userId } = req.body;
-    
+    const requestUser = (req as any).user;
+    const isSoloPlayer = requestUser?.role === 'player' && requestUser?.playerType === 'solo';
+
+    // Соло-игрок всегда создаёт только свою карточку
+    let { userId } = req.body;
+    if (isSoloPlayer) {
+      userId = requestUser._id.toString();
+    }
+
     if (!userId) {
       console.error('Ошибка: ID пользователя не указан');
-      return res.status(400).json({ 
-        success: false, 
-        message: 'ID пользователя не указан' 
+      return res.status(400).json({
+        success: false,
+        message: 'ID пользователя не указан'
       });
+    }
+
+    // Соло-игрок не может создать карточку другого пользователя
+    if (!canAccessCard(req, userId)) {
+      return res.status(403).json({ success: false, message: 'Доступ разрешён только к собственной карточке' });
     }
 
     // Проверка на валидный ObjectId
@@ -276,18 +308,16 @@ export const updateContacts = async (req: Request, res: Response) => {
     const { contacts } = req.body;
 
     if (!userId) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'ID пользователя не указан' 
-      });
+      return res.status(400).json({ success: false, message: 'ID пользователя не указан' });
     }
 
-    // Проверка на валидный ObjectId
     if (!mongoose.Types.ObjectId.isValid(userId)) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Некорректный формат ID пользователя' 
-      });
+      return res.status(400).json({ success: false, message: 'Некорректный формат ID пользователя' });
+    }
+
+    // Соло-игрок может редактировать только свои контакты
+    if (!canAccessCard(req, userId)) {
+      return res.status(403).json({ success: false, message: 'Доступ разрешён только к собственной карточке' });
     }
 
     // Проверка наличия данных контактов
@@ -364,10 +394,12 @@ export const updateCommunicationLine = async (req: Request, res: Response) => {
     const { communicationLine } = req.body;
 
     if (!userId) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'ID пользователя не указан' 
-      });
+      return res.status(400).json({ success: false, message: 'ID пользователя не указан' });
+    }
+
+    // Соло-игрок может редактировать только свою линию
+    if (!canAccessCard(req, userId)) {
+      return res.status(403).json({ success: false, message: 'Доступ разрешён только к собственной карточке' });
     }
 
     // Проверка на валидный ObjectId
@@ -415,12 +447,14 @@ export const updateCommunicationLine = async (req: Request, res: Response) => {
 export const uploadRoadmap = async (req: Request, res: Response) => {
   try {
     const userId = req.params.userId;
-    
+
     if (!userId) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'ID пользователя не указан' 
-      });
+      return res.status(400).json({ success: false, message: 'ID пользователя не указан' });
+    }
+
+    // Соло-игрок может загружать roadmap только для своей карточки
+    if (!canAccessCard(req, userId)) {
+      return res.status(403).json({ success: false, message: 'Доступ разрешён только к собственной карточке' });
     }
 
     // Проверка на валидный ObjectId
@@ -492,12 +526,14 @@ export const uploadRoadmap = async (req: Request, res: Response) => {
 export const uploadMindmap = async (req: Request, res: Response) => {
   try {
     const userId = req.params.userId;
-    
+
     if (!userId) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'ID пользователя не указан' 
-      });
+      return res.status(400).json({ success: false, message: 'ID пользователя не указан' });
+    }
+
+    // Соло-игрок может загружать mindmap только для своей карточки
+    if (!canAccessCard(req, userId)) {
+      return res.status(403).json({ success: false, message: 'Доступ разрешён только к собственной карточке' });
     }
 
     // Проверка на валидный ObjectId

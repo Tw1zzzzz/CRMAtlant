@@ -108,6 +108,22 @@ export const hasPrivilegeKey = (req: any, res: any, next: any) => {
   }
 };
 
+// Middleware для проверки: стафф ИЛИ соло-игрок
+// Соло-игрок получает доступ к аналитике и своей карточке наравне со стаффом
+export const isSoloOrStaff = (req: any, res: any, next: any) => {
+  const user = req.user;
+  const isStaffUser = user && user.role === 'staff';
+  const isSoloPlayer = user && user.role === 'player' && user.playerType === 'solo';
+
+  if (isStaffUser || isSoloPlayer) {
+    console.log(`[AUTH] Доступ для ${isStaffUser ? 'сотрудника' : 'соло-игрока'} (${user.name}) разрешен`);
+    next();
+  } else {
+    console.log(`[AUTH] Доступ запрещен: требуется роль staff или тип solo`);
+    return res.status(403).json({ message: 'Нет прав доступа для этого действия' });
+  }
+};
+
 // Middleware для проверки роли Player
 export const isPlayer = (req: any, res: any, next: any) => {
   if (req.user && req.user.role === 'player') {

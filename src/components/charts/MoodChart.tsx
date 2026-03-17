@@ -30,6 +30,9 @@ const MoodChart = ({ data, height = 400 }: MoodChartProps) => {
     );
   }
 
+  const hasSleepData = data.some((entry) => typeof entry.sleepHours === 'number');
+  const yAxisUpperBound = hasSleepData ? 12 : 10;
+
   return (
     <ResponsiveContainer width="100%" height={height}>
       <LineChart
@@ -49,7 +52,7 @@ const MoodChart = ({ data, height = 400 }: MoodChartProps) => {
           tickMargin={10}
         />
         <YAxis 
-          domain={[0, 10]} 
+          domain={[0, yAxisUpperBound]} 
           tick={{ fill: COLORS.textColor }} 
           tickMargin={10}
         />
@@ -73,6 +76,19 @@ const MoodChart = ({ data, height = 400 }: MoodChartProps) => {
           activeDot={{ r: 8 }}
           dot={{ strokeWidth: 2 }}
         />
+        {hasSleepData && (
+          <Line
+            type="monotone"
+            dataKey="sleepHours"
+            name="Сон (ч)"
+            stroke={COLORS.chartColors[2] || "#f59e0b"}
+            strokeWidth={2}
+            strokeDasharray="6 4"
+            activeDot={{ r: 7 }}
+            dot={{ strokeWidth: 2 }}
+            connectNulls={false}
+          />
+        )}
       </LineChart>
     </ResponsiveContainer>
   );

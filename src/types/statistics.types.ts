@@ -49,6 +49,7 @@ export interface StatsData {
   date: string;
   mood: number;
   energy: number;
+  sleepHours?: number;
 }
 
 /** Данные за неделю */

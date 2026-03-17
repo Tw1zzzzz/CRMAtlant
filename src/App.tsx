@@ -137,31 +137,31 @@ const AppRoutes = () => (
       
       <Route path={ROUTES.NEW_ANALYTICS} element={<Navigate to={ROUTES.STATISTICS} replace />} />
       
-      <Route 
-        path="/correlation-analysis" 
+      <Route
+        path="/correlation-analysis"
         element={
-          <RouteGuard requiredRole="staff">
+          <RouteGuard>
             <CorrelationAnalysisPage />
           </RouteGuard>
-        } 
+        }
       />
       
-      <Route 
-        path={ROUTES.PLAYER_CARD} 
+      <Route
+        path={ROUTES.PLAYER_CARD}
         element={
-          <RouteGuard requiredRole="staff">
+          <RouteGuard allowedPlayerTypes={["solo"]}>
             <PlayerCard />
           </RouteGuard>
-        } 
+        }
       />
-      
-      <Route 
-        path={`${ROUTES.PLAYER_CARD}/:playerId`} 
+
+      <Route
+        path={`${ROUTES.PLAYER_CARD}/:playerId`}
         element={
-          <RouteGuard requiredRole="staff">
+          <RouteGuard allowedPlayerTypes={["solo"]}>
             <PlayerCard />
           </RouteGuard>
-        } 
+        }
       />
       
       <Route 

@@ -9,8 +9,6 @@ import { Settings, User as UserIcon, LogOut, ChevronDown } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ROUTES from "@/lib/routes";
 import twizzLogoSvg from "@/assets/twizz-logo.svg";
-// Импортируем CSS для анимации
-import "@/assets/twizz-logo-animation.css";
 // Импортируем UserAvatar
 import UserAvatar from "./UserAvatar";
 
@@ -25,17 +23,13 @@ const Header = () => {
     color: COLORS.textColor
   };
 
-  // Стиль для логотипа Twizz
+  // Подрезанный SVG можно показывать крупнее без потери читаемости
   const twizzLogoStyle = {
-    height: '4.5rem',
-    maxWidth: '220px',
+    height: '6rem',
+    maxWidth: '520px',
     objectFit: 'contain' as const,
-    borderRadius: '8px',
-    padding: '4px',
     marginLeft: '10px',
-    background: 'rgba(29, 140, 248, 0.08)',
-    border: '1px solid rgba(0, 0, 0, 0.3)',
-    boxShadow: '0px 0px 3px rgba(0, 0, 0, 0.2)'
+    display: 'block' as const
   };
 
   return (
@@ -44,7 +38,7 @@ const Header = () => {
         <div className="flex items-center gap-4">
           <img 
             src={twizzLogoSvg} 
-            alt="Twizz Logo" 
+            alt="ATLANT Technology Logo" 
             style={twizzLogoStyle}
           />
         </div>

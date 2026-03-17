@@ -944,15 +944,21 @@ const PlayerCardPage: React.FC = () => {
   };
   
   // Загрузка списка игроков при монтировании компонента
+  const isSoloPlayer = user?.role === "player" && user?.playerType === "solo";
   useEffect(() => {
-    // Проверка прав доступа
     if (user && user.role === "staff") {
+      // Стафф: загружаем всех игроков
       fetchPlayers();
+    } else if (user && isSoloPlayer) {
+      // Solo-игрок: сразу показываем свою карточку без загрузки общего списка
+      setSelectedPlayerId(user.id || null);
+      setDisplayMode(DisplayMode.DETAIL);
+      setLoadingPlayers(false);
     } else {
       navigate("/dashboard");
-      toast.error("Доступ запрещен. Только для персонала.");
+      toast.error("Доступ запрещен. Только для персонала и одиночных игроков.");
     }
-  }, [user, navigate]);
+  }, [user, navigate, isSoloPlayer]);
   
   // Создание карточки игрока
   const handleCreatePlayerCard = async () => {
@@ -2124,6 +2130,11 @@ const safeDeletePlayerCard = async (
     }
   };
   
+  // Для solo-игрока используем данные из useAuth как данные текущего игрока
+  const currentPlayerForDetail = selectedPlayerId
+    ? (players.find(p => p.id === selectedPlayerId) || (isSoloPlayer ? { id: user?.id || '', name: user?.name || 'Без имени', email: user?.email || '' } : null))
+    : null;
+
   // Компонент для загрузки списка игроков
   if (loadingPlayers) {
     return (
@@ -2153,12 +2164,19 @@ const safeDeletePlayerCard = async (
     <div className="container px-4 py-6 mx-auto performance-page">
       {/* Добавляем стили анимаций */}
       <style>{animationStyles}</style>
-      
+
       <span className="performance-eyebrow">Player Intelligence</span>
-      <h1 className="text-3xl font-bold mb-2 performance-title">Карточки игроков</h1>
-      <p className="text-muted-foreground performance-subtitle mb-4">Создавайте и управляйте карточками игроков - добавляйте контакты и карты развития.</p>
-      
-      <div className="flex justify-between items-center mb-6">
+      <h1 className="text-3xl font-bold mb-2 performance-title">
+        {isSoloPlayer ? "Моя карточка" : "Карточки игроков"}
+      </h1>
+      <p className="text-muted-foreground performance-subtitle mb-4">
+        {isSoloPlayer
+          ? "Ваша персональная карточка — контакты, карта развития и коммуникативная линия."
+          : "Создавайте и управляйте карточками игроков - добавляйте контакты и карты развития."}
+      </p>
+
+      {/* Панель инструментов — только для стаффа */}
+      {user?.role === "staff" && <div className="flex justify-between items-center mb-6">
         <div className="relative w-full max-w-xs">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
@@ -2242,8 +2260,8 @@ const safeDeletePlayerCard = async (
           )}
         </Button>
         </div>
-      </div>
-      
+      </div>}
+
       {/* Отображаем или список карточек, или детальный вид */}
       {displayMode === DisplayMode.GRID ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -2448,17 +2466,18 @@ const safeDeletePlayerCard = async (
       ) : (
         // Детальный режим просмотра карточки игрока
         <div className="space-y-6 animate-fadeIn">
-          {/* Кнопки навигации и действий */}
+          {/* Кнопки навигации и действий — скрыты для solo-игроков */}
+          {!isSoloPlayer && (
           <div className="flex justify-between items-center">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={handleBackToGrid}
               className="bg-background text-foreground hover:bg-secondary/80"
             >
-              <ChevronDown className="h-4 w-4 mr-2 rotate-90" /> 
+              <ChevronDown className="h-4 w-4 mr-2 rotate-90" />
               Вернуться к списку
             </Button>
-            
+
             {/* Кнопка удаления карточки - прямое удаление */}
             {playerHasCard && (
               <Button 
@@ -2536,33 +2555,58 @@ const safeDeletePlayerCard = async (
               </Button>
             )}
           </div>
+          )}
 
-          {/* Основная информация об игроке */}
-          {selectedPlayerId && players.find(p => p.id === selectedPlayerId) && (
+          {/* Основная информация об игроке — для solo-игрока используем данные из useAuth */}
+          {selectedPlayerId && currentPlayerForDetail && (
             <Card className="shadow-md">
               <CardHeader className="bg-muted/30">
                 <div className="flex items-center gap-4">
-                  <UserAvatar 
-                    user={players.find(p => p.id === selectedPlayerId)!} 
-                    className="h-14 w-14 border-2 border-background shadow-sm" 
+                  <UserAvatar
+                    user={currentPlayerForDetail}
+                    className="h-14 w-14 border-2 border-background shadow-sm"
                   />
                   <div>
                     <CardTitle className="text-2xl">
-                      {players.find(p => p.id === selectedPlayerId)?.name || "Без имени"}
+                      {currentPlayerForDetail.name || "Без имени"}
                     </CardTitle>
                     <CardDescription className="text-base">
-                      {players.find(p => p.id === selectedPlayerId)?.email || "Без email"}
+                      {(currentPlayerForDetail as any).email || "Без email"}
                     </CardDescription>
                   </div>
                 </div>
               </CardHeader>
 
               <CardContent className="pt-6 space-y-6">
+                {/* Кнопка создания карточки (если карточки нет) */}
+                {!loading && !playerHasCard && (
+                  <div className="flex flex-col items-center justify-center py-6 space-y-3 border rounded-md bg-muted/10">
+                    <CreditCard className="h-10 w-10 text-muted-foreground opacity-50" />
+                    <p className="text-muted-foreground text-sm">Карточка ещё не создана</p>
+                    <Button
+                      onClick={handleCreatePlayerCard}
+                      disabled={creatingCard}
+                      className="bg-primary hover:bg-primary/90"
+                    >
+                      {creatingCard ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Создание...
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="h-4 w-4 mr-2" />
+                          Создать мою карточку
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
                 {loading ? (
                   <div className="flex justify-center items-center py-10">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
                   </div>
-                ) : (
+                ) : playerHasCard ? (
                   <>
                     {/* Карточка игрока (v1): индексы и таймлайн */}
                     <div className="space-y-4">
@@ -2986,7 +3030,7 @@ const safeDeletePlayerCard = async (
                       </div>
                     </div>
                   </>
-                )}
+                ) : null}
               </CardContent>
             </Card>
           )}

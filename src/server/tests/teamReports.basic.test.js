@@ -38,16 +38,7 @@ const createMockResponse = () => {
  */
 function testValidation() {
   console.log('🧪 Тестирование валидации...');
-  
-  // Тест 1: Проверка обязательных полей
-  const { body } = require('express-validator');
-  
-  const validationRules = [
-    body('title').notEmpty().withMessage('Название отчета обязательно'),
-    body('content').notEmpty().withMessage('Содержимое отчета обязательно'),
-    body('type').notEmpty().withMessage('Тип отчета обязательно')
-  ];
-  
+
   // Симуляция валидных данных
   const validData = {
     title: 'Тестовый отчет',
@@ -61,16 +52,24 @@ function testValidation() {
     },
     type: 'weekly'
   };
-  
+
+  assert(validData.title.trim().length > 0, 'Название отчета обязательно');
+  assert(validData.content && Array.isArray(validData.content.sections), 'Содержимое отчета обязательно');
+  assert(validData.type.trim().length > 0, 'Тип отчета обязательно');
+
   console.log('✅ Валидация пройдена для корректных данных');
-  
+
   // Тест 2: Проверка некорректных данных
   const invalidData = {
     title: '', // Пустое название
     content: null, // Отсутствует содержимое
     type: '' // Пустой тип
   };
-  
+
+  assert.strictEqual(invalidData.title.trim().length > 0, false, 'Пустое название должно отклоняться');
+  assert.strictEqual(Boolean(invalidData.content), false, 'Пустое содержимое должно отклоняться');
+  assert.strictEqual(invalidData.type.trim().length > 0, false, 'Пустой тип должен отклоняться');
+
   console.log('✅ Валидация корректно отклонила некорректные данные');
 }
 

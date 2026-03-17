@@ -7,10 +7,10 @@ import { Label } from "@/components/ui/label";
 import { format, subDays, subMonths, startOfMonth, endOfMonth, eachDayOfInterval } from "date-fns";
 import { ru } from "date-fns/locale";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from "recharts";
-import { MoodEntry, TestEntry, StatsData } from "@/types";
+import { MoodEntry, SleepEntry, TestEntry, StatsData } from "@/types";
 import { getMoodEntries, getTestEntries } from "@/utils/storage";
 import { formatDate } from "@/utils/dateUtils";
-import { getMoodStats, getTestStats, getAllPlayersMoodStats, getAllPlayersTestStats, getPlayers, getPlayerStats } from "@/lib/api";
+import { getMoodStats, getSleepStats, getTestStats, getAllPlayersMoodStats, getAllPlayersSleepStats, getAllPlayersTestStats, getPlayers, getPlayerStats } from "@/lib/api";
 import { useLocation, useNavigate } from "react-router-dom";
 import { COLORS, COMPONENT_STYLES } from "@/styles/theme";
 import { prepareMoodDataByTimeRange, prepareTestDataByTimeRange, prepareTestDistribution } from "@/utils/statsUtils";
@@ -84,6 +84,7 @@ const Statistics = () => {
   
   const isStaff = user?.role === "staff";
   const [moodEntries, setMoodEntries] = useState<MoodEntry[]>([]);
+  const [sleepEntries, setSleepEntries] = useState<SleepEntry[]>([]);
   const [testEntries, setTestEntries] = useState<TestEntry[]>([]);
   const [timeRange, setTimeRange] = useState<"week" | "month" | "3months">("week");
   const [moodData, setMoodData] = useState<StatsData[]>([]);
@@ -91,12 +92,14 @@ const Statistics = () => {
   const [testDistribution, setTestDistribution] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<"personal" | "players">(urlPlayerId ? "personal" : "personal");
   const [playersMoodStats, setPlayersMoodStats] = useState<any>([]);
+  const [playersSleepStats, setPlayersSleepStats] = useState<any>([]);
   const [playersTestStats, setPlayersTestStats] = useState<any>([]);
   const [loadingPlayersData, setLoadingPlayersData] = useState(false);
   const [loadingError, setLoadingError] = useState<string | null>(null);
   const [averagePlayerStats, setAveragePlayerStats] = useState({
     avgMood: 0,
     avgEnergy: 0,
+    avgSleep: 0,
     completedTests: 0,
     totalPlayers: 0
   });
@@ -132,14 +135,16 @@ const Statistics = () => {
   }, [isStaff, activeTab]);
   
   useEffect(() => {
-    if (moodEntries.length > 0) {
+    if (moodEntries.length > 0 || sleepEntries.length > 0) {
       processMoodData();
+    } else {
+      setMoodData([]);
     }
     
     if (testEntries.length > 0) {
       processTestData();
     }
-  }, [moodEntries, testEntries, timeRange]);
+  }, [moodEntries, sleepEntries, testEntries, timeRange]);
   
   const loadPersonalData = async () => {
     try {
@@ -148,7 +153,11 @@ const Statistics = () => {
       setLoadingError(null);
       
       // Получаем данные о настроении из API
-      const moodResponse = await getMoodStats();
+      const [moodResponse, sleepResponse, testResponse] = await Promise.all([
+        getMoodStats(),
+        getSleepStats(),
+        getTestStats()
+      ]);
       if (moodResponse.data && Array.isArray(moodResponse.data)) {
         console.log(`Получено ${moodResponse.data.length} записей о настроении`);
         setMoodEntries(moodResponse.data);
@@ -156,9 +165,15 @@ const Statistics = () => {
         console.warn('Не получено данных о настроении');
         setMoodEntries([]);
       }
-      
-      // Получаем данные о тестах из API
-      const testResponse = await getTestStats();
+
+      if (sleepResponse.data && Array.isArray(sleepResponse.data)) {
+        console.log(`Получено ${sleepResponse.data.length} записей о сне`);
+        setSleepEntries(sleepResponse.data);
+      } else {
+        console.warn('Не получено данных о сне');
+        setSleepEntries([]);
+      }
+
       if (testResponse.data && Array.isArray(testResponse.data)) {
         console.log(`Получено ${testResponse.data.length} записей о тестах`);
         setTestEntries(testResponse.data);
@@ -175,6 +190,7 @@ const Statistics = () => {
       const loadedTestEntries = getTestEntries();
       
       setMoodEntries(loadedMoodEntries);
+      setSleepEntries([]);
       setTestEntries(loadedTestEntries);
     } finally {
       setLoadingPlayersData(false);
@@ -229,6 +245,14 @@ const Statistics = () => {
           console.warn('No mood entries data received');
           setMoodEntries([]);
         }
+
+        if (response.data.sleepEntries && Array.isArray(response.data.sleepEntries)) {
+          console.log(`Received ${response.data.sleepEntries.length} sleep entries`);
+          setSleepEntries(response.data.sleepEntries);
+        } else {
+          console.warn('No sleep entries data received');
+          setSleepEntries([]);
+        }
         
         // Проверяем, есть ли данные о тестах
         if (response.data.testEntries && Array.isArray(response.data.testEntries)) {
@@ -244,6 +268,7 @@ const Statistics = () => {
       } else {
         console.warn('No data received for player');
         setMoodEntries([]);
+        setSleepEntries([]);
         setTestEntries([]);
         setPlayerStatsData(null);
       }
@@ -251,6 +276,7 @@ const Statistics = () => {
       console.error('Error fetching player stats:', error);
       setLoadingError(`Ошибка загрузки данных игрока: ${(error as Error).message}`);
       setMoodEntries([]);
+      setSleepEntries([]);
       setTestEntries([]);
       setPlayerStatsData(null);
     } finally {
@@ -264,20 +290,23 @@ const Statistics = () => {
       setLoadingError(null);
       
       // Загружаем данные о настроении игроков
-      const moodResponse = await getAllPlayersMoodStats();
+      const [moodResponse, sleepResponse, testResponse] = await Promise.all([
+        getAllPlayersMoodStats(),
+        getAllPlayersSleepStats(),
+        getAllPlayersTestStats()
+      ]);
       if (moodResponse.data) {
         setPlayersMoodStats(moodResponse.data);
       }
-      
-      // Загружаем данные о тестах игроков
-      const testResponse = await getAllPlayersTestStats();
+      if (sleepResponse.data) {
+        setPlayersSleepStats(sleepResponse.data);
+      }
       if (testResponse.data) {
         setPlayersTestStats(testResponse.data);
       }
       
-      // Рассчитываем средние показатели игроков
-      if (moodResponse.data && testResponse.data) {
-        calculateAveragePlayerStats(moodResponse.data, testResponse.data);
+      if (moodResponse.data && sleepResponse.data && testResponse.data) {
+        calculateAveragePlayerStats(moodResponse.data, sleepResponse.data, testResponse.data);
       }
     } catch (error) {
       console.error('Error loading players data:', error);
@@ -287,14 +316,16 @@ const Statistics = () => {
     }
   };
   
-  const calculateAveragePlayerStats = (moodStats: any, testStats: any) => {
-    if (!moodStats || !Array.isArray(moodStats) || !testStats || !Array.isArray(testStats)) {
+  const calculateAveragePlayerStats = (moodStats: any, sleepStats: any, testStats: any) => {
+    if (!moodStats || !Array.isArray(moodStats) || !sleepStats || !Array.isArray(sleepStats) || !testStats || !Array.isArray(testStats)) {
       return;
     }
     
     let totalMood = 0;
     let totalEnergy = 0;
+    let totalSleep = 0;
     let moodCount = 0;
+    let sleepCount = 0;
     let totalTests = 0;
     let uniquePlayers = new Set<string>();
     
@@ -310,19 +341,30 @@ const Statistics = () => {
         moodCount++;
       }
       
-      if (entry.playerId) {
-        uniquePlayers.add(entry.playerId);
+      if (entry.userId) {
+        uniquePlayers.add(entry.userId);
+      }
+    });
+
+    sleepStats.forEach(entry => {
+      if (typeof entry.avgSleep === 'number') {
+        totalSleep += entry.avgSleep;
+        sleepCount++;
+      }
+
+      if (entry.userId) {
+        uniquePlayers.add(entry.userId);
       }
     });
     
     // Обрабатываем данные о тестах
     testStats.forEach(entry => {
-      if (entry.count && typeof entry.count === 'number') {
-        totalTests += entry.count;
+      if (entry.testCount && typeof entry.testCount === 'number') {
+        totalTests += entry.testCount;
       }
       
-      if (entry.playerId) {
-        uniquePlayers.add(entry.playerId);
+      if (entry.userId) {
+        uniquePlayers.add(entry.userId);
       }
     });
     
@@ -330,13 +372,14 @@ const Statistics = () => {
     setAveragePlayerStats({
       avgMood: moodCount ? +(totalMood / moodCount).toFixed(1) : 0,
       avgEnergy: moodCount ? +(totalEnergy / moodCount).toFixed(1) : 0,
+      avgSleep: sleepCount ? +(totalSleep / sleepCount).toFixed(1) : 0,
       completedTests: totalTests,
       totalPlayers: uniquePlayers.size
     });
   };
   
   const processMoodData = () => {
-    setMoodData(prepareMoodDataByTimeRange(moodEntries, timeRange));
+    setMoodData(prepareMoodDataByTimeRange(moodEntries, timeRange, sleepEntries));
   };
   
   const processTestData = () => {
@@ -368,6 +411,7 @@ const Statistics = () => {
         testData={testData}
         testDistribution={testDistribution}
         moodEntries={moodEntries}
+        sleepEntries={sleepEntries}
         testEntries={testEntries}
         timeRange={timeRange}
         onTimeRangeChange={handleTimeRangeChange}
@@ -427,6 +471,7 @@ const Statistics = () => {
               testData={testData}
               testDistribution={testDistribution}
               moodEntries={moodEntries}
+              sleepEntries={sleepEntries}
               testEntries={testEntries}
               timeRange={timeRange}
               onTimeRangeChange={handleTimeRangeChange}
@@ -437,6 +482,7 @@ const Statistics = () => {
         // Показываем общую статистику всех игроков
         <PlayersStats
           playersMoodStats={playersMoodStats}
+          playersSleepStats={playersSleepStats}
           playersTestStats={playersTestStats}
           averagePlayerStats={averagePlayerStats}
           players={players}

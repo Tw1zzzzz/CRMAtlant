@@ -19,6 +19,7 @@
     "seed:activity": "ts-node src/server/scripts/seedActivityData.ts",
     "clean:activity": "ts-node src/server/scripts/cleanActivityData.ts",
     "test:frontend": "node tests/frontend.smoke.test.cjs",
+    "test:programmer-fixes": "node tests/programmer-fixes.test.cjs",
     "test:backend": "cd src/server && npm test",
     "test": "npm run test:frontend && npm run test:backend"
   },
