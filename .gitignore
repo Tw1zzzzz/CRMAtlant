@@ -13,6 +13,7 @@ dist
 **/dist
 .env
 .env.*
+!deploy/.env.production.example
 uploads
 dist-ssr
 *.local

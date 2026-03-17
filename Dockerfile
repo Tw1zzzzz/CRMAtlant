@@ -4,6 +4,7 @@ WORKDIR /app
 
 # Copy root package.json and install frontend dependencies
 COPY package*.json ./
+COPY scripts ./scripts
 RUN npm install --no-fund --no-audit
 
 # Copy server package.json and install server dependencies
