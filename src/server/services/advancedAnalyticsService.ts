@@ -1,7 +1,5 @@
-import mongoose from 'mongoose';
 import TeamReport from '../models/TeamReport';
 import MoodEntry from '../models/MoodEntry';
-import TestEntry from '../models/TestEntry';
 import BalanceWheel from '../models/BalanceWheel';
 import User from '../models/User';
 
@@ -108,10 +106,13 @@ export interface AdvancedAnalyticsReport {
   };
 }
 
+type EmotionKey = 'joy' | 'sadness' | 'anger' | 'fear' | 'confidence' | 'surprise';
+type EmotionalToneMap = Record<EmotionKey, number>;
+
 /**
  * Простой алгоритм сентимент-анализа на основе ключевых слов
  */
-const analyzeSentiment = (text: string): { score: number; tone: any } => {
+const analyzeSentiment = (text: string): { score: number; tone: EmotionalToneMap } => {
   // Словари для анализа тональности
   const positiveWords = [
     'отлично', 'хорошо', 'замечательно', 'прогресс', 'улучшение', 'успех', 
@@ -125,7 +126,7 @@ const analyzeSentiment = (text: string): { score: number; tone: any } => {
     'усталость', 'разочарование', 'фрустрация', 'конфликт'
   ];
 
-  const emotionalWords = {
+  const emotionalWords: Record<EmotionKey, string[]> = {
     joy: ['радость', 'счастье', 'веселье', 'удовольствие', 'восторг'],
     sadness: ['грусть', 'печаль', 'уныние', 'тоска', 'депрессия'],
     anger: ['злость', 'гнев', 'раздражение', 'ярость', 'недовольство'],
@@ -138,7 +139,7 @@ const analyzeSentiment = (text: string): { score: number; tone: any } => {
   
   let positiveCount = 0;
   let negativeCount = 0;
-  const emotionalCounts = {
+  const emotionalCounts: EmotionalToneMap = {
     joy: 0, sadness: 0, anger: 0, fear: 0, confidence: 0, surprise: 0
   };
 
@@ -146,7 +147,7 @@ const analyzeSentiment = (text: string): { score: number; tone: any } => {
     if (positiveWords.includes(word)) positiveCount++;
     if (negativeWords.includes(word)) negativeCount++;
     
-    Object.keys(emotionalWords).forEach(emotion => {
+    (Object.keys(emotionalWords) as EmotionKey[]).forEach(emotion => {
       if (emotionalWords[emotion].includes(word)) {
         emotionalCounts[emotion]++;
       }
@@ -157,10 +158,17 @@ const analyzeSentiment = (text: string): { score: number; tone: any } => {
   const score = (positiveCount - negativeCount) / Math.max(totalWords, 1);
   
   // Нормализация эмоциональных счетчиков
-  const emotionalTone = Object.keys(emotionalCounts).reduce((acc, emotion) => {
+  const emotionalTone = (Object.keys(emotionalCounts) as EmotionKey[]).reduce((acc, emotion) => {
     acc[emotion] = Math.min(emotionalCounts[emotion] / Math.max(totalWords * 0.1, 1), 1);
     return acc;
-  }, {} as any);
+  }, {
+    joy: 0,
+    sadness: 0,
+    anger: 0,
+    fear: 0,
+    confidence: 0,
+    surprise: 0
+  } as EmotionalToneMap);
 
   return { score: Math.max(-1, Math.min(1, score)), tone: emotionalTone };
 };
@@ -179,8 +187,6 @@ const linearRegression = (data: number[]): { slope: number; intercept: number; r
   const sumY = y.reduce((a, b) => a + b, 0);
   const sumXY = x.reduce((sum, xi, i) => sum + xi * y[i], 0);
   const sumX2 = x.reduce((sum, xi) => sum + xi * xi, 0);
-  const sumY2 = y.reduce((sum, yi) => sum + yi * yi, 0);
-
   const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
   const intercept = (sumY - slope * sumX) / n;
 
@@ -574,7 +580,7 @@ export const generatePredictiveInsights = async (): Promise<PredictiveInsight[]>
         metric: 'Настроение команды',
         currentValue: 6.5, // Можно получить из последних данных
         predictedValue: moodPattern[0].forecast.nextWeek,
-        confidence: moodPattern[0].confidence,
+        confidence: moodPattern[0].forecast.confidence,
         trend: moodPattern[0].trend.direction === 'upward' ? 'improving' : 
                moodPattern[0].trend.direction === 'downward' ? 'declining' : 'stable',
         timeframe: 'следующая неделя',
@@ -589,7 +595,7 @@ export const generatePredictiveInsights = async (): Promise<PredictiveInsight[]>
         metric: 'Общий баланс жизни',
         currentValue: 7.2,
         predictedValue: balancePattern[0].forecast.nextWeek,
-        confidence: balancePattern[0].confidence,
+        confidence: balancePattern[0].forecast.confidence,
         trend: balancePattern[0].trend.direction === 'upward' ? 'improving' : 
                balancePattern[0].trend.direction === 'downward' ? 'declining' : 'stable',
         timeframe: 'следующие 3 недели',
@@ -604,7 +610,7 @@ export const generatePredictiveInsights = async (): Promise<PredictiveInsight[]>
         metric: 'Вовлеченность команды',
         currentValue: 8.0,
         predictedValue: activityPattern[0].forecast.nextMonth,
-        confidence: activityPattern[0].confidence,
+        confidence: activityPattern[0].forecast.confidence,
         trend: activityPattern[0].trend.direction === 'upward' ? 'improving' : 
                activityPattern[0].trend.direction === 'downward' ? 'declining' : 'stable',
         timeframe: 'следующий месяц',
@@ -721,8 +727,6 @@ export const generateAdvancedAnalyticsReport = async (
   dateTo?: Date
 ): Promise<AdvancedAnalyticsReport> => {
   try {
-    const startTime = new Date();
-    
     // Выполняем все виды анализа параллельно
     const [
       predictiveInsights,

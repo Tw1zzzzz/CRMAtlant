@@ -1,9 +1,6 @@
-import mongoose from 'mongoose';
 import TeamReport from '../models/TeamReport';
 import MoodEntry from '../models/MoodEntry';
-import TestEntry from '../models/TestEntry';
 import BalanceWheel from '../models/BalanceWheel';
-import User from '../models/User';
 
 // Интерфейсы для результатов анализа
 export interface CorrelationResult {
@@ -135,7 +132,7 @@ const getDateRange = (baseDate: Date, daysBefore: number, daysAfter: number) => 
 
 // Основные функции анализа
 export const analyzeReportMoodCorrelations = async (
-  teamId?: string,
+  _teamId?: string,
   dateFrom?: Date,
   dateTo?: Date
 ): Promise<ReportMoodCorrelation[]> => {

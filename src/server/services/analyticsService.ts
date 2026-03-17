@@ -1,7 +1,6 @@
 import mongoose from 'mongoose';
 import User from '../models/User';
 import Match from '../models/Match';
-import FaceitAccount from '../models/FaceitAccount';
 import PlayerMetrics from '../models/PlayerMetrics';
 import AnalyticsCache from '../models/AnalyticsCache';
 
