@@ -17,6 +17,7 @@ import {
   successScore,
   toDayKey
 } from '../domain/scores';
+import { buildBrainPerformanceSummary } from '../services/brainTestsService';
 
 function startOfDayUTC(d: Date) {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
@@ -58,10 +59,11 @@ export const getPlayerDashboardByUserId = asyncHandler(async (req: Request, res:
   const start30 = daysAgoUTC(29); // inclusive window for 30 days
   const start7 = daysAgoUTC(6);
 
-  const [moodEntries, screenTimes, gameStats] = await Promise.all([
+  const [moodEntries, screenTimes, gameStats, brainSummary] = await Promise.all([
     MoodEntry.find({ userId: user._id, date: { $gte: start30, $lte: now } }).sort({ date: 1 }).lean(),
     ScreenTime.find({ userId: user._id, date: { $gte: start30, $lte: now } }).sort({ date: 1 }).lean(),
-    GameStats.find({ userId: user._id, date: { $gte: start30, $lte: now } }).sort({ date: 1 }).lean()
+    GameStats.find({ userId: user._id, date: { $gte: start30, $lte: now } }).sort({ date: 1 }).lean(),
+    buildBrainPerformanceSummary(user._id.toString(), 30)
   ]);
 
   const sleepEntries = await SleepEntry.find({ userId: user._id, date: { $gte: start30, $lte: now } })
@@ -239,7 +241,8 @@ export const getPlayerDashboardByUserId = asyncHandler(async (req: Request, res:
         performance: week.summary.performance,
         discipline: week.summary.discipline,
         success: week.summary.success,
-        confidence: week.summary.confidence
+        confidence: week.summary.confidence,
+        brainPerformance: brainSummary.brainPerformanceIndex
       },
       windows: {
         days7: {
@@ -254,6 +257,11 @@ export const getPlayerDashboardByUserId = asyncHandler(async (req: Request, res:
           discipline: month.summary.discipline,
           success: month.summary.success
         }
+      },
+      brain: {
+        brainPerformanceIndex: brainSummary.brainPerformanceIndex,
+        confidence: brainSummary.confidence,
+        calibrationStatus: brainSummary.calibrationStatus
       },
       drivers,
       timeline: {

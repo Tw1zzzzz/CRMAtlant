@@ -16,10 +16,11 @@ import BalanceWheel from '../models/BalanceWheel';
 import ScreenTime from '../models/ScreenTime';
 import GameStats from '../models/GameStats';
 import Match from '../models/Match';
-import TestEntry from '../models/TestEntry';
 import User from '../models/User';
 import FaceitAccount from '../models/FaceitAccount';
 import { getPlayerDailyStats, resolveFaceitProfile } from '../services/faceitService';
+import BrainTestAttempt from '../models/BrainTestAttempt';
+import { BRAIN_TEST_KEYS, computeBatteryIndex } from '../services/brainTestsService';
 
 /**
  * Получить корреляции между отчетами команды и настроением игроков
@@ -502,14 +503,21 @@ export const getMultiMetrics = async (req: AuthRequest, res: Response) => {
     };
     
     // Получаем данные из всех коллекций параллельно
-    const [moodData, sleepData, balanceData, screenTimeData, gameStatsData, matchData, testData] = await Promise.all([
+    const [moodData, sleepData, balanceData, screenTimeData, gameStatsData, matchData, brainAttempts] = await Promise.all([
       MoodEntry.find(filter).sort({ date: 1 }).lean(),
       SleepEntry.find(filter).sort({ date: 1 }).lean(),
       BalanceWheel.find(filter).sort({ date: 1 }).lean(),
       ScreenTime.find(filter).sort({ date: 1 }).lean(),
       GameStats.find(filter).sort({ date: 1 }).lean(),
       Match.find(matchFilter).sort({ playedAt: 1 }).lean(),
-      TestEntry.find(filter).sort({ date: 1 }).lean()
+      BrainTestAttempt.find({
+        ...userFilter,
+        status: 'completed',
+        validityStatus: 'valid',
+        ...(dateFilter.date ? { completedAt: dateFilter.date } : {})
+      })
+        .sort({ completedAt: 1 })
+        .lean()
     ]);
     
     console.log(`[CORRELATION] Найдено данных: настроение=${moodData.length}, сон=${sleepData.length}, баланс=${balanceData.length}, экранное время=${screenTimeData.length}, игровые показатели=${gameStatsData.length}, матчи(ELO)=${matchData.length}`);
@@ -609,18 +617,41 @@ export const getMultiMetrics = async (req: AuthRequest, res: Response) => {
       }
     });
 
-    // РћР±СЂР°Р±Р°С‚С‹РІР°РµРј РґР°РЅРЅС‹Рµ С‚РµСЃС‚РѕРІ
-    testData.forEach((entry: any) => {
-      const dateKey = entry.date.toISOString().split('T')[0];
+    const brainAttemptsBySession = new Map<string, any[]>();
+
+    brainAttempts.forEach((attempt: any) => {
+      if (!attempt.batterySessionId) return;
+      const sessionKey = `${String(attempt.userId)}:${attempt.batterySessionId}`;
+      const sessionAttempts = brainAttemptsBySession.get(sessionKey) || [];
+      sessionAttempts.push(attempt);
+      brainAttemptsBySession.set(sessionKey, sessionAttempts);
+    });
+
+    brainAttemptsBySession.forEach((sessionAttempts) => {
+      const testsInSession = new Set(sessionAttempts.map((attempt) => attempt.testKey));
+      const isCompleteBattery = BRAIN_TEST_KEYS.every((testKey) => testsInSession.has(testKey));
+      if (!isCompleteBattery) return;
+
+      const brainPerformanceIndex = computeBatteryIndex(sessionAttempts);
+      if (!Number.isFinite(brainPerformanceIndex)) return;
+
+      const completedAtValues = sessionAttempts
+        .map((attempt) => (attempt.completedAt ? new Date(attempt.completedAt) : null))
+        .filter((value): value is Date => value instanceof Date && !Number.isNaN(value.getTime()));
+
+      if (!completedAtValues.length) return;
+
+      const latestCompletedAt = new Date(Math.max(...completedAtValues.map((value) => value.getTime())));
+      const dateKey = latestCompletedAt.toISOString().split('T')[0];
+
       if (!dataByDate.has(dateKey)) {
         dataByDate.set(dateKey, { date: dateKey, count: 0 });
       }
+
       const dayData = dataByDate.get(dateKey);
-      dayData.testsCount = (dayData.testsCount || 0) + 1;
-      if (Number.isFinite(entry.scoreNormalized)) {
-        dayData.testsScore = (dayData.testsScore || 0) + entry.scoreNormalized;
-        dayData.testsScoreCount = (dayData.testsScoreCount || 0) + 1;
-      }
+      dayData.brainPerformanceIndex = (dayData.brainPerformanceIndex || 0) + brainPerformanceIndex;
+      dayData.brainPerformanceIndexCount = (dayData.brainPerformanceIndexCount || 0) + 1;
+      dayData.brainBatteryCount = (dayData.brainBatteryCount || 0) + 1;
     });
 
     // Текущий ELO: для individual — последний матч, для team — среднее по последнему матчу каждого игрока
@@ -755,8 +786,10 @@ export const getMultiMetrics = async (req: AuthRequest, res: Response) => {
       elo: dayData.eloCount
         ? Number((dayData.elo / dayData.eloCount).toFixed(0))
         : (Number.isFinite(dayData.faceitLatestElo) ? Number(dayData.faceitLatestElo.toFixed(0)) : null),
-      testsScore: dayData.testsScoreCount ? Number((dayData.testsScore / dayData.testsScoreCount).toFixed(1)) : null,
-      testsCount: dayData.testsCount ? Number(dayData.testsCount) : null,
+      brainPerformanceIndex: dayData.brainPerformanceIndexCount
+        ? Number((dayData.brainPerformanceIndex / dayData.brainPerformanceIndexCount).toFixed(1))
+        : null,
+      brainBatteryCount: dayData.brainBatteryCount ? Number(dayData.brainBatteryCount) : null,
       faceitMatches: dayData.faceitMatches
         ? Number(dayData.faceitMatches)
         : (dayData.faceitMatchCountFallback ? Number(dayData.faceitMatchCountFallback) : null),

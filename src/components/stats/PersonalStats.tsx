@@ -6,6 +6,7 @@ import MoodChart from "@/components/charts/MoodChart";
 import TestChart from "@/components/charts/TestChart";
 import TestDistributionChart from "@/components/charts/TestDistributionChart";
 import { getMoodByDayOfWeek, getTestsByDayOfWeek, timeRangeLabel, prepareTestDistribution } from "@/utils/statsUtils";
+import { getReadableTestTypeDescription, getReadableTestTypeLabel } from "@/utils/testTypeMetadata";
 import { COLORS } from "@/styles/theme";
 
 interface PersonalStatsProps {
@@ -64,15 +65,16 @@ const PersonalStats = ({
   // Получаем среднее количество выполненных тестов
   const getCompletedTests = () => {
     const testTypes = [...new Set(testEntries.map(t => (t.testType ?? 'generic')))];
-    let results: Record<string, { count: number, avgScore: number }> = {};
+    let results: Record<string, { count: number; avgScore: number; description: string }> = {};
 
     testTypes.forEach(type => {
       const typeTests = testEntries.filter(t => (t.testType ?? 'generic') === type);
       const totalScore = typeTests.reduce((sum, test) => sum + (test.scoreNormalized ?? 0), 0);
       
-      results[type] = {
+      results[getReadableTestTypeLabel(type)] = {
         count: typeTests.length,
-        avgScore: typeTests.length ? +(totalScore / typeTests.length).toFixed(1) : 0
+        avgScore: typeTests.length ? +(totalScore / typeTests.length).toFixed(1) : 0,
+        description: getReadableTestTypeDescription(type)
       };
     });
     
@@ -187,9 +189,25 @@ const PersonalStats = ({
             <Card className="bg-[#1C1F3B] border-[#293056] shadow-none">
               <CardHeader>
                 <CardTitle className="text-white">Результаты тестов {timeRangeLabel(timeRange)}</CardTitle>
-                <CardDescription className="text-gray-400">График средних результатов тестов по типам</CardDescription>
+                <CardDescription className="text-gray-400">
+                  Средний score по каждому типу тестов, включая Brain Lab и ручные записи.
+                </CardDescription>
               </CardHeader>
               <CardContent>
+                {Object.keys(completedTests.types).length > 0 ? (
+                  <div className="mb-5 grid gap-3 lg:grid-cols-2">
+                    {Object.entries(completedTests.types).map(([label, value]) => (
+                      <div key={label} className="rounded-xl border border-[#293056] bg-[#14162D] p-4">
+                        <div className="text-sm font-medium text-white">{label}</div>
+                        <div className="mt-1 text-xs text-gray-400">{value.description}</div>
+                        <div className="mt-3 flex items-center justify-between text-sm text-gray-300">
+                          <span>Попыток: {value.count}</span>
+                          <span>Средний score: {value.avgScore.toFixed(1)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
                     {testData.length > 0 ? (
                 <TestChart data={testData} height={300} />
                     ) : (

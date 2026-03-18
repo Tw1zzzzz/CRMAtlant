@@ -12,9 +12,9 @@ import {
   TIME_PERIOD_METADATA,
   ChartDataPoint,
   AggregatedStats,
-  TestType,
-  TEST_TYPE_METADATA
+  TestType
 } from "@/types";
+import { getReadableTestTypeLabel } from "@/utils/testTypeMetadata";
 import { 
   format, 
   subDays, 
@@ -160,7 +160,7 @@ export const getTestsByDayOfWeek = (entries: TestEntry[]): ChartDataPoint[] => {
         dayData.total += (entry.scoreNormalized ?? 0);
 
         // Группировка по типам тестов
-        const entryTestType = entry.testType ?? 'generic';
+        const entryTestType = getReadableTestTypeLabel(entry.testType ?? 'generic');
         if (!dayData.byType[entryTestType]) {
           dayData.byType[entryTestType] = { count: 0, total: 0 };
         }
@@ -334,7 +334,7 @@ export const prepareTestDataByTimeRange = (
         groupedTests[dateString] = {};
       }
 
-      const testTypeKey = entry.testType ?? 'generic';
+      const testTypeKey = getReadableTestTypeLabel(entry.testType ?? 'generic');
       if (!groupedTests[dateString][testTypeKey]) {
         groupedTests[dateString][testTypeKey] = { total: 0, count: 0 };
       }
@@ -347,7 +347,7 @@ export const prepareTestDataByTimeRange = (
   });
   
   // Получаем все типы тестов
-  const testTypes = [...new Set(filteredEntries.map(entry => (entry.testType ?? 'generic')))];
+  const testTypes = [...new Set(filteredEntries.map(entry => getReadableTestTypeLabel(entry.testType ?? 'generic')))];
   
   // Преобразуем данные в формат для графика
   return Object.keys(groupedTests)
@@ -378,7 +378,7 @@ export const prepareTestDistribution = (entries: TestEntry[]): ChartDataPoint[] 
   
   entries.forEach(entry => {
     const testType = (entry.testType as TestType) ?? TestType.COGNITIVE;
-    const label = TEST_TYPE_METADATA[testType]?.label || entry.testType || 'generic';
+    const label = getReadableTestTypeLabel(testType);
     
     if (!testCounts[label]) {
       testCounts[label] = 0;

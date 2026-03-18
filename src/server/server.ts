@@ -30,6 +30,7 @@ import questionnairesRoutes from './routes/questionnaires';
 import excelImportRoutes from './routes/excelImport';
 import cs2AnalyticsRoutes from './routes/cs2Analytics';
 import notificationsRoutes from './routes/notifications';
+import brainTestsRoutes from './routes/brainTests';
 import { errorHandler } from './middleware/errorHandler';
 
 // Загрузка переменных окружения с явным указанием пути
@@ -188,6 +189,7 @@ app.use('/api/questionnaires', questionnairesRoutes);
 app.use('/api/imports', excelImportRoutes);
 app.use('/api/cs2', cs2AnalyticsRoutes);
 app.use('/api/notifications', notificationsRoutes);
+app.use('/api/brain-tests', brainTestsRoutes);
 app.use('/health', healthRoutes);
 
 // Специальный middleware для обработки статических изображений с заголовками против кэширования

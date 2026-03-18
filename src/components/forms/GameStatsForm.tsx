@@ -108,6 +108,52 @@ interface GameStatsFormProps {
   showPlayerSelect?: boolean;
 }
 
+const getValidationErrors = ({
+  analysisMode,
+  formData,
+  selectedPlayerId,
+  showPlayerSelect,
+}: {
+  analysisMode: 'team' | 'individual';
+  formData: GameStatsFormData;
+  selectedPlayerId: string;
+  showPlayerSelect: boolean;
+}): Record<string, string> => {
+  const errors: Record<string, string> = {};
+
+  if (showPlayerSelect && analysisMode === 'individual' && !selectedPlayerId) {
+    errors.playerSelection = 'Необходимо выбрать игрока для индивидуальной статистики';
+  }
+
+  if (!formData.date) {
+    errors.date = 'Необходимо указать дату';
+  }
+
+  const { ctSide } = formData;
+  if (ctSide.totalMatches > 0 && ctSide.wins + ctSide.losses + ctSide.draws !== ctSide.totalMatches) {
+    errors.ctMatches = 'CT: Сумма побед, поражений и ничьих должна равняться общему количеству матчей';
+  }
+  if (ctSide.totalRounds > 0 && ctSide.roundsWon + ctSide.roundsLost !== ctSide.totalRounds) {
+    errors.ctRounds = 'CT: Сумма выигранных и проигранных раундов должна равняться общему количеству раундов';
+  }
+  if (ctSide.pistolRounds > 0 && ctSide.pistolRoundsWon > ctSide.pistolRounds) {
+    errors.ctPistol = 'CT: Выигранные пистолетные раунды не могут превышать общее количество';
+  }
+
+  const { tSide } = formData;
+  if (tSide.totalMatches > 0 && tSide.wins + tSide.losses + tSide.draws !== tSide.totalMatches) {
+    errors.tMatches = 'T: Сумма побед, поражений и ничьих должна равняться общему количеству матчей';
+  }
+  if (tSide.totalRounds > 0 && tSide.roundsWon + tSide.roundsLost !== tSide.totalRounds) {
+    errors.tRounds = 'T: Сумма выигранных и проигранных раундов должна равняться общему количеству раундов';
+  }
+  if (tSide.pistolRounds > 0 && tSide.pistolRoundsWon > tSide.pistolRounds) {
+    errors.tPistol = 'T: Выигранные пистолетные раунды не могут превышать общее количество';
+  }
+
+  return errors;
+};
+
 const defaultSideStats: SideStatsData = {
   totalMatches: 0,
   wins: 0,
@@ -174,7 +220,7 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
     userId: initialData.userId || ''
   });
 
-  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
 
   // РћР±СЂР°Р±РѕС‚С‡РёРє РёР·РјРµРЅРµРЅРёСЏ СЂРµР¶РёРјР° Р°РЅР°Р»РёР·Р°
   const handleAnalysisModeChange = (mode: 'team' | 'individual') => {
@@ -276,55 +322,16 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
     };
   }, [formData]);
 
-  // Р’Р°Р»РёРґР°ция формы
-  const validateForm = (): boolean => {
-    const errors: Record<string, string> = {};
-
-    // РџСЂРѕРІРµСЂСЏРµРј РІС‹Р±РѕСЂ РёРіСЂРѕРєР° РґР»СЏ staff РІ РёРЅРґРёРІРёРґСѓР°Р»СЊРЅРѕРј СЂРµР¶РёРјРµ
-    if (showPlayerSelect && analysisMode === 'individual' && !selectedPlayerId) {
-      errors.playerSelection = 'Необходимо выбрать игрока для индивидуальной статистики';
-    }
-
-    // Р’Р°Р»РёРґР°С†РёСЏ РґР°ты
-    if (!formData.date) {
-      errors.date = 'Необходимо указать дату';
-    }
-
-    // Р’Р°Р»РёРґР°С†РёСЏ CT Side (С‚РѕР»СЊРєРѕ РµСЃР»Рё РµСЃС‚СЊ РґР°РЅРЅС‹Рµ)
-    const { ctSide } = formData;
-    if (ctSide.totalMatches > 0) {
-      if (ctSide.wins + ctSide.losses + ctSide.draws !== ctSide.totalMatches) {
-        errors.ctMatches = 'CT: Сумма побед, поражений и ничьих должна равняться общему количеству матчей';
-      }
-    }
-    if (ctSide.totalRounds > 0) {
-      if (ctSide.roundsWon + ctSide.roundsLost !== ctSide.totalRounds) {
-        errors.ctRounds = 'CT: Сумма выигранных и проигранных раундов должна равняться общему количеству раундов';
-      }
-    }
-    if (ctSide.pistolRounds > 0 && ctSide.pistolRoundsWon > ctSide.pistolRounds) {
-      errors.ctPistol = 'CT: Выигранные пистолетные раунды не могут превышать общее количество';
-    }
-
-    // Р’Р°Р»РёРґР°С†РёСЏ T Side (С‚РѕР»СЊРєРѕ РµСЃР»Рё РµСЃС‚СЊ РґР°РЅРЅС‹Рµ)
-    const { tSide } = formData;
-    if (tSide.totalMatches > 0) {
-      if (tSide.wins + tSide.losses + tSide.draws !== tSide.totalMatches) {
-        errors.tMatches = 'T: Сумма побед, поражений и ничьих должна равняться общему количеству матчей';
-      }
-    }
-    if (tSide.totalRounds > 0) {
-      if (tSide.roundsWon + tSide.roundsLost !== tSide.totalRounds) {
-        errors.tRounds = 'T: Сумма выигранных и проигранных раундов должна равняться общему количеству раундов';
-      }
-    }
-    if (tSide.pistolRounds > 0 && tSide.pistolRoundsWon > tSide.pistolRounds) {
-      errors.tPistol = 'T: Выигранные пистолетные раунды не могут превышать общее количество';
-    }
-
-    setValidationErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
+  const validationErrors = React.useMemo(
+    () =>
+      getValidationErrors({
+        analysisMode,
+        formData,
+        selectedPlayerId,
+        showPlayerSelect,
+      }),
+    [analysisMode, formData, selectedPlayerId, showPlayerSelect]
+  );
 
   const handleInputChange = (field: string, value: number, side?: 'ctSide' | 'tSide') => {
     if (side) {
@@ -359,8 +366,9 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!validateForm()) {
+    setHasAttemptedSubmit(true);
+
+    if (Object.keys(validationErrors).length > 0) {
       toast({
         title: "Ошибка валидации",
         description: "Пожалуйста, исправьте ошибки в форме",
@@ -384,6 +392,7 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
         title: "Успешно",
         description: "Игровые показатели сохранены",
       });
+      setHasAttemptedSubmit(false);
       
       // РЎР±СЂР°СЃС‹РІР°РµРј С„РѕСЂРјСѓ РїРѕСЃР»Рµ СѓСЃРїРµС€РЅРѕРіРѕ СЃРѕС…СЂР°РЅРµния
       if (analysisMode === 'individual') {
@@ -422,7 +431,7 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
     }
   };
 
-  const isFormValid = Object.keys(validationErrors).length === 0;
+  const visibleErrors = hasAttemptedSubmit ? validationErrors : {};
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6 rounded-[28px] p-4 md:p-5">
@@ -459,7 +468,7 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
                 onValueChange={handlePlayerSelect}
                 disabled={loadingPlayers}
               >
-                <SelectTrigger className={validationErrors.playerSelection ? 'border-red-500' : ''} style={inputStyle}>
+                <SelectTrigger className={visibleErrors.playerSelection ? 'border-red-500' : ''} style={inputStyle}>
                   <SelectValue placeholder={loadingPlayers ? "Загрузка игроков..." : "Выберите игрока"} />
                 </SelectTrigger>
                 <SelectContent style={{ backgroundColor: '#1A202C', borderColor: 'rgba(255,255,255,0.08)', color: '#FFFFFF' }}>
@@ -470,8 +479,8 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
                   ))}
                 </SelectContent>
               </Select>
-              {validationErrors.playerSelection && (
-                <p className="text-red-500 text-sm">{validationErrors.playerSelection}</p>
+              {visibleErrors.playerSelection && (
+                <p className="text-red-500 text-sm">{visibleErrors.playerSelection}</p>
               )}
               {players.length === 0 && !loadingPlayers && (
                 <p className="text-sm" style={descriptionStyle}>
@@ -514,12 +523,12 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
                 type="date"
                 value={formData.date}
                 onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                className={validationErrors.date ? 'border-red-500' : ''}
+                className={visibleErrors.date ? 'border-red-500' : ''}
                 style={inputStyle}
                 required
               />
-              {validationErrors.date && (
-                <p className="text-red-500 text-sm mt-1">{validationErrors.date}</p>
+              {visibleErrors.date && (
+                <p className="text-red-500 text-sm mt-1">{visibleErrors.date}</p>
               )}
             </div>
           </div>
@@ -674,7 +683,7 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
                   min="0"
                   value={formData.ctSide.totalMatches}
                   onChange={(e) => handleInputChange('totalMatches', parseInt(e.target.value) || 0, 'ctSide')}
-                  className={validationErrors.ctMatches ? 'border-red-500' : ''}
+                  className={visibleErrors.ctMatches ? 'border-red-500' : ''}
                   style={inputStyle}
                 />
               </div>
@@ -686,7 +695,7 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
                   min="0"
                   value={formData.ctSide.wins}
                   onChange={(e) => handleInputChange('wins', parseInt(e.target.value) || 0, 'ctSide')}
-                  className={validationErrors.ctMatches ? 'border-red-500' : ''}
+                  className={visibleErrors.ctMatches ? 'border-red-500' : ''}
                   style={inputStyle}
                 />
               </div>
@@ -698,7 +707,7 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
                   min="0"
                   value={formData.ctSide.losses}
                   onChange={(e) => handleInputChange('losses', parseInt(e.target.value) || 0, 'ctSide')}
-                  className={validationErrors.ctMatches ? 'border-red-500' : ''}
+                  className={visibleErrors.ctMatches ? 'border-red-500' : ''}
                   style={inputStyle}
                 />
               </div>
@@ -710,13 +719,13 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
                   min="0"
                   value={formData.ctSide.draws}
                   onChange={(e) => handleInputChange('draws', parseInt(e.target.value) || 0, 'ctSide')}
-                  className={validationErrors.ctMatches ? 'border-red-500' : ''}
+                  className={visibleErrors.ctMatches ? 'border-red-500' : ''}
                   style={inputStyle}
                 />
               </div>
             </div>
-            {validationErrors.ctMatches && (
-              <p className="text-red-500 text-sm mt-1">{validationErrors.ctMatches}</p>
+            {visibleErrors.ctMatches && (
+              <p className="text-red-500 text-sm mt-1">{visibleErrors.ctMatches}</p>
             )}
           </div>
 
@@ -734,7 +743,7 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
                   min="0"
                   value={formData.ctSide.totalRounds}
                   onChange={(e) => handleInputChange('totalRounds', parseInt(e.target.value) || 0, 'ctSide')}
-                  className={validationErrors.ctRounds ? 'border-red-500' : ''}
+                  className={visibleErrors.ctRounds ? 'border-red-500' : ''}
                   style={inputStyle}
                 />
               </div>
@@ -746,7 +755,7 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
                   min="0"
                   value={formData.ctSide.roundsWon}
                   onChange={(e) => handleInputChange('roundsWon', parseInt(e.target.value) || 0, 'ctSide')}
-                  className={validationErrors.ctRounds ? 'border-red-500' : ''}
+                  className={visibleErrors.ctRounds ? 'border-red-500' : ''}
                   style={inputStyle}
                 />
               </div>
@@ -758,13 +767,13 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
                   min="0"
                   value={formData.ctSide.roundsLost}
                   onChange={(e) => handleInputChange('roundsLost', parseInt(e.target.value) || 0, 'ctSide')}
-                  className={validationErrors.ctRounds ? 'border-red-500' : ''}
+                  className={visibleErrors.ctRounds ? 'border-red-500' : ''}
                   style={inputStyle}
                 />
               </div>
             </div>
-            {validationErrors.ctRounds && (
-              <p className="text-red-500 text-sm mt-1">{validationErrors.ctRounds}</p>
+            {visibleErrors.ctRounds && (
+              <p className="text-red-500 text-sm mt-1">{visibleErrors.ctRounds}</p>
             )}
           </div>
 
@@ -782,7 +791,7 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
                   min="0"
                   value={formData.ctSide.pistolRounds}
                   onChange={(e) => handleInputChange('pistolRounds', parseInt(e.target.value) || 0, 'ctSide')}
-                  className={validationErrors.ctPistol ? 'border-red-500' : ''}
+                  className={visibleErrors.ctPistol ? 'border-red-500' : ''}
                   style={inputStyle}
                 />
               </div>
@@ -794,13 +803,13 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
                   min="0"
                   value={formData.ctSide.pistolRoundsWon}
                   onChange={(e) => handleInputChange('pistolRoundsWon', parseInt(e.target.value) || 0, 'ctSide')}
-                  className={validationErrors.ctPistol ? 'border-red-500' : ''}
+                  className={visibleErrors.ctPistol ? 'border-red-500' : ''}
                   style={inputStyle}
                 />
               </div>
             </div>
-            {validationErrors.ctPistol && (
-              <p className="text-red-500 text-sm mt-1">{validationErrors.ctPistol}</p>
+            {visibleErrors.ctPistol && (
+              <p className="text-red-500 text-sm mt-1">{visibleErrors.ctPistol}</p>
             )}
           </div>
 
@@ -854,7 +863,7 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
                   min="0"
                   value={formData.tSide.totalMatches}
                   onChange={(e) => handleInputChange('totalMatches', parseInt(e.target.value) || 0, 'tSide')}
-                  className={validationErrors.tMatches ? 'border-red-500' : ''}
+                  className={visibleErrors.tMatches ? 'border-red-500' : ''}
                   style={inputStyle}
                 />
               </div>
@@ -866,7 +875,7 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
                   min="0"
                   value={formData.tSide.wins}
                   onChange={(e) => handleInputChange('wins', parseInt(e.target.value) || 0, 'tSide')}
-                  className={validationErrors.tMatches ? 'border-red-500' : ''}
+                  className={visibleErrors.tMatches ? 'border-red-500' : ''}
                   style={inputStyle}
                 />
               </div>
@@ -878,7 +887,7 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
                   min="0"
                   value={formData.tSide.losses}
                   onChange={(e) => handleInputChange('losses', parseInt(e.target.value) || 0, 'tSide')}
-                  className={validationErrors.tMatches ? 'border-red-500' : ''}
+                  className={visibleErrors.tMatches ? 'border-red-500' : ''}
                   style={inputStyle}
                 />
               </div>
@@ -890,13 +899,13 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
                   min="0"
                   value={formData.tSide.draws}
                   onChange={(e) => handleInputChange('draws', parseInt(e.target.value) || 0, 'tSide')}
-                  className={validationErrors.tMatches ? 'border-red-500' : ''}
+                  className={visibleErrors.tMatches ? 'border-red-500' : ''}
                   style={inputStyle}
                 />
               </div>
             </div>
-            {validationErrors.tMatches && (
-              <p className="text-red-500 text-sm mt-1">{validationErrors.tMatches}</p>
+            {visibleErrors.tMatches && (
+              <p className="text-red-500 text-sm mt-1">{visibleErrors.tMatches}</p>
             )}
           </div>
 
@@ -914,7 +923,7 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
                   min="0"
                   value={formData.tSide.totalRounds}
                   onChange={(e) => handleInputChange('totalRounds', parseInt(e.target.value) || 0, 'tSide')}
-                  className={validationErrors.tRounds ? 'border-red-500' : ''}
+                  className={visibleErrors.tRounds ? 'border-red-500' : ''}
                   style={inputStyle}
                 />
               </div>
@@ -926,7 +935,7 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
                   min="0"
                   value={formData.tSide.roundsWon}
                   onChange={(e) => handleInputChange('roundsWon', parseInt(e.target.value) || 0, 'tSide')}
-                  className={validationErrors.tRounds ? 'border-red-500' : ''}
+                  className={visibleErrors.tRounds ? 'border-red-500' : ''}
                   style={inputStyle}
                 />
               </div>
@@ -938,13 +947,13 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
                   min="0"
                   value={formData.tSide.roundsLost}
                   onChange={(e) => handleInputChange('roundsLost', parseInt(e.target.value) || 0, 'tSide')}
-                  className={validationErrors.tRounds ? 'border-red-500' : ''}
+                  className={visibleErrors.tRounds ? 'border-red-500' : ''}
                   style={inputStyle}
                 />
               </div>
             </div>
-            {validationErrors.tRounds && (
-              <p className="text-red-500 text-sm mt-1">{validationErrors.tRounds}</p>
+            {visibleErrors.tRounds && (
+              <p className="text-red-500 text-sm mt-1">{visibleErrors.tRounds}</p>
             )}
           </div>
 
@@ -962,7 +971,7 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
                   min="0"
                   value={formData.tSide.pistolRounds}
                   onChange={(e) => handleInputChange('pistolRounds', parseInt(e.target.value) || 0, 'tSide')}
-                  className={validationErrors.tPistol ? 'border-red-500' : ''}
+                  className={visibleErrors.tPistol ? 'border-red-500' : ''}
                   style={inputStyle}
                 />
               </div>
@@ -974,13 +983,13 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
                   min="0"
                   value={formData.tSide.pistolRoundsWon}
                   onChange={(e) => handleInputChange('pistolRoundsWon', parseInt(e.target.value) || 0, 'tSide')}
-                  className={validationErrors.tPistol ? 'border-red-500' : ''}
+                  className={visibleErrors.tPistol ? 'border-red-500' : ''}
                   style={inputStyle}
                 />
               </div>
             </div>
-            {validationErrors.tPistol && (
-              <p className="text-red-500 text-sm mt-1">{validationErrors.tPistol}</p>
+            {visibleErrors.tPistol && (
+              <p className="text-red-500 text-sm mt-1">{visibleErrors.tPistol}</p>
             )}
           </div>
 
@@ -1097,7 +1106,7 @@ const GameStatsForm: React.FC<GameStatsFormProps> = ({
       <div className="flex justify-end">
         <Button 
           type="submit" 
-          disabled={isLoading || !isFormValid}
+          disabled={isLoading}
           className="min-w-[160px] rounded-2xl"
           style={{ backgroundColor: '#3590FF', color: '#FFFFFF' }}
         >

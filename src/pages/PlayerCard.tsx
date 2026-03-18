@@ -393,6 +393,7 @@ const PlayerCardPage: React.FC = () => {
   const [dashboardData, setDashboardData] = useState<PlayerDashboardData | null>(null);
   const [dashboardLoading, setDashboardLoading] = useState<boolean>(false);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
+  const isSoloPlayer = user?.role === "player" && user?.playerType === "solo";
   
   // Функция сброса всех состояний для нового игрока
   const resetAllPlayerStates = () => {
@@ -582,15 +583,24 @@ const PlayerCardPage: React.FC = () => {
       if (result.success) {
         setDashboardData(result.data);
       } else {
+        const isDashboardAccessDenied =
+          result.error?.trim() === "Нет прав доступа для этого действия";
+
         setDashboardData(null);
-        setDashboardError(result.error || 'Ошибка при загрузке дашборда');
+
+        // Для solo-игрока скрываем системное сообщение 403 в "Моей карточке".
+        setDashboardError(
+          isSoloPlayer && isDashboardAccessDenied
+            ? null
+            : result.error || 'Ошибка при загрузке дашборда'
+        );
       }
       
       setDashboardLoading(false);
     };
     
     loadDashboard();
-  }, [selectedPlayerId, forceUpdateCounter]);
+  }, [selectedPlayerId, forceUpdateCounter, isSoloPlayer]);
   
   // Обработчик изменения полей ввода в диалоге добавления игрока
   const handleDialogInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -944,7 +954,6 @@ const PlayerCardPage: React.FC = () => {
   };
   
   // Загрузка списка игроков при монтировании компонента
-  const isSoloPlayer = user?.role === "player" && user?.playerType === "solo";
   useEffect(() => {
     if (user && user.role === "staff") {
       // Стафф: загружаем всех игроков
@@ -2632,7 +2641,7 @@ const safeDeletePlayerCard = async (
                       
                       {!dashboardLoading && dashboardData && (
                         <>
-                          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
                             <Card className="bg-muted/20">
                               <CardHeader className="pb-2">
                                 <CardTitle className="text-sm">Readiness</CardTitle>
@@ -2667,6 +2676,14 @@ const safeDeletePlayerCard = async (
                             </Card>
                             <Card className="bg-muted/20">
                               <CardHeader className="pb-2">
+                                <CardTitle className="text-sm">Brain</CardTitle>
+                              </CardHeader>
+                              <CardContent className="pt-0 text-2xl font-semibold">
+                                {formatScore(dashboardData.scores.brainPerformance)}
+                              </CardContent>
+                            </Card>
+                            <Card className="bg-muted/20">
+                              <CardHeader className="pb-2">
                                 <CardTitle className="text-sm">Confidence</CardTitle>
                               </CardHeader>
                               <CardContent className="pt-0 text-2xl font-semibold">
@@ -2679,12 +2696,16 @@ const safeDeletePlayerCard = async (
                             <div className="rounded-md border bg-muted/10 p-3">
                               <div className="text-sm font-medium mb-2">Драйверы (7 дней)</div>
                               <div className="space-y-1 text-sm">
-                                {dashboardData.drivers.map((driver) => (
-                                  <div key={driver.label} className="flex justify-between text-muted-foreground">
-                                    <span>{driver.label}</span>
-                                    <span className="text-foreground">{formatScore(driver.value)}</span>
-                                  </div>
-                                ))}
+                                {dashboardData.drivers.length > 0 ? (
+                                  dashboardData.drivers.map((driver) => (
+                                    <div key={driver.label} className="flex justify-between text-muted-foreground">
+                                      <span>{driver.label}</span>
+                                      <span className="text-foreground">{formatScore(driver.value)}</span>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <div className="text-muted-foreground">Нет данных по драйверам</div>
+                                )}
                               </div>
                             </div>
                             
@@ -2697,26 +2718,34 @@ const safeDeletePlayerCard = async (
                                 </TabsList>
                                 <TabsContent value="days7" className="mt-2">
                                   <div className="grid grid-cols-1 gap-2 text-xs">
-                                    {dashboardData.timeline.days7.map((point) => (
-                                      <div key={point.date} className="flex justify-between text-muted-foreground">
-                                        <span>{point.date}</span>
-                                        <span className="text-foreground">
-                                          R {formatScore(point.readiness)} · P {formatScore(point.performance)} · D {formatScore(point.discipline)} · S {formatScore(point.success)}
-                                        </span>
-                                      </div>
-                                    ))}
+                                    {dashboardData.timeline.days7.length > 0 ? (
+                                      dashboardData.timeline.days7.map((point) => (
+                                        <div key={point.date} className="flex justify-between text-muted-foreground">
+                                          <span>{point.date}</span>
+                                          <span className="text-foreground">
+                                            R {formatScore(point.readiness)} · P {formatScore(point.performance)} · D {formatScore(point.discipline)} · S {formatScore(point.success)}
+                                          </span>
+                                        </div>
+                                      ))
+                                    ) : (
+                                      <div className="text-muted-foreground">Нет данных за 7 дней</div>
+                                    )}
                                   </div>
                                 </TabsContent>
                                 <TabsContent value="days30" className="mt-2">
                                   <div className="grid grid-cols-1 gap-2 text-xs">
-                                    {dashboardData.timeline.days30.map((point) => (
-                                      <div key={point.date} className="flex justify-between text-muted-foreground">
-                                        <span>{point.date}</span>
-                                        <span className="text-foreground">
-                                          R {formatScore(point.readiness)} · P {formatScore(point.performance)} · D {formatScore(point.discipline)} · S {formatScore(point.success)}
-                                        </span>
-                                      </div>
-                                    ))}
+                                    {dashboardData.timeline.days30.length > 0 ? (
+                                      dashboardData.timeline.days30.map((point) => (
+                                        <div key={point.date} className="flex justify-between text-muted-foreground">
+                                          <span>{point.date}</span>
+                                          <span className="text-foreground">
+                                            R {formatScore(point.readiness)} · P {formatScore(point.performance)} · D {formatScore(point.discipline)} · S {formatScore(point.success)}
+                                          </span>
+                                        </div>
+                                      ))
+                                    ) : (
+                                      <div className="text-muted-foreground">Нет данных за 30 дней</div>
+                                    )}
                                   </div>
                                 </TabsContent>
                               </Tabs>

@@ -1,5 +1,6 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { COLORS } from "@/styles/theme";
+import { getReadableTestTypeLabel } from "@/utils/testTypeMetadata";
 import CustomTooltip from "./CustomTooltip";
 
 // Кастомный стиль для диаграмм
@@ -33,7 +34,7 @@ const TestChart = ({ data, height = 400, testTypes = [] }: TestChartProps) => {
   // Если типы тестов не указаны явно, извлекаем их из данных
   const types = testTypes.length > 0 
     ? testTypes 
-    : Object.keys(data[0]).filter(key => key !== 'date');
+    : Object.keys(data[0]).filter((key) => key !== 'date' && key !== 'name');
 
   // Создаем цветовую палитру для различных типов тестов
   const getColor = (index: number) => {
@@ -60,7 +61,7 @@ const TestChart = ({ data, height = 400, testTypes = [] }: TestChartProps) => {
           tickMargin={10}
         />
         <YAxis 
-          domain={[0, 10]} 
+          domain={[0, 100]} 
           tick={{ fill: COLORS.textColor }} 
           tickMargin={10}
         />
@@ -71,7 +72,7 @@ const TestChart = ({ data, height = 400, testTypes = [] }: TestChartProps) => {
           <Bar
             key={`bar-${type}`}
             dataKey={type}
-            name={type}
+            name={getReadableTestTypeLabel(type)}
             fill={getColor(index)}
             radius={[4, 4, 0, 0]}
           />

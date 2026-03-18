@@ -36,8 +36,8 @@ interface MetricData {
   adr: number | null;
   kast: number | null;
   currentElo: number | null;
-  testsScore: number | null;
-  testsCount: number | null;
+  brainPerformanceIndex: number | null;
+  brainBatteryCount: number | null;
   faceitMatches: number | null;
   faceitWinRate: number | null;
   faceitKdRatio: number | null;
@@ -64,7 +64,7 @@ const FACEIT_GROUP_METRICS = [
 ] as const;
 
 const ELO_METRICS = ['currentElo'] as const;
-const DEFAULT_SELECTED_METRICS = ['mood', 'energy', 'sleepHours', 'screenTime', 'currentElo', 'faceitKdRatio'] as const;
+const DEFAULT_SELECTED_METRICS = ['mood', 'energy', 'sleepHours', 'brainPerformanceIndex', 'currentElo', 'faceitKdRatio'] as const;
 const CORRELATION_SESSION_STORAGE_KEY = 'correlation-analysis:last-session';
 
 type CorrelationResultTab = 'overview' | 'analysis';
@@ -136,7 +136,8 @@ type CorrelationComparisonRow = {
   balanceAvg: number | null;
   screenTime: number | null;
   currentElo: number | null;
-  testsScore: number | null;
+  brainPerformanceIndex: number | null;
+  brainBatteryCount: number | null;
   kills: number | null;
   deaths: number | null;
   assists: number | null;
@@ -157,7 +158,7 @@ type CorrelationComparisonRow = {
 };
 
 interface PersistedCorrelationSession {
-  version: 1;
+  version: 2;
   activeTab: CorrelationResultTab;
   analysisGameStatsDaily: DailyGameStatsComparison[];
   analysisMode: 'team' | 'individual';
@@ -192,7 +193,8 @@ const readPersistedCorrelationSession = (): PersistedCorrelationSession | null =
 
     const parsed = JSON.parse(raw) as Partial<PersistedCorrelationSession>;
     if (
-      parsed.version !== 1 ||
+      parsed.version !== 1 &&
+      parsed.version !== 2 ||
       !parsed.dateFrom ||
       !parsed.dateTo ||
       !Array.isArray(parsed.chartData) ||
@@ -201,8 +203,12 @@ const readPersistedCorrelationSession = (): PersistedCorrelationSession | null =
       return null;
     }
 
+    const migratedSelectedMetrics = Array.isArray(parsed.selectedMetrics) && parsed.selectedMetrics.length
+      ? parsed.selectedMetrics.map((metric) => (metric === 'testsScore' ? 'brainPerformanceIndex' : metric))
+      : [...DEFAULT_SELECTED_METRICS];
+
     return {
-      version: 1,
+      version: 2,
       activeTab: parsed.activeTab === 'analysis' ? 'analysis' : 'overview',
       analysisGameStatsDaily: parsed.analysisGameStatsDaily,
       analysisMode: parsed.analysisMode === 'individual' ? 'individual' : 'team',
@@ -215,9 +221,7 @@ const readPersistedCorrelationSession = (): PersistedCorrelationSession | null =
       faceitMetricsStatus: parsed.faceitMetricsStatus === 'ok' || parsed.faceitMetricsStatus === 'partial'
         ? parsed.faceitMetricsStatus
         : 'unavailable',
-      selectedMetrics: Array.isArray(parsed.selectedMetrics) && parsed.selectedMetrics.length
-        ? parsed.selectedMetrics
-        : [...DEFAULT_SELECTED_METRICS],
+      selectedMetrics: migratedSelectedMetrics,
       selectedPlayerId: typeof parsed.selectedPlayerId === 'string' ? parsed.selectedPlayerId : '',
       updatedAt: typeof parsed.updatedAt === 'string' ? parsed.updatedAt : new Date().toISOString(),
     };
@@ -378,6 +382,8 @@ const CorrelationAnalysisPage: React.FC = () => {
         ...(metric || { date }),
         date,
         sleepHours: metric?.sleepHours ?? null,
+        brainPerformanceIndex: metric?.brainPerformanceIndex ?? null,
+        brainBatteryCount: metric?.brainBatteryCount ?? null,
         kills: game?.kills ?? metric?.kills ?? null,
         deaths: game?.deaths ?? metric?.deaths ?? null,
         assists: game?.assists ?? metric?.assists ?? null,
@@ -569,7 +575,7 @@ const CorrelationAnalysisPage: React.FC = () => {
       d.sleepHours !== null ||
       d.screenTime !== null ||
       d.winRate !== null ||
-      d.testsScore !== null ||
+      d.brainPerformanceIndex !== null ||
       d.faceitKdRatio !== null ||
       d.faceitAdr !== null ||
       d.faceitHsPercent !== null
@@ -585,7 +591,9 @@ const CorrelationAnalysisPage: React.FC = () => {
     const avgBalance = validData.filter(d => d.balanceAvg !== null).reduce((sum, d) => sum + (d.balanceAvg || 0), 0) / validData.filter(d => d.balanceAvg !== null).length || 0;
     const avgScreenTime = validData.filter(d => d.screenTime !== null).reduce((sum, d) => sum + (d.screenTime || 0), 0) / validData.filter(d => d.screenTime !== null).length || 0;
     const avgWinRate = validData.filter(d => d.winRate !== null).reduce((sum, d) => sum + (d.winRate || 0), 0) / validData.filter(d => d.winRate !== null).length || 0;
-    const avgTestsScore = validData.filter(d => d.testsScore !== null).reduce((sum, d) => sum + (d.testsScore || 0), 0) / validData.filter(d => d.testsScore !== null).length || 0;
+    const avgBrainPerformanceIndex =
+      validData.filter(d => d.brainPerformanceIndex !== null).reduce((sum, d) => sum + (d.brainPerformanceIndex || 0), 0) /
+        validData.filter(d => d.brainPerformanceIndex !== null).length || 0;
     const avgFaceitKdRatio = validData.filter(d => d.faceitKdRatio !== null).reduce((sum, d) => sum + (d.faceitKdRatio || 0), 0) / validData.filter(d => d.faceitKdRatio !== null).length || 0;
     const avgFaceitAdr = validData.filter(d => d.faceitAdr !== null).reduce((sum, d) => sum + (d.faceitAdr || 0), 0) / validData.filter(d => d.faceitAdr !== null).length || 0;
     const avgFaceitHs = validData.filter(d => d.faceitHsPercent !== null).reduce((sum, d) => sum + (d.faceitHsPercent || 0), 0) / validData.filter(d => d.faceitHsPercent !== null).length || 0;
@@ -645,10 +653,10 @@ const CorrelationAnalysisPage: React.FC = () => {
       });
     }
 
-    if (avgTestsScore > 0) {
+    if (avgBrainPerformanceIndex > 0) {
       stats.push({
-        title: `${prefix} результат тестов ${suffix}`,
-        value: avgTestsScore.toFixed(1),
+        title: `${prefix} индекс когнитивной формы ${suffix}`,
+        value: avgBrainPerformanceIndex.toFixed(1),
         change: '+0%',
         icon: <BarChart3 className="h-4 w-4 text-white" />,
         color: 'text-cyan-600'
@@ -707,7 +715,7 @@ const CorrelationAnalysisPage: React.FC = () => {
     sleepHours: { name: 'Сон (ч)', color: '#f59e0b', dataKey: 'sleepHours' },
     balanceAvg: { name: 'Баланс жизни', color: '#8b5cf6', dataKey: 'balanceAvg' },
     screenTime: { name: 'Экранное время', color: '#f59e0b', dataKey: 'screenTime' },
-    testsScore: { name: 'Результат тестов', color: '#22d3ee', dataKey: 'testsScore' },
+    brainPerformanceIndex: { name: 'Индекс когнитивной формы', color: '#22d3ee', dataKey: 'brainPerformanceIndex' },
     currentElo: { name: 'Текущий ELO', color: '#1d4ed8', dataKey: 'currentElo' },
     winRate: { name: 'Винрейт (Пракк)', color: '#ef4444', dataKey: 'winRate' },
     kdRatio: { name: 'K/D (Пракк)', color: '#06b6d4', dataKey: 'kdRatio' },
@@ -779,7 +787,7 @@ const CorrelationAnalysisPage: React.FC = () => {
     }
 
     writePersistedCorrelationSession({
-      version: 1,
+      version: 2,
       activeTab,
       analysisGameStatsDaily: nextAnalysisGameStatsDaily,
       analysisMode: nextAnalysisMode,
@@ -1077,7 +1085,7 @@ const CorrelationAnalysisPage: React.FC = () => {
               <div className="mt-6">
                 <Label className="text-base font-medium">Основные метрики</Label>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Здесь собраны настроение, опросники, текущий ELO и ваши ручные игровые данные из пракков.
+                  Здесь собраны настроение, опросники, индекс когнитивной формы, текущий ELO и игровые данные из пракков.
                 </p>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2">
                   {visibleMetricEntries.map(([key, config]) => (
@@ -1625,7 +1633,7 @@ const CorrelationAnalysisPage: React.FC = () => {
               <CardHeader className="border-b border-white/10">
                 <CardTitle className="text-slate-50">Сравнение с игровыми показателями</CardTitle>
                 <CardDescription className="text-slate-300">
-                  Сводка локальных игровых показателей и данных FACEIT за тот же период, чтобы сравнивать их с настроением, энергией и экранным временем.
+                  Сводка локальных игровых показателей, данных FACEIT и индекса когнитивной формы за тот же период.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -1689,6 +1697,7 @@ const CorrelationAnalysisPage: React.FC = () => {
                             <th className="border border-white/10 px-3 py-3 text-right text-slate-50">Сон</th>
                             <th className="border border-white/10 px-3 py-3 text-right text-slate-50">Баланс</th>
                             <th className="border border-white/10 px-3 py-3 text-right text-slate-50">Экранное время</th>
+                            <th className="border border-violet-400/10 bg-violet-300/8 px-3 py-3 text-right text-violet-50">Индекс когнитивной формы</th>
                             <th className="border border-cyan-400/10 bg-cyan-300/8 px-3 py-3 text-right text-cyan-50">Убийства (Пракк)</th>
                             <th className="border border-cyan-400/10 bg-cyan-300/8 px-3 py-3 text-right text-cyan-50">Смерти (Пракк)</th>
                             <th className="border border-cyan-400/10 bg-cyan-300/8 px-3 py-3 text-right text-cyan-50">Ассисты (Пракк)</th>
@@ -1716,6 +1725,7 @@ const CorrelationAnalysisPage: React.FC = () => {
                               <td className="border border-white/10 px-3 py-2 text-right text-slate-100">{row.sleepHours === null ? '' : `${formatNumber(row.sleepHours, 1)}ч`}</td>
                               <td className="border border-white/10 px-3 py-2 text-right text-slate-100">{row.balanceAvg === null ? '' : formatNumber(row.balanceAvg, 1)}</td>
                               <td className="border border-white/10 px-3 py-2 text-right text-slate-100">{row.screenTime === null ? '' : formatNumber(row.screenTime, 1)}</td>
+                              <td className="border border-violet-400/10 bg-violet-300/[0.06] px-3 py-2 text-right text-violet-50">{row.brainPerformanceIndex === null ? '' : formatNumber(row.brainPerformanceIndex, 1)}</td>
                               <td className="border border-cyan-400/10 bg-cyan-300/[0.06] px-3 py-2 text-right text-cyan-50">{row.kills === null ? '' : formatNumber(row.kills, 0)}</td>
                               <td className="border border-cyan-400/10 bg-cyan-300/[0.06] px-3 py-2 text-right text-cyan-50">{row.deaths === null ? '' : formatNumber(row.deaths, 0)}</td>
                               <td className="border border-cyan-400/10 bg-cyan-300/[0.06] px-3 py-2 text-right text-cyan-50">{row.assists === null ? '' : formatNumber(row.assists, 0)}</td>

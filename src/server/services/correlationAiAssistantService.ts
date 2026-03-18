@@ -232,7 +232,7 @@ const buildPrompt = ({ payload, comprehensive }: CorrelationAssistantContext) =>
           'sleepHours',
           'balanceAvg',
           'screenTime',
-          'testsScore',
+          'brainPerformanceIndex',
         ],
         secondary: [
           'winRate',

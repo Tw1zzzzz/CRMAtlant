@@ -105,6 +105,17 @@ type TemplateColumn = {
 };
 
 const PLACEHOLDER_VALUE = '—';
+const GAME_STATS_SNAPSHOT_STORAGE_KEY = 'game-stats:last-table-snapshot';
+
+interface PersistedGameStatsSnapshot {
+  version: 1;
+  dateFrom: string;
+  dateTo: string;
+  mode: 'team' | 'individual';
+  playerId: string;
+  columns: string[];
+  rows: TemplateMetric[];
+}
 
 const templateLabels: string[] = [
   'Total kills',
@@ -193,26 +204,74 @@ const buildPlaceholderColumns = (dateFrom: string, dateTo: string, mode: 'team' 
   });
 };
 
+const readPersistedGameStatsSnapshot = (): PersistedGameStatsSnapshot | null => {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const raw = window.localStorage.getItem(GAME_STATS_SNAPSHOT_STORAGE_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as Partial<PersistedGameStatsSnapshot>;
+    if (
+      parsed.version !== 1 ||
+      !parsed.dateFrom ||
+      !parsed.dateTo ||
+      !Array.isArray(parsed.columns) ||
+      !Array.isArray(parsed.rows)
+    ) {
+      return null;
+    }
+
+    return {
+      version: 1,
+      dateFrom: parsed.dateFrom,
+      dateTo: parsed.dateTo,
+      mode: parsed.mode === 'individual' ? 'individual' : 'team',
+      playerId: typeof parsed.playerId === 'string' ? parsed.playerId : '',
+      columns: parsed.columns,
+      rows: parsed.rows as TemplateMetric[],
+    };
+  } catch (error) {
+    console.error('[GameStatsPage] Не удалось восстановить таблицу из localStorage:', error);
+    return null;
+  }
+};
+
+const writePersistedGameStatsSnapshot = (snapshot: PersistedGameStatsSnapshot) => {
+  if (typeof window === 'undefined') return;
+
+  try {
+    window.localStorage.setItem(GAME_STATS_SNAPSHOT_STORAGE_KEY, JSON.stringify(snapshot));
+  } catch (error) {
+    console.error('[GameStatsPage] Не удалось сохранить таблицу в localStorage:', error);
+  }
+};
+
 const GameStatsPage: React.FC = () => {
   const { user } = useAuth();
+  const [restoredSnapshot] = useState<PersistedGameStatsSnapshot | null>(() => readPersistedGameStatsSnapshot());
   const [players, setPlayers] = useState<any[]>([]);
   const [loadingPlayers, setLoadingPlayers] = useState(false);
-  const [gameStatsMode, setGameStatsMode] = useState<'team' | 'individual'>('team');
-  const [gameStatsPlayerId, setGameStatsPlayerId] = useState('');
-  const [gameStatsRows, setGameStatsRows] = useState<TemplateMetric[]>([]);
-  const [gameStatsColumns, setGameStatsColumns] = useState<string[]>([]);
+  const [gameStatsMode, setGameStatsMode] = useState<'team' | 'individual'>(restoredSnapshot?.mode ?? 'team');
+  const [gameStatsPlayerId, setGameStatsPlayerId] = useState(restoredSnapshot?.playerId ?? '');
+  const [gameStatsRows, setGameStatsRows] = useState<TemplateMetric[]>(restoredSnapshot?.rows ?? []);
+  const [gameStatsColumns, setGameStatsColumns] = useState<string[]>(restoredSnapshot?.columns ?? []);
   const [gameStatsLoading, setGameStatsLoading] = useState(false);
-  const [gameStatsDateFrom, setGameStatsDateFrom] = useState('');
-  const [gameStatsDateTo, setGameStatsDateTo] = useState('');
+  const [gameStatsDateFrom, setGameStatsDateFrom] = useState(restoredSnapshot?.dateFrom ?? '');
+  const [gameStatsDateTo, setGameStatsDateTo] = useState(restoredSnapshot?.dateTo ?? '');
 
   const isStaff = user?.role === 'staff';
 
   useEffect(() => {
+    if (restoredSnapshot?.dateFrom && restoredSnapshot?.dateTo) {
+      return;
+    }
+
     const today = new Date();
     const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
     setGameStatsDateTo(today.toISOString().split('T')[0]);
     setGameStatsDateFrom(thirtyDaysAgo.toISOString().split('T')[0]);
-  }, []);
+  }, [restoredSnapshot?.dateFrom, restoredSnapshot?.dateTo]);
 
   useEffect(() => {
     if (!user) return;
@@ -422,6 +481,18 @@ const GameStatsPage: React.FC = () => {
     ];
   };
 
+  const persistCurrentTableSnapshot = (columns: string[], rows: TemplateMetric[]) => {
+    writePersistedGameStatsSnapshot({
+      version: 1,
+      dateFrom: gameStatsDateFrom,
+      dateTo: gameStatsDateTo,
+      mode: gameStatsMode,
+      playerId: gameStatsPlayerId,
+      columns,
+      rows,
+    });
+  };
+
   const fetchGameStatsTemplate = async () => {
     if (!gameStatsDateFrom || !gameStatsDateTo) {
       toast.error('Выберите период для таблицы игровых показателей');
@@ -462,14 +533,20 @@ const GameStatsPage: React.FC = () => {
 
       if (entries.length === 0) {
         const placeholderColumns = buildPlaceholderColumns(gameStatsDateFrom, gameStatsDateTo, gameStatsMode);
-        setGameStatsColumns(placeholderColumns.map((column) => `${column.label}\n${column.meta}`));
-        setGameStatsRows(buildPlaceholderRows(placeholderColumns.length));
+        const nextColumns = placeholderColumns.map((column) => `${column.label}\n${column.meta}`);
+        const nextRows = buildPlaceholderRows(placeholderColumns.length);
+        setGameStatsColumns(nextColumns);
+        setGameStatsRows(nextRows);
+        persistCurrentTableSnapshot(nextColumns, nextRows);
         toast.success('Показан шаблон таблицы для заполнения');
         return;
       }
 
-      setGameStatsColumns(entries.map((entry) => `${entry.columnLabel}\n${entry.columnMeta}`));
-      setGameStatsRows(buildTemplateRows(entries));
+      const nextColumns = entries.map((entry) => `${entry.columnLabel}\n${entry.columnMeta}`);
+      const nextRows = buildTemplateRows(entries);
+      setGameStatsColumns(nextColumns);
+      setGameStatsRows(nextRows);
+      persistCurrentTableSnapshot(nextColumns, nextRows);
 
       const targetLabel =
         gameStatsMode === 'team'
@@ -479,8 +556,6 @@ const GameStatsPage: React.FC = () => {
     } catch (error: any) {
       console.error('[GameStatsPage] Ошибка загрузки таблицы игровых показателей:', error);
       toast.error(error?.message || 'Не удалось загрузить таблицу игровых показателей');
-      setGameStatsColumns([]);
-      setGameStatsRows([]);
     } finally {
       setGameStatsLoading(false);
     }

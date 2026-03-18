@@ -10,11 +10,13 @@ import {
   getAllPlayersTestStats, 
   getTeamMoodChartData,
   getAnalyticsMoodStats,
-  getAnalyticsTestStats
+  getAnalyticsTestStats,
+  getBrainPerformanceSummary
 } from "@/lib/api";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { ArrowUpRight, Users, TrendingUp, BarChart2, ListChecks, ChevronRight, Zap, SmilePlus, PieChart as PieChartIcon, Activity } from "lucide-react";
+import { ArrowUpRight, Users, TrendingUp, BarChart2, ListChecks, ChevronRight, Zap, SmilePlus, PieChart as PieChartIcon, Activity, Brain } from "lucide-react";
+import type { BrainPerformanceSummary } from "@/types";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -60,6 +62,7 @@ const Dashboard = () => {
   const [weeklyData, setWeeklyData] = useState<WeeklyData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [brainSummary, setBrainSummary] = useState<BrainPerformanceSummary | null>(null);
   
   // Статистика всех игроков (для персонала)
   const [playersMoodStats, setPlayersMoodStats] = useState<any[]>([]);
@@ -141,8 +144,11 @@ const Dashboard = () => {
             console.log(`[Dashboard] Обработано ${loadedTestEntries.length} записей о тестах из API`);
             
             // Устанавливаем данные в состояние
-                setMoodEntries(loadedMoodEntries as MoodEntry[]);
+            setMoodEntries(loadedMoodEntries as MoodEntry[]);
             setTestEntries(loadedTestEntries);
+
+            const brainResponse = await getBrainPerformanceSummary();
+            setBrainSummary(brainResponse.data.data || null);
     
             // Обрабатываем данные для графиков
             const recentStats = processRecentStats(loadedMoodEntries);
@@ -171,6 +177,7 @@ const Dashboard = () => {
             
             setMoodEntries(localMoodEntries);
             setTestEntries(localTestEntries);
+            setBrainSummary(null);
             
             // Обрабатываем данные для графиков из локального хранилища
             const recentStats = processRecentStats(localMoodEntries);
@@ -659,6 +666,25 @@ const Dashboard = () => {
                   </div>
                   <p className="text-xs" style={{ color: COLORS.textColorSecondary }}>
                     Отслеживание прогресса
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor, boxShadow: "0 1px 20px 0 rgba(0,0,0,.1)" }}>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium" style={{ color: COLORS.textColorSecondary }}>
+                    Brain Lab
+                  </CardTitle>
+                  <Brain className="h-4 w-4" style={{ color: COLORS.primary }} />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold" style={{ color: COLORS.textColor }}>
+                    {brainSummary?.brainPerformanceIndex != null ? brainSummary.brainPerformanceIndex.toFixed(1) : "Калибровка"}
+                  </div>
+                  <p className="text-xs" style={{ color: COLORS.textColorSecondary }}>
+                    {brainSummary
+                      ? `${brainSummary.confidence} confidence · батарей ${brainSummary.validBatteryCount}`
+                      : "Запустите Brain Lab на вкладке тестов"}
                   </p>
                 </CardContent>
               </Card>

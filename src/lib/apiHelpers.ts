@@ -66,6 +66,7 @@ export function buildTestsStateImpactPath(params?: {
   matchType?: string;
   map?: string;
   role?: string;
+  source?: string;
 }) {
   const search = new URLSearchParams();
   if (params?.from) search.append('from', params.from);
@@ -74,6 +75,7 @@ export function buildTestsStateImpactPath(params?: {
   if (params?.matchType) search.append('matchType', params.matchType);
   if (params?.map) search.append('map', params.map);
   if (params?.role) search.append('role', params.role);
+  if (params?.source) search.append('source', params.source);
 
   const query = search.toString();
   return `/stats/tests/state-impact${query ? `?${query}` : ''}`;

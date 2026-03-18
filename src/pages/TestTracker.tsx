@@ -14,7 +14,9 @@ import { createTestEntry, deleteTestEntry, getMyTestEntries, getTestsStateImpact
 import { formatDate, getCurrentWeekRange, getWeekLabel, getPrevWeek, getNextWeek } from "@/utils/dateUtils";
 import { useAuth } from "@/hooks/useAuth";
 import { COLORS } from "@/styles/theme";
+import { getReadableTestTypeLabel } from "@/utils/testTypeMetadata";
 import axios from "axios";
+import BrainLabPanel from "@/components/brain-lab/BrainLabPanel";
 
 const predefinedTests = [
   {
@@ -82,6 +84,7 @@ const TestTracker = () => {
   const [periodFilter, setPeriodFilter] = useState<string>("30");
   const [testTypeFilter, setTestTypeFilter] = useState<string>("all");
   const [contextRoleFilter, setContextRoleFilter] = useState<string>("all");
+  const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [stateImpact, setStateImpact] = useState<StateImpactSummary | null>(null);
   
   const isStaff = user?.role === "staff";
@@ -194,7 +197,8 @@ const TestTracker = () => {
           from: fromDate.toISOString().slice(0, 10),
           to: now.toISOString().slice(0, 10),
           testType: testTypeFilter !== "all" ? testTypeFilter : undefined,
-          role: contextRoleFilter !== "all" ? contextRoleFilter : undefined
+          role: contextRoleFilter !== "all" ? contextRoleFilter : undefined,
+          source: sourceFilter !== "all" ? sourceFilter : undefined
         });
 
         setStateImpact(response.data);
@@ -207,7 +211,7 @@ const TestTracker = () => {
     if (user) {
       loadStateImpact();
     }
-  }, [user, periodFilter, testTypeFilter, contextRoleFilter]);
+  }, [user, periodFilter, testTypeFilter, contextRoleFilter, sourceFilter]);
   
   const loadEntries = async () => {
     try {
@@ -436,7 +440,8 @@ const TestTracker = () => {
       const inPeriod = measuredAt >= fromDate && measuredAt <= now;
       const byType = testTypeFilter === "all" || (test.testType || "generic") === testTypeFilter;
       const byRole = contextRoleFilter === "all" || test.context?.role === contextRoleFilter;
-      return inPeriod && byType && byRole;
+      const bySource = sourceFilter === "all" || (test.context?.source || "manual") === sourceFilter;
+      return inPeriod && byType && byRole && bySource;
     });
   };
 
@@ -484,16 +489,7 @@ const TestTracker = () => {
   };
 
   const getTestTypeLabel = (value?: string) => {
-    switch ((value || "generic").toLowerCase()) {
-      case "reaction":
-        return "Reaction";
-      case "aim":
-        return "Aim";
-      case "cognitive":
-        return "Cognitive";
-      default:
-        return value || "Generic";
-    }
+    return getReadableTestTypeLabel(value);
   };
 
   return (
@@ -555,6 +551,8 @@ const TestTracker = () => {
           </div>
         </section>
 
+        {!isStaff && <BrainLabPanel />}
+
         <section
           className="rounded-[28px] border p-5 md:p-6"
           style={{
@@ -587,7 +585,7 @@ const TestTracker = () => {
             )}
           </div>
 
-          <div className="mt-5 grid gap-3 md:grid-cols-3">
+          <div className="mt-5 grid gap-3 md:grid-cols-4">
             <div className="space-y-2">
               <Label style={{ color: COLORS.textColor }}>Период</Label>
               <select
@@ -610,10 +608,15 @@ const TestTracker = () => {
                 style={fieldStyle}
               >
                 <option value="all">Все типы</option>
-                <option value="generic">Generic</option>
-                <option value="reaction">Reaction</option>
-                <option value="aim">Aim</option>
-                <option value="cognitive">Cognitive</option>
+                <option value="generic">{getTestTypeLabel("generic")}</option>
+                <option value="reaction">{getTestTypeLabel("reaction")}</option>
+                <option value="aim">{getTestTypeLabel("aim")}</option>
+                <option value="cognitive">{getTestTypeLabel("cognitive")}</option>
+                <option value="visual_search">{getTestTypeLabel("visual_search")}</option>
+                <option value="go_no_go">{getTestTypeLabel("go_no_go")}</option>
+                <option value="n_back_2">{getTestTypeLabel("n_back_2")}</option>
+                <option value="stroop_switch">{getTestTypeLabel("stroop_switch")}</option>
+                <option value="spatial_span">{getTestTypeLabel("spatial_span")}</option>
               </select>
             </div>
             <div className="space-y-2">
@@ -629,6 +632,19 @@ const TestTracker = () => {
                 <option value="support">Support</option>
                 <option value="awp">AWP</option>
                 <option value="igl">IGL</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label style={{ color: COLORS.textColor }}>Источник</Label>
+              <select
+                value={sourceFilter}
+                onChange={(e) => setSourceFilter(e.target.value)}
+                className="w-full rounded-2xl border px-4 py-3"
+                style={fieldStyle}
+              >
+                <option value="all">Все источники</option>
+                <option value="manual">Ручной ввод</option>
+                <option value="brain_lab">Brain Lab</option>
               </select>
             </div>
           </div>

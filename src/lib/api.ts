@@ -109,6 +109,24 @@ interface TestEntryData {
   measuredAt?: string | Date;
 }
 
+interface BrainAttemptStartPayload {
+  testKey: string;
+  batterySessionId?: string;
+  clientMeta?: {
+    viewport?: { width?: number; height?: number };
+    userAgent?: string;
+    deviceType?: string;
+    refreshRate?: number;
+  };
+}
+
+interface BrainAttemptCompletePayload {
+  rawMetrics: Record<string, unknown>;
+  clientMeta?: BrainAttemptStartPayload['clientMeta'];
+  stateSnapshot?: TestEntryData['stateSnapshot'];
+  context?: TestEntryData['context'];
+}
+
 interface PlayerStatusUpdate {
   completedTests?: boolean;
   completedBalanceWheel?: boolean;
@@ -270,9 +288,20 @@ export const getTestsStateImpact = (params?: {
   matchType?: string;
   map?: string;
   role?: string;
+  source?: string;
 }) => retryRequest(() => api.get(buildTestsStateImpactPath(params)));
 
 export const getNotifications = () => retryRequest(() => api.get('/notifications'));
+
+export const getBrainTestsCatalog = () => retryRequest(() => api.get('/brain-tests/catalog'));
+export const startBrainTestAttempt = (data: BrainAttemptStartPayload) =>
+  retryRequest(() => api.post('/brain-tests/attempts/start', data));
+export const completeBrainTestAttempt = (attemptId: string, data: BrainAttemptCompletePayload) =>
+  retryRequest(() => api.post(`/brain-tests/attempts/${attemptId}/complete`, data));
+export const getBrainPerformanceSummary = (window = 30) =>
+  retryRequest(() => api.get(`/brain-tests/me/summary?window=${window}`));
+export const getBrainTestsHistory = (testKey?: string) =>
+  retryRequest(() => api.get(`/brain-tests/me/history${testKey ? `?testKey=${testKey}` : ''}`));
 
 // API для управления ключом привилегий
 // Update privilege key (for staff) with enhanced error handling

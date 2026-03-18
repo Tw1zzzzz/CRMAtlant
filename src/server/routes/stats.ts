@@ -850,7 +850,8 @@ router.get('/tests/state-impact', protect, async (req: any, res) => {
       testType,
       matchType,
       map,
-      role
+      role,
+      source
     } = req.query;
 
     const filter: any = {};
@@ -873,6 +874,10 @@ router.get('/tests/state-impact', protect, async (req: any, res) => {
 
     if (role) {
       filter['context.role'] = role;
+    }
+
+    if (source) {
+      filter['context.source'] = source;
     }
 
     if (from || to) {
@@ -936,6 +941,8 @@ router.get('/tests/state-impact', protect, async (req: any, res) => {
         matchType: matchType || null,
         map: map || null,
         role: role || null
+        ,
+        source: source || null
       },
       totals: {
         entries: entries.length,
