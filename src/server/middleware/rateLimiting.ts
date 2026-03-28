@@ -120,6 +120,32 @@ export const authResetPasswordLimit = rateLimit({
   },
 });
 
+export const authResendVerificationLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `verify-resend-${req.ip}-${String(req.body?.email || '').trim().toLowerCase()}`,
+  message: {
+    status: 'error',
+    message: 'Слишком много запросов на отправку письма подтверждения. Попробуйте позже.',
+    retryAfter: '15 минут',
+  },
+});
+
+export const authChangePasswordLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `change-password-${req.ip}-${req.user?._id || 'anonymous'}`,
+  message: {
+    status: 'error',
+    message: 'Слишком много попыток смены пароля. Попробуйте позже.',
+    retryAfter: '15 минут',
+  },
+});
+
 /**
  * Комбинированный middleware для применения разных лимитов
  * в зависимости от типа операции

@@ -35,7 +35,19 @@ interface MetricData {
   deaths: number | null;
   assists: number | null;
   adr: number | null;
+  kpr: number | null;
+  deathPerRound: number | null;
+  avgKr: number | null;
+  avgKd: number | null;
   kast: number | null;
+  firstKills: number | null;
+  firstDeaths: number | null;
+  openingDuelDiff: number | null;
+  udr: number | null;
+  avgMultikills: number | null;
+  clutchesWon: number | null;
+  avgFlashTime: number | null;
+  roundWinRate: number | null;
   currentElo: number | null;
   brainPerformanceIndex: number | null;
   brainBatteryCount: number | null;
@@ -143,7 +155,19 @@ type CorrelationComparisonRow = {
   deaths: number | null;
   assists: number | null;
   adr: number | null;
+  kpr: number | null;
+  deathPerRound: number | null;
+  avgKr: number | null;
+  avgKd: number | null;
   kast: number | null;
+  firstKills: number | null;
+  firstDeaths: number | null;
+  openingDuelDiff: number | null;
+  udr: number | null;
+  avgMultikills: number | null;
+  clutchesWon: number | null;
+  avgFlashTime: number | null;
+  roundWinRate: number | null;
   winRate: number | null;
   kdRatio: number | null;
   faceitMatches: number | null;
@@ -389,6 +413,20 @@ const CorrelationAnalysisPage: React.FC = () => {
         kills: game?.kills ?? metric?.kills ?? null,
         deaths: game?.deaths ?? metric?.deaths ?? null,
         assists: game?.assists ?? metric?.assists ?? null,
+        adr: metric?.adr ?? null,
+        kpr: metric?.kpr ?? null,
+        deathPerRound: metric?.deathPerRound ?? null,
+        avgKr: metric?.avgKr ?? null,
+        avgKd: metric?.avgKd ?? null,
+        kast: metric?.kast ?? null,
+        firstKills: metric?.firstKills ?? null,
+        firstDeaths: metric?.firstDeaths ?? null,
+        openingDuelDiff: metric?.openingDuelDiff ?? null,
+        udr: metric?.udr ?? null,
+        avgMultikills: metric?.avgMultikills ?? null,
+        clutchesWon: metric?.clutchesWon ?? null,
+        avgFlashTime: metric?.avgFlashTime ?? null,
+        roundWinRate: metric?.roundWinRate ?? null,
         winRate: game?.winRate ?? metric?.winRate ?? null,
         kdRatio: game?.kdRatio ?? metric?.kdRatio ?? null,
         faceitMatches: metric?.faceitMatches ?? null,
@@ -724,6 +762,9 @@ const CorrelationAnalysisPage: React.FC = () => {
    * РљРѕРЅС„РёРіСѓСЂР°С†РёСЏ РјРµС‚СЂРёРє РґР»СЏ РѕС‚РѕР±СЂР°Р¶Рµния
    */
   const metricsConfig = {
+    // Game metrics map: adr: kpr: deathPerRound: avgKr: avgKd: kast: firstKills:
+    // firstDeaths: openingDuelDiff: udr: avgMultikills: clutchesWon:
+    // avgFlashTime: roundWinRate:
     mood: { name: 'Настроение', color: '#3b82f6', dataKey: 'mood' },
     energy: { name: 'Энергия', color: '#10b981', dataKey: 'energy' },
     sleepHours: { name: 'Сон (ч)', color: '#f59e0b', dataKey: 'sleepHours' },
@@ -737,7 +778,19 @@ const CorrelationAnalysisPage: React.FC = () => {
     deaths: { name: 'Смерти (Пракк)', color: '#9ca3af', dataKey: 'deaths' },
     assists: { name: 'Ассисты (Пракк)', color: '#84cc16', dataKey: 'assists' },
     adr: { name: 'ADR (Пракк)', color: '#f97316', dataKey: 'adr' },
+    kpr: { name: 'KPR (Пракк)', color: '#0ea5e9', dataKey: 'kpr' },
+    deathPerRound: { name: 'Death/Round (Пракк)', color: '#64748b', dataKey: 'deathPerRound' },
+    avgKr: { name: 'AVG KR (Пракк)', color: '#14b8a6', dataKey: 'avgKr' },
+    avgKd: { name: 'AVG KD (Пракк)', color: '#2563eb', dataKey: 'avgKd' },
     kast: { name: 'KAST (Пракк)', color: '#a855f7', dataKey: 'kast' },
+    firstKills: { name: 'First Kills (Пракк)', color: '#ef4444', dataKey: 'firstKills' },
+    firstDeaths: { name: 'First Deaths (Пракк)', color: '#94a3b8', dataKey: 'firstDeaths' },
+    openingDuelDiff: { name: 'Разница опен дуэлей (Пракк)', color: '#f59e0b', dataKey: 'openingDuelDiff' },
+    udr: { name: 'UDR (Пракк)', color: '#22c55e', dataKey: 'udr' },
+    avgMultikills: { name: 'Мультикиллы (Пракк)', color: '#8b5cf6', dataKey: 'avgMultikills' },
+    clutchesWon: { name: 'Клатчи (Пракк)', color: '#e11d48', dataKey: 'clutchesWon' },
+    avgFlashTime: { name: 'Flash Time (Пракк)', color: '#06b6d4', dataKey: 'avgFlashTime' },
+    roundWinRate: { name: 'Round Win-Rate (Пракк)', color: '#f43f5e', dataKey: 'roundWinRate' },
     faceitMatches: { name: 'Матчи FACEIT', color: '#1e40af', dataKey: 'faceitMatches' },
     faceitWinRate: { name: 'Винрейт FACEIT', color: '#0f766e', dataKey: 'faceitWinRate' },
     faceitKdRatio: { name: 'FACEIT K/D', color: '#0284c7', dataKey: 'faceitKdRatio' },

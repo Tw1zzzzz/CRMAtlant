@@ -100,11 +100,6 @@ type TemplateMetric = {
   values: string[];
 };
 
-type TemplateColumn = {
-  label: string;
-  meta: string;
-};
-
 const PLACEHOLDER_VALUE = '—';
 const GAME_STATS_SNAPSHOT_STORAGE_KEY = 'game-stats:last-table-snapshot';
 
@@ -117,30 +112,6 @@ interface PersistedGameStatsSnapshot {
   columns: string[];
   rows: TemplateMetric[];
 }
-
-const templateLabels: string[] = [
-  'Total kills',
-  'Total deaths',
-  'K/D Ratio',
-  'Rounds played',
-  'ADR (Damage/Round)',
-  'KPR (Kills/round)',
-  'Death/round',
-  'AVG KR',
-  'AVG KD',
-  'KAST',
-  'First kills',
-  'First deaths',
-  'Разница опен дуэлей',
-  'UDR',
-  'Ср. мультикиллы',
-  'Выигранные клатчи',
-  'Ср. время ослепления',
-  'Win-Rate',
-  'Round Win-Rate',
-  'CT Win-Rate',
-  'T Win-Rate'
-];
 
 const formatNumber = (value: number, decimals = 2) => {
   if (!Number.isFinite(value)) return '0';
@@ -157,52 +128,6 @@ const formatNullablePercent = (value: number | null, decimals = 1) => (value ===
 const safeDivide = (numerator: number, denominator: number): number | null => {
   if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator === 0) return null;
   return numerator / denominator;
-};
-
-const buildPlaceholderRows = (columnsCount: number): TemplateMetric[] => {
-  return templateLabels.map((label) => ({
-    label,
-    summary: PLACEHOLDER_VALUE,
-    values: Array.from({ length: columnsCount }, () => PLACEHOLDER_VALUE)
-  }));
-};
-
-const buildSampleDates = (dateFrom: string, dateTo: string): Date[] => {
-  const now = new Date();
-  if (!dateFrom || !dateTo) {
-    return [
-      now,
-      new Date(now.getTime() + 24 * 60 * 60 * 1000),
-      new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000)
-    ];
-  }
-
-  const start = new Date(`${dateFrom}T00:00:00`);
-  const end = new Date(`${dateTo}T00:00:00`);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-    return [now, new Date(now.getTime() + 24 * 60 * 60 * 1000), new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000)];
-  }
-
-  const mid = new Date((start.getTime() + end.getTime()) / 2);
-  const unique = new Map<string, Date>();
-  [start, mid, end].forEach((date) => {
-    const key = date.toISOString().split('T')[0];
-    unique.set(key, date);
-  });
-
-  return Array.from(unique.values()).slice(0, 3);
-};
-
-const buildPlaceholderColumns = (dateFrom: string, dateTo: string, mode: 'team' | 'individual'): TemplateColumn[] => {
-  const sampleDates = buildSampleDates(dateFrom, dateTo);
-  return sampleDates.map((date, index) => {
-    const dateLabel = date.toLocaleDateString('ru-RU');
-    const meta = mode === 'team' ? `Пример игрока • ${dateLabel}` : dateLabel;
-    return {
-      label: `№${index + 1}`,
-      meta
-    };
-  });
 };
 
 const readPersistedGameStatsSnapshot = (): PersistedGameStatsSnapshot | null => {
@@ -223,6 +148,19 @@ const readPersistedGameStatsSnapshot = (): PersistedGameStatsSnapshot | null => 
       return null;
     }
 
+    const rows = parsed.rows as TemplateMetric[];
+    const isPlaceholderSnapshot = rows.every(
+      (row) =>
+        row.summary === PLACEHOLDER_VALUE &&
+        Array.isArray(row.values) &&
+        row.values.every((value) => value === PLACEHOLDER_VALUE)
+    );
+
+    if (isPlaceholderSnapshot) {
+      window.localStorage.removeItem(GAME_STATS_SNAPSHOT_STORAGE_KEY);
+      return null;
+    }
+
     return {
       version: 1,
       dateFrom: parsed.dateFrom,
@@ -235,6 +173,16 @@ const readPersistedGameStatsSnapshot = (): PersistedGameStatsSnapshot | null => 
   } catch (error) {
     console.error('[GameStatsPage] Не удалось восстановить таблицу из localStorage:', error);
     return null;
+  }
+};
+
+const clearPersistedGameStatsSnapshot = () => {
+  if (typeof window === 'undefined') return;
+
+  try {
+    window.localStorage.removeItem(GAME_STATS_SNAPSHOT_STORAGE_KEY);
+  } catch (error) {
+    console.error('[GameStatsPage] Не удалось очистить таблицу в localStorage:', error);
   }
 };
 
@@ -538,13 +486,10 @@ const GameStatsPage: React.FC = () => {
       const entries = normalizeGameStatsEntries((result.data || []) as GameStatsEntry[]);
 
       if (entries.length === 0) {
-        const placeholderColumns = buildPlaceholderColumns(gameStatsDateFrom, gameStatsDateTo, gameStatsMode);
-        const nextColumns = placeholderColumns.map((column) => `${column.label}\n${column.meta}`);
-        const nextRows = buildPlaceholderRows(placeholderColumns.length);
-        setGameStatsColumns(nextColumns);
-        setGameStatsRows(nextRows);
-        persistCurrentTableSnapshot(nextColumns, nextRows);
-        toast.success('Показан шаблон таблицы для заполнения');
+        setGameStatsColumns([]);
+        setGameStatsRows([]);
+        clearPersistedGameStatsSnapshot();
+        toast.info('За выбранный период игровых записей пока нет');
         return;
       }
 

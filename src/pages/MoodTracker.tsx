@@ -286,7 +286,6 @@ const MoodTracker = () => {
       const response = await getAllPlayersMoodStatsByDate(formattedDate);
       
       setPlayerStats(response.data);
-      console.log(`Загружена статистика настроения игроков на дату ${formattedDate}`, response.data);
     } catch (error) {
       console.error("Ошибка при загрузке статистики игроков:", error);
       
@@ -294,7 +293,6 @@ const MoodTracker = () => {
       try {
         const fallbackResponse = await getAllPlayersMoodStats();
         setPlayerStats(fallbackResponse.data);
-        console.log("Загружена статистика настроения игроков (без фильтрации по дате)", fallbackResponse.data);
       } catch (fallbackError) {
         console.error("Ошибка при загрузке статистики игроков (резервный метод):", fallbackError);
         toast({
@@ -393,7 +391,7 @@ const MoodTracker = () => {
               return itemDateStr === apiDateFormat;
             });
             
-            setChartData(filteredChartData.length > 0 ? filteredChartData : fallbackChartResponse.data);
+            setChartData(filteredChartData);
           } catch (fallbackError) {
             console.error(`Ошибка при загрузке данных для графика игрока (резервный метод) ${actualPlayerId}:`, fallbackError);
             
@@ -432,6 +430,7 @@ const MoodTracker = () => {
           if (filteredEntries.length > 0) {
             prepareChartData(filteredEntries);
           } else {
+            setChartData([]);
             // Если нет данных для выбранной даты
             toast({
               title: "Нет данных",
@@ -460,12 +459,6 @@ const MoodTracker = () => {
           });
         }
       }
-
-      toast({
-        title: "Данные загружены",
-        description: "Записи игрока успешно загружены.",
-        variant: "default"
-      });
 
       // Сохраняем ID игрока в sessionStorage для восстановления при перезагрузке
       try {

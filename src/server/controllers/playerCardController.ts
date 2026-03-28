@@ -5,6 +5,11 @@ import mongoose from 'mongoose';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import {
+  buildVisiblePlayersFilter,
+  findAccessiblePlayerById,
+  hasTeamScope,
+} from '../utils/teamAccess';
 
 // Настройка хранения изображений
 const storage = multer.diskStorage({
@@ -52,10 +57,17 @@ export const upload = multer({
  * Стафф — доступ к любой карточке.
  * Соло-игрок — только к своей карточке.
  */
-const canAccessCard = (req: Request, targetUserId: string): boolean => {
+const canAccessCard = async (req: Request, targetUserId: string): Promise<boolean> => {
   const user = (req as any).user;
   if (!user) return false;
-  if (user.role === 'staff') return true;
+  if (user.role === 'staff') {
+    if (!hasTeamScope(user)) {
+      return true;
+    }
+
+    const targetPlayer = await findAccessiblePlayerById(user, targetUserId, '_id');
+    return Boolean(targetPlayer);
+  }
   if (user.role === 'player' && user.playerType === 'solo') {
     return user._id.toString() === targetUserId.toString();
   }
@@ -77,7 +89,7 @@ export const getPlayerCard = async (req: Request, res: Response) => {
     }
 
     // Соло-игрок может смотреть только свою карточку
-    if (!canAccessCard(req, userId)) {
+    if (!(await canAccessCard(req, userId))) {
       return res.status(403).json({ success: false, message: 'Доступ разрешён только к собственной карточке' });
     }
 
@@ -121,12 +133,15 @@ export const getAllPlayerCards = async (req: Request, res: Response) => {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
     const skip = (page - 1) * limit;
+
+    const visiblePlayers = await User.find(buildVisiblePlayersFilter((req as any).user)).select('_id name avatar').lean();
+    const visiblePlayerIds = visiblePlayers.map((player: any) => player._id);
     
     // Получаем общее количество карточек для пагинации
-    const total = await PlayerCard.countDocuments();
+    const total = await PlayerCard.countDocuments({ userId: { $in: visiblePlayerIds } });
     
     // Получаем карточки с пагинацией и сортировкой по дате обновления
-    const playerCards = await PlayerCard.find()
+    const playerCards = await PlayerCard.find({ userId: { $in: visiblePlayerIds } })
       .sort({ updatedAt: -1 })
       .skip(skip)
       .limit(limit);
@@ -145,8 +160,8 @@ export const getAllPlayerCards = async (req: Request, res: Response) => {
     }
     
     // Получаем информацию о пользователях для каждой карточки
-    const userIds = playerCards.map(card => card.userId);
-    const users = await User.find({ _id: { $in: userIds } }, 'name avatar');
+    const userIds = playerCards.map(card => card.userId.toString());
+    const users = visiblePlayers.filter((user: any) => userIds.includes(String(user._id)));
     
     // Объединяем данные карточек с данными пользователей
     const cardsWithUserInfo = playerCards.map(card => {
@@ -206,7 +221,7 @@ export const createPlayerCard = async (req: Request, res: Response) => {
     }
 
     // Соло-игрок не может создать карточку другого пользователя
-    if (!canAccessCard(req, userId)) {
+    if (!(await canAccessCard(req, userId))) {
       return res.status(403).json({ success: false, message: 'Доступ разрешён только к собственной карточке' });
     }
 
@@ -317,7 +332,7 @@ export const updateContacts = async (req: Request, res: Response) => {
     }
 
     // Соло-игрок может редактировать только свои контакты
-    if (!canAccessCard(req, userId)) {
+    if (!(await canAccessCard(req, userId))) {
       return res.status(403).json({ success: false, message: 'Доступ разрешён только к собственной карточке' });
     }
 
@@ -399,7 +414,7 @@ export const updateCommunicationLine = async (req: Request, res: Response) => {
     }
 
     // Соло-игрок может редактировать только свою линию
-    if (!canAccessCard(req, userId)) {
+    if (!(await canAccessCard(req, userId))) {
       return res.status(403).json({ success: false, message: 'Доступ разрешён только к собственной карточке' });
     }
 
@@ -454,7 +469,7 @@ export const uploadRoadmap = async (req: Request, res: Response) => {
     }
 
     // Соло-игрок может загружать roadmap только для своей карточки
-    if (!canAccessCard(req, userId)) {
+    if (!(await canAccessCard(req, userId))) {
       return res.status(403).json({ success: false, message: 'Доступ разрешён только к собственной карточке' });
     }
 
@@ -533,7 +548,7 @@ export const uploadMindmap = async (req: Request, res: Response) => {
     }
 
     // Соло-игрок может загружать mindmap только для своей карточки
-    if (!canAccessCard(req, userId)) {
+    if (!(await canAccessCard(req, userId))) {
       return res.status(403).json({ success: false, message: 'Доступ разрешён только к собственной карточке' });
     }
 
@@ -618,6 +633,10 @@ export const uploadCommunicationImage = async (req: Request, res: Response) => {
         message: 'ID пользователя не указан' 
       });
     }
+
+    if (!(await canAccessCard(req, userId))) {
+      return res.status(403).json({ success: false, message: 'Доступ разрешён только к собственной карточке' });
+    }
     
     // Проверка наличия загружаемого файла
     if (!req.file) {
@@ -700,6 +719,10 @@ export const deletePlayerCard = async (req: Request, res: Response) => {
         success: false, 
         message: 'ID пользователя не указан' 
       });
+    }
+
+    if (!(await canAccessCard(req, userId))) {
+      return res.status(403).json({ success: false, message: 'Доступ разрешён только к собственной карточке' });
     }
 
     // Проверка на валидный ObjectId
@@ -793,7 +816,7 @@ export const attachPlayerToCard = async (req: Request, res: Response) => {
     }
 
     // Проверяем, существует ли пользователь с новым ID
-    const newUser = await User.findById(newUserId);
+    const newUser = await findAccessiblePlayerById((req as any).user, newUserId);
     if (!newUser) {
       return res.status(404).json({ 
         success: false, 
@@ -815,6 +838,13 @@ export const attachPlayerToCard = async (req: Request, res: Response) => {
       return res.status(404).json({ 
         success: false, 
         message: 'Карточка с указанным ID не найдена' 
+      });
+    }
+
+    if (!(await canAccessCard(req, existingCard.userId.toString()))) {
+      return res.status(403).json({
+        success: false,
+        message: 'Нет доступа к этой карточке игрока'
       });
     }
 

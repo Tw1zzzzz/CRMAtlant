@@ -1,5 +1,6 @@
 const assert = require('assert');
 const path = require('path');
+const fs = require('fs');
 const { pathToFileURL } = require('url');
 
 const projectRoot = path.resolve(__dirname, '..');
@@ -28,7 +29,6 @@ const main = async () => {
   const routesModule = await importModule('src/lib/routes.ts');
   const navigationModule = await importModule('src/lib/sidebarNavigation.ts');
   const apiHelpersModule = await importModule('src/lib/apiHelpers.ts');
-
   const {
     ROUTES,
     isProtectedRoute,
@@ -45,6 +45,7 @@ const main = async () => {
 
   runTest('route guards classify public, player and staff routes correctly', () => {
     assert.strictEqual(isProtectedRoute(ROUTES.WELCOME), false);
+    assert.strictEqual(isProtectedRoute(ROUTES.VERIFY_EMAIL), false);
     assert.strictEqual(isProtectedRoute(ROUTES.DASHBOARD), true);
     assert.strictEqual(isPlayerRoute(ROUTES.BALANCE_WHEEL), true);
     assert.strictEqual(isPlayerRoute(ROUTES.GAME_STATS), false);
@@ -90,6 +91,18 @@ const main = async () => {
     assert(titles.includes('Управление игроками'));
     assert(titles.includes('Управление персоналом'));
     assert(titles.includes('Моя карточка'));
+  });
+
+  runTest('auth normalization keeps playerType available for staff/team accounts', () => {
+    const authServiceSource = fs.readFileSync(
+      path.join(projectRoot, 'src/services/auth.service.ts'),
+      'utf8'
+    );
+
+    assert(
+      authServiceSource.includes("rawUser.playerType === 'solo' || rawUser.playerType === 'team'"),
+      'auth.service должен сохранять playerType из ответа сервера и для staff/team.'
+    );
   });
 
   runTest('extractPlayerId supports object, string and serialized ObjectId inputs', () => {

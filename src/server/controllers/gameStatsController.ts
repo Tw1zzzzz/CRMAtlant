@@ -2,6 +2,11 @@ import { Request, Response } from 'express';
 import GameStats from '../models/GameStats';
 import User from '../models/User';
 import { AuthRequest } from '../types';
+import {
+  buildVisiblePlayersFilter,
+  canAccessTargetUser,
+  findAccessiblePlayerById,
+} from '../utils/teamAccess';
 
 /**
  * Создание новой записи игровых показателей
@@ -68,13 +73,12 @@ export const createGameStats = async (req: AuthRequest, res: Response) => {
     
     // Если пользователь - staff и передан userId, используем его
     if (req.user.role === 'staff' && userId) {
-      targetUserId = userId;
-      
-      // Проверяем, что целевой пользователь существует
-      const targetUser = await User.findById(userId);
+      const targetUser = await findAccessiblePlayerById(req.user, userId, '_id');
       if (!targetUser) {
         return res.status(404).json({ message: 'Указанный пользователь не найден' });
       }
+
+      targetUserId = targetUser._id.toString();
     }
 
     const advancedMetrics = {
@@ -197,7 +201,7 @@ export const getGameStats = async (req: AuthRequest, res: Response) => {
 
     if (req.user.role === 'staff') {
       if (effectiveMode === 'team') {
-        const players = await User.find({ role: 'player' }).select('_id').lean();
+        const players = await User.find(buildVisiblePlayersFilter(req.user)).select('_id').lean();
         const playerIds = players.map((player: any) => player._id);
 
         if (!playerIds.length) {
@@ -218,7 +222,12 @@ export const getGameStats = async (req: AuthRequest, res: Response) => {
 
         query.userId = { $in: playerIds };
       } else if (playerId) {
-        query.userId = playerId;
+        const player = await findAccessiblePlayerById(req.user, String(playerId), '_id');
+        if (!player) {
+          return res.status(404).json({ message: 'Игрок не найден' });
+        }
+
+        query.userId = player._id;
       } else {
         query.userId = req.user.id;
       }
@@ -283,6 +292,13 @@ export const updateGameStats = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Запись игровых показателей не найдена' });
     }
 
+    if (req.user.role === 'staff') {
+      const targetUser = await User.findById(gameStats.userId).select('role playerType teamId');
+      if (!canAccessTargetUser(req.user, targetUser)) {
+        return res.status(403).json({ message: 'Недостаточно прав для обновления этой записи' });
+      }
+    }
+
     // Валидация данных при обновлении
     if (updateData.ctSide) {
       const { ctSide } = updateData;
@@ -336,7 +352,23 @@ export const deleteGameStats = async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ message: 'Пользователь не авторизован' });
     }
 
-    const gameStats = await GameStats.findOneAndDelete({ _id: id, userId: req.user.id });
+    let gameStats;
+
+    if (req.user.role === 'staff') {
+      const existing = await GameStats.findById(id);
+      if (!existing) {
+        return res.status(404).json({ message: 'Запись игровых показателей не найдена' });
+      }
+
+      const targetUser = await User.findById(existing.userId).select('role playerType teamId');
+      if (!canAccessTargetUser(req.user, targetUser)) {
+        return res.status(403).json({ message: 'Недостаточно прав для удаления этой записи' });
+      }
+
+      gameStats = await GameStats.findByIdAndDelete(id);
+    } else {
+      gameStats = await GameStats.findOneAndDelete({ _id: id, userId: req.user.id });
+    }
 
     if (!gameStats) {
       return res.status(404).json({ message: 'Запись игровых показателей не найдена' });
@@ -360,7 +392,10 @@ export const getGameStatsAnalytics = async (req: AuthRequest, res: Response) => 
 
     const { startDate, endDate } = req.query;
 
-    let matchQuery: any = { userId: req.user.id };
+    let matchQuery: any =
+      req.user.role === 'staff'
+        ? { userId: { $in: (await User.find(buildVisiblePlayersFilter(req.user)).select('_id').lean()).map((player: any) => player._id) } }
+        : { userId: req.user.id };
 
     if (startDate || endDate) {
       matchQuery.date = {};
@@ -444,6 +479,13 @@ export const getTopPlayersByGameStats = async (req: Request, res: Response) => {
     const { metric = 'winRate', limit = 10, startDate, endDate } = req.query;
 
     let matchQuery: any = {};
+    const requestUser = (req as AuthRequest).user;
+
+    if (requestUser?.role === 'staff') {
+      const players = await User.find(buildVisiblePlayersFilter(requestUser)).select('_id').lean();
+      const playerIds = players.map((player: any) => player._id);
+      matchQuery.userId = { $in: playerIds };
+    }
 
     if (startDate || endDate) {
       matchQuery.date = {};

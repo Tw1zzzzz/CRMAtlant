@@ -21,6 +21,11 @@ import FaceitAccount from '../models/FaceitAccount';
 import { getPlayerDailyStats, resolveFaceitProfile } from '../services/faceitService';
 import BrainTestAttempt from '../models/BrainTestAttempt';
 import { BRAIN_TEST_KEYS, computeBatteryIndex } from '../services/brainTestsService';
+import {
+  buildVisiblePlayersFilter,
+  findAccessiblePlayerById,
+  getScopedTeamId,
+} from '../utils/teamAccess';
 
 /**
  * Получить корреляции между отчетами команды и настроением игроков
@@ -422,17 +427,33 @@ export const getMultiMetrics = async (req: AuthRequest, res: Response) => {
     const userFilter: any = {};
     const matchFilter: any = { ...matchDateFilter };
     if (analysisMode === 'individual' && playerId) {
-      userFilter.userId = playerId;
+      if (req.user?.role === 'staff') {
+        const player = await findAccessiblePlayerById(req.user, String(playerId), '_id faceitAccountId');
+        if (!player) {
+          return res.status(404).json({
+            success: false,
+            message: 'Игрок не найден'
+          });
+        }
 
-      const player = await User.findById(playerId).select('faceitAccountId').lean();
-      if (player?.faceitAccountId) {
-        matchFilter.faceitAccountId = player.faceitAccountId;
+        userFilter.userId = player._id;
+        if ((player as any)?.faceitAccountId) {
+          matchFilter.faceitAccountId = (player as any).faceitAccountId;
+        } else {
+          matchFilter.faceitAccountId = { $in: [] };
+        }
       } else {
-        matchFilter.faceitAccountId = { $in: [] };
+        userFilter.userId = req.user?._id;
+
+        const player = await User.findById(req.user?._id).select('faceitAccountId').lean();
+        if (player?.faceitAccountId) {
+          matchFilter.faceitAccountId = player.faceitAccountId;
+        } else {
+          matchFilter.faceitAccountId = { $in: [] };
+        }
       }
     } else if (analysisMode === 'team') {
-      // Для командного режима учитываем только игроков, исключая staff.
-      const players = await User.find({ role: 'player' }).select('_id faceitAccountId').lean();
+      const players = await User.find(buildVisiblePlayersFilter(req.user)).select('_id faceitAccountId').lean();
       const playerIds = players.map((player: any) => player._id);
 
       if (!playerIds.length) {
@@ -441,7 +462,8 @@ export const getMultiMetrics = async (req: AuthRequest, res: Response) => {
           data: [],
           meta: {
             mode: analysisMode,
-            playerId,
+            playerId: null,
+            teamId: req.user?.role === 'staff' ? getScopedTeamId(req.user) || null : null,
             dateFrom,
             dateTo,
             totalDays: 0,
@@ -583,14 +605,29 @@ export const getMultiMetrics = async (req: AuthRequest, res: Response) => {
       dayData.kills = (dayData.kills || 0) + (entry.kills ?? 0);
       dayData.deaths = (dayData.deaths || 0) + (entry.deaths ?? 0);
       dayData.assists = (dayData.assists || 0) + (entry.assists ?? 0);
-      if (Number.isFinite(entry.adr) && entry.adr !== null) {
-        dayData.adr = (dayData.adr || 0) + entry.adr;
-        dayData.adrCount = (dayData.adrCount || 0) + 1;
-      }
-      if (Number.isFinite(entry.kast) && entry.kast !== null) {
-        dayData.kast = (dayData.kast || 0) + entry.kast;
-        dayData.kastCount = (dayData.kastCount || 0) + 1;
-      }
+      const advancedMetricKeys = [
+        'adr',
+        'kpr',
+        'deathPerRound',
+        'avgKr',
+        'avgKd',
+        'kast',
+        'firstKills',
+        'firstDeaths',
+        'openingDuelDiff',
+        'udr',
+        'avgMultikills',
+        'clutchesWon',
+        'avgFlashTime',
+        'roundWinRate'
+      ];
+
+      advancedMetricKeys.forEach((metricKey) => {
+        if (Number.isFinite(entry[metricKey]) && entry[metricKey] !== null) {
+          dayData[metricKey] = (dayData[metricKey] || 0) + entry[metricKey];
+          dayData[`${metricKey}Count`] = (dayData[`${metricKey}Count`] || 0) + 1;
+        }
+      });
       dayData.gameStatsCount = (dayData.gameStatsCount || 0) + 1;
     });
 
@@ -782,7 +819,19 @@ export const getMultiMetrics = async (req: AuthRequest, res: Response) => {
       deaths: dayData.gameStatsCount ? Number((dayData.deaths / dayData.gameStatsCount).toFixed(1)) : null,
       assists: dayData.gameStatsCount ? Number((dayData.assists / dayData.gameStatsCount).toFixed(1)) : null,
       adr: dayData.adrCount ? Number((dayData.adr / dayData.adrCount).toFixed(1)) : null,
+      kpr: dayData.kprCount ? Number((dayData.kpr / dayData.kprCount).toFixed(2)) : null,
+      deathPerRound: dayData.deathPerRoundCount ? Number((dayData.deathPerRound / dayData.deathPerRoundCount).toFixed(2)) : null,
+      avgKr: dayData.avgKrCount ? Number((dayData.avgKr / dayData.avgKrCount).toFixed(2)) : null,
+      avgKd: dayData.avgKdCount ? Number((dayData.avgKd / dayData.avgKdCount).toFixed(2)) : null,
       kast: dayData.kastCount ? Number((dayData.kast / dayData.kastCount).toFixed(1)) : null,
+      firstKills: dayData.firstKillsCount ? Number((dayData.firstKills / dayData.firstKillsCount).toFixed(1)) : null,
+      firstDeaths: dayData.firstDeathsCount ? Number((dayData.firstDeaths / dayData.firstDeathsCount).toFixed(1)) : null,
+      openingDuelDiff: dayData.openingDuelDiffCount ? Number((dayData.openingDuelDiff / dayData.openingDuelDiffCount).toFixed(1)) : null,
+      udr: dayData.udrCount ? Number((dayData.udr / dayData.udrCount).toFixed(2)) : null,
+      avgMultikills: dayData.avgMultikillsCount ? Number((dayData.avgMultikills / dayData.avgMultikillsCount).toFixed(2)) : null,
+      clutchesWon: dayData.clutchesWonCount ? Number((dayData.clutchesWon / dayData.clutchesWonCount).toFixed(1)) : null,
+      avgFlashTime: dayData.avgFlashTimeCount ? Number((dayData.avgFlashTime / dayData.avgFlashTimeCount).toFixed(2)) : null,
+      roundWinRate: dayData.roundWinRateCount ? Number((dayData.roundWinRate / dayData.roundWinRateCount).toFixed(1)) : null,
       elo: dayData.eloCount
         ? Number((dayData.elo / dayData.eloCount).toFixed(0))
         : (Number.isFinite(dayData.faceitLatestElo) ? Number(dayData.faceitLatestElo.toFixed(0)) : null),
@@ -827,7 +876,10 @@ export const getMultiMetrics = async (req: AuthRequest, res: Response) => {
       data: result,
       meta: {
         mode: analysisMode,
-        playerId,
+        playerId: analysisMode === 'individual' ? playerId || null : null,
+        teamId: analysisMode === 'team' && req.user?.role === 'staff'
+          ? getScopedTeamId(req.user) || null
+          : null,
         dateFrom,
         dateTo,
         totalDays: result.length,

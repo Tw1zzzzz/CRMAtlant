@@ -2,6 +2,7 @@ import User from '../models/User';
 import Subscription from '../models/Subscription';
 import { verifyJwt } from '../utils/jwt';
 import { buildSubscriptionSummary, buildSubscriptionAccessFlags } from '../utils/subscriptionAccess';
+import { isTeamStaffUser } from '../utils/teamAccess';
 
 const PRIMARY_JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 const LEGACY_JWT_SECRET = 'your-secret-key';
@@ -87,6 +88,11 @@ export const isStaff = (req: any, res: any, next: any) => {
 export const hasPrivilegeKey = (req: any, res: any, next: any) => {
   try {
     if (req.user && req.user.role === 'staff') {
+      if (isTeamStaffUser(req.user)) {
+        console.log(`[AUTH] Team-staff доступ к управлению своей командой разрешен без ключа привилегий`);
+        return next();
+      }
+
       // Получаем корректный ключ привилегий из переменных окружения или используем fallback значение
       const validPrivilegeKey = process.env.STAFF_PRIVILEGE_KEY || 'ADMIN_ACCESS_2024_SECURE_KEY_xyz789';
       

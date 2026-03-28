@@ -5,14 +5,19 @@ import SleepEntry from '../models/SleepEntry';
 import TestEntry from '../models/TestEntry';
 import PlayerRating from '../models/PlayerRating';
 import { protect, isStaff, hasPrivilegeKey } from '../middleware/auth';
+import {
+  buildVisiblePlayersFilter,
+  findAccessiblePlayerById,
+  isTeamStaffUser,
+} from '../utils/teamAccess';
 
 const router = express.Router();
 
 // Get all players (staff only)
-router.get('/players', protect, isStaff, async (_req: any, res) => {
+router.get('/players', protect, isStaff, async (req: any, res) => {
   try {
     console.log('Fetching all players');
-    const players = await User.find({ role: 'player' })
+    const players = await User.find(buildVisiblePlayersFilter(req.user))
       .select('name email role playerType completedTests completedBalanceWheel createdAt')
       .sort({ createdAt: -1 });
 
@@ -28,9 +33,11 @@ router.get('/players', protect, isStaff, async (_req: any, res) => {
 router.get('/players/:id/stats', protect, isStaff, async (req: any, res) => {
   try {
     console.log('Fetching stats for player:', req.params.id);
-    const player = await User.findById(req.params.id)
-      .select('name email playerType completedTests completedBalanceWheel createdAt')
-      .sort({ createdAt: -1 });
+    const player = await findAccessiblePlayerById(
+      req.user,
+      req.params.id,
+      'name email playerType completedTests completedBalanceWheel createdAt'
+    );
 
     if (!player) {
       console.log('Player not found:', req.params.id);
@@ -38,13 +45,13 @@ router.get('/players/:id/stats', protect, isStaff, async (req: any, res) => {
     }
 
     // Р”РѕР±Р°РІР»СЏРµРј РїРѕР»СѓС‡РµРЅРёРµ РґР°РЅРЅС‹С… Рѕ РЅР°СЃС‚СЂРѕРµРЅРёРё Рё СЌРЅРµСЂРіРёРё
-    const moodEntries = await MoodEntry.find({ userId: req.params.id })
+    const moodEntries = await MoodEntry.find({ userId: player._id })
       .sort({ date: -1 });
     
     // Р”РѕР±Р°РІР»СЏРµРј РїРѕР»СѓС‡РµРЅРёРµ РґР°РЅРЅС‹С… Рѕ С‚РµСЃС‚Р°С…
-    const testEntries = await TestEntry.find({ userId: req.params.id })
+    const testEntries = await TestEntry.find({ userId: player._id })
       .sort({ date: -1 });
-    const sleepEntries = await SleepEntry.find({ userId: req.params.id })
+    const sleepEntries = await SleepEntry.find({ userId: player._id })
       .sort({ date: -1 });
 
     // Р¤РѕСЂРјРёСЂСѓРµРј РѕР±СЉРµРєС‚ СЃ РїРѕР»РЅРѕР№ СЃС‚Р°С‚РёСЃС‚РёРєРѕР№ РёРіСЂРѕРєР°
@@ -81,7 +88,7 @@ router.delete('/players/:id', protect, isStaff, hasPrivilegeKey, async (req: any
     console.log(`Attempting to delete player with ID: ${id}`);
     
     // РџСЂРѕРІРµСЂСЏРµРј, СЃСѓС‰РµСЃС‚РІСѓРµС‚ Р»Рё РёРіСЂРѕРє
-    const player = await User.findById(id);
+    const player = await findAccessiblePlayerById(req.user, id);
     if (!player) {
       return res.status(404).json({ message: 'РРіСЂРѕРє РЅРµ РЅР°Р№РґРµРЅ' });
     }
@@ -106,7 +113,7 @@ router.patch('/players/:id/status', protect, isStaff, async (req: any, res) => {
   try {
     console.log('Updating status for player:', req.params.id);
     const { completedTests, completedBalanceWheel } = req.body;
-    const player = await User.findById(req.params.id);
+    const player = await findAccessiblePlayerById(req.user, req.params.id);
     
     if (!player) {
       console.log('Player not found for status update:', req.params.id);
@@ -142,7 +149,7 @@ router.delete('/players/:id/complete', protect, isStaff, hasPrivilegeKey, async 
     console.log(`[CASCADE DELETE] Attempting to delete player with ID: ${id} and all related data`);
     
     // РџСЂРѕРІРµСЂСЏРµРј, СЃСѓС‰РµСЃС‚РІСѓРµС‚ Р»Рё РёРіСЂРѕРє
-    const player = await User.findById(id);
+    const player = await findAccessiblePlayerById(req.user, id);
     if (!player) {
       return res.status(404).json({ message: 'РРіСЂРѕРє РЅРµ РЅР°Р№РґРµРЅ' });
     }
@@ -265,7 +272,8 @@ router.post('/update-privilege-key', protect, isStaff, async (req: any, res) => 
 // Check if staff has privilege key
 router.get('/check-privilege', protect, isStaff, async (req: any, res) => {
   try {
-    const hasPrivilege = req.user && req.user.privilegeKey && req.user.privilegeKey.trim() !== '';
+    const hasPrivilege = isTeamStaffUser(req.user) ||
+      Boolean(req.user && req.user.privilegeKey && req.user.privilegeKey.trim() !== '');
     
     return res.json({
       hasPrivilege,

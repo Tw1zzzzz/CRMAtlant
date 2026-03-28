@@ -30,6 +30,9 @@ interface AuthContextType {
   register: (userData: CreateUserDto) => Promise<AuthResult>;
   requestPasswordReset: (email: string) => Promise<{ success: boolean; error?: string }>;
   resetPassword: (token: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  resendVerificationEmail: (email: string) => Promise<{ success: boolean; error?: string }>;
+  verifyEmail: (token: string) => Promise<{ success: boolean; error?: string }>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   deleteAccount: () => Promise<void>;
   updateAvatar: (file: File) => Promise<AuthResult>;
@@ -47,6 +50,9 @@ const defaultContextValue: AuthContextType = {
   register: async () => ({ success: false, error: 'Context not initialized' }),
   requestPasswordReset: async () => ({ success: false, error: 'Context not initialized' }),
   resetPassword: async () => ({ success: false, error: 'Context not initialized' }),
+  resendVerificationEmail: async () => ({ success: false, error: 'Context not initialized' }),
+  verifyEmail: async () => ({ success: false, error: 'Context not initialized' }),
+  changePassword: async () => ({ success: false, error: 'Context not initialized' }),
   logout: () => {},
   deleteAccount: async () => {},
   updateAvatar: async () => ({ success: false, error: 'Context not initialized' }),
@@ -172,6 +178,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         
         // Навигация на главную страницу после успешной регистрации
         navigate(ROUTES.DASHBOARD);
+      } else if (result.success) {
+        sessionStorage.removeItem(BASELINE_REGISTER_MODAL_FLAG);
+        setAuthState(prev => ({
+          ...prev,
+          loading: false,
+          error: null
+        }));
+
+        toast.success(result.message || 'Аккаунт создан. Подтвердите email и затем войдите в систему.');
       } else {
         setAuthState(prev => ({
           ...prev,
@@ -219,6 +234,53 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     return result;
   }, []);
+
+  const resendVerificationEmail = useCallback(async (email: string) => {
+    const result = await authService.resendVerificationEmail({ email });
+
+    if (result.success) {
+      toast.success(result.message || 'Письмо с подтверждением отправлено');
+    } else {
+      toast.error(result.error || 'Не удалось отправить письмо подтверждения');
+    }
+
+    return {
+      success: result.success,
+      error: result.error
+    };
+  }, []);
+
+  const verifyEmail = useCallback(async (token: string) => {
+    const result = await authService.verifyEmail({ token });
+
+    return {
+      success: result.success,
+      error: result.error
+    };
+  }, []);
+
+  const changePassword = useCallback(async (currentPassword: string, newPassword: string) => {
+    const result = await authService.changePassword({ currentPassword, newPassword });
+
+    if (result.success) {
+      sessionStorage.removeItem(BASELINE_REGISTER_MODAL_FLAG);
+      authService.logout();
+      setAuthState({
+        data: null,
+        loading: false,
+        error: null
+      });
+      toast.success(result.message || 'Пароль обновлен. Войдите заново.');
+      navigate(ROUTES.WELCOME);
+    } else {
+      toast.error(result.error || 'Не удалось изменить пароль');
+    }
+
+    return {
+      success: result.success,
+      error: result.error
+    };
+  }, [navigate]);
 
   /**
    * Выход из системы
@@ -353,11 +415,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     register,
     requestPasswordReset,
     resetPassword,
+    resendVerificationEmail,
+    verifyEmail,
+    changePassword,
     logout,
     deleteAccount,
     updateAvatar,
     refreshUser
-  }), [authState, login, register, requestPasswordReset, resetPassword, logout, deleteAccount, updateAvatar, refreshUser]);
+  }), [authState, login, register, requestPasswordReset, resetPassword, resendVerificationEmail, verifyEmail, changePassword, logout, deleteAccount, updateAvatar, refreshUser]);
 
   return (
     <AuthContext.Provider value={contextValue}>

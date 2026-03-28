@@ -29,7 +29,7 @@ interface ProfileState {
  * Отображает данные профиля и предоставляет возможность удаления аккаунта
  */
 const Profile: React.FC = () => {
-  const { user, deleteAccount, updateAvatar, refreshUser } = useAuth();
+  const { user, deleteAccount, updateAvatar, refreshUser, changePassword, resendVerificationEmail } = useAuth();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -47,6 +47,13 @@ const Profile: React.FC = () => {
   const [currentFaceitUrl, setCurrentFaceitUrl] = useState<string | null>(null);
   const [isSavingFaceit, setIsSavingFaceit] = useState(false);
   const [loadingFaceit, setLoadingFaceit] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [isSendingVerificationEmail, setIsSendingVerificationEmail] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
 
   // Загружаем текущую FACEIT ссылку при монтировании
   useEffect(() => {
@@ -100,6 +107,59 @@ const Profile: React.FC = () => {
       toast.error('Ошибка при сохранении FACEIT ссылки');
     } finally {
       setIsSavingFaceit(false);
+    }
+  };
+
+  const handlePasswordFieldChange = (
+    field: "currentPassword" | "newPassword" | "confirmPassword",
+    value: string
+  ): void => {
+    setPasswordForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleChangePassword = async (): Promise<void> => {
+    const { currentPassword, newPassword, confirmPassword } = passwordForm;
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      toast.error("Заполните все поля для смены пароля");
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      toast.error("Новый пароль должен содержать минимум 8 символов");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      toast.error("Новый пароль и подтверждение не совпадают");
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      const result = await changePassword(currentPassword, newPassword);
+      if (result.success) {
+        setPasswordForm({
+          currentPassword: "",
+          newPassword: "",
+          confirmPassword: "",
+        });
+      }
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+
+  const handleResendVerificationEmail = async (): Promise<void> => {
+    if (!user?.email) {
+      return;
+    }
+
+    setIsSendingVerificationEmail(true);
+    try {
+      await resendVerificationEmail(user.email);
+    } finally {
+      setIsSendingVerificationEmail(false);
     }
   };
 
@@ -236,6 +296,8 @@ const Profile: React.FC = () => {
   }
 
   const { isDeleting, isDialogOpen, isUploadingAvatar, lastAvatarUpdate } = state;
+  const isTeamStaff = user.role === "staff" && user.playerType === "team";
+  const teamName = user.teamName?.trim() || "";
 
   return (
     <div className="container mx-auto py-6 performance-page">
@@ -303,12 +365,49 @@ const Profile: React.FC = () => {
             </div>
             <div className="space-y-2">
               <Label>Email</Label>
-              <div className="p-2 bg-muted rounded">{user.email}</div>
+              <div className="p-2 bg-muted rounded space-y-2">
+                <div>{user.email}</div>
+                <div className="text-xs text-muted-foreground">
+                  {user.emailVerified ? "Email подтвержден" : "Email пока не подтвержден"}
+                </div>
+              </div>
             </div>
             <div className="space-y-2">
               <Label>Роль</Label>
               <div className="p-2 bg-muted rounded">
                 {user.role === "player" ? "Игрок" : "Стафф"}
+              </div>
+            </div>
+            {user.playerType === "team" && (
+              <div className="rounded-2xl border border-sky-400/25 bg-[linear-gradient(135deg,rgba(56,189,248,0.14),rgba(15,23,42,0.92))] p-5 shadow-[0_18px_40px_rgba(14,165,233,0.12)]">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-200/80">
+                      Текущая команда
+                    </p>
+                    <p className="mt-2 text-2xl font-semibold text-white">
+                      {teamName || "Команда пока не назначена"}
+                    </p>
+                    <p className="mt-2 text-sm text-slate-300">
+                      {teamName
+                        ? user.role === "staff"
+                          ? "Вы работаете внутри этой команды и управляете её составом."
+                          : "Ваш профиль привязан к этой команде."
+                        : user.role === "staff"
+                          ? "Создайте команду или присоединитесь по staff-коду, чтобы начать работу."
+                          : "Команда появится здесь после привязки по team-коду."}
+                    </p>
+                  </div>
+                  <div className="inline-flex items-center rounded-full border border-sky-300/25 bg-sky-400/10 px-3 py-1 text-xs font-medium text-sky-100">
+                    {user.role === "staff" ? "Staff / Team" : "Player / Team"}
+                  </div>
+                </div>
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label>Тип профиля</Label>
+              <div className="p-2 bg-muted rounded">
+                {user.playerType === "team" ? "Командный" : "Solo"}
               </div>
             </div>
 
@@ -389,6 +488,88 @@ const Profile: React.FC = () => {
               )}
             </div>
 
+            <div className="border-t pt-6">
+              <div className="mb-4">
+                <h2 className="text-lg font-semibold">Безопасность</h2>
+                <p className="text-sm text-muted-foreground">
+                  Подтверждение почты и смена пароля аккаунта.
+                </p>
+              </div>
+
+              <div className="space-y-6">
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between gap-4 rounded-lg border p-4">
+                    <div>
+                      <p className="font-medium">Статус email</p>
+                      <p className="text-sm text-muted-foreground">
+                        {user.emailVerified
+                          ? "Почта подтверждена, аккаунт активен."
+                          : "Почта еще не подтверждена. Без этого вход может быть ограничен."}
+                      </p>
+                    </div>
+                    {!user.emailVerified && (
+                      <Button
+                        variant="outline"
+                        onClick={handleResendVerificationEmail}
+                        disabled={isSendingVerificationEmail}
+                      >
+                        {isSendingVerificationEmail ? "Отправляем..." : "Отправить письмо"}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <p className="font-medium">Сменить пароль</p>
+                    <p className="text-sm text-muted-foreground">
+                      После смены пароля потребуется войти в аккаунт заново.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="current-password">Текущий пароль</Label>
+                    <Input
+                      id="current-password"
+                      type="password"
+                      value={passwordForm.currentPassword}
+                      onChange={(event) => handlePasswordFieldChange("currentPassword", event.target.value)}
+                      autoComplete="current-password"
+                      disabled={isChangingPassword}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="new-password">Новый пароль</Label>
+                    <Input
+                      id="new-password"
+                      type="password"
+                      value={passwordForm.newPassword}
+                      onChange={(event) => handlePasswordFieldChange("newPassword", event.target.value)}
+                      autoComplete="new-password"
+                      disabled={isChangingPassword}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="confirm-new-password">Повторите новый пароль</Label>
+                    <Input
+                      id="confirm-new-password"
+                      type="password"
+                      value={passwordForm.confirmPassword}
+                      onChange={(event) => handlePasswordFieldChange("confirmPassword", event.target.value)}
+                      autoComplete="new-password"
+                      disabled={isChangingPassword}
+                    />
+                  </div>
+
+                  <Button onClick={handleChangePassword} disabled={isChangingPassword}>
+                    {isChangingPassword ? "Сохраняем..." : "Обновить пароль"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+
           </CardContent>
           <CardFooter>
             {/* Диалог подтверждения удаления аккаунта */}
@@ -422,42 +603,44 @@ const Profile: React.FC = () => {
             </Dialog>
           </CardFooter>
         </Card>
-        
-        {/* Карточка со статистикой */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Статистика</CardTitle>
-            <CardDescription>
-              Сводка вашей активности
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="p-4 bg-muted rounded">
-              <p className="text-sm">Эта секция будет содержать вашу персональную статистику.</p>
-            </div>
-            {/* Дополнительная статистика может быть добавлена здесь */}
-          </CardContent>
-        </Card>
 
-        {user.role === "staff" && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Права и доступ</CardTitle>
-              <CardDescription>
-                Управление привилегиями сотрудника
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <StaffPrivilegeUpgrade
-                onUpgradeSuccess={refreshUser}
-              />
-            </CardContent>
-          </Card>
-        )}
+        <div className="space-y-8">
+          {isTeamStaff && (
+            <TeamManagement />
+          )}
 
-        {user.role === "staff" && user.playerType === "team" && (
-          <TeamManagement />
-        )}
+          {user.role !== "staff" && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Статистика</CardTitle>
+                <CardDescription>
+                  Сводка вашей активности
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="p-4 bg-muted rounded">
+                  <p className="text-sm">Подробная статистика доступна в разделах «Статистика», «Настроение и энергия» и «Тесты».</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {user.role === "staff" && !isTeamStaff && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Права и доступ</CardTitle>
+                <CardDescription>
+                  Управление привилегиями сотрудника
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <StaffPrivilegeUpgrade
+                  onUpgradeSuccess={refreshUser}
+                />
+              </CardContent>
+            </Card>
+          )}
+        </div>
       </div>
     </div>
   );

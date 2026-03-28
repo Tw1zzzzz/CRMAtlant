@@ -22,6 +22,13 @@ assert(
 );
 
 assert(
+  authController.includes('export const resendVerificationEmail') &&
+    authController.includes('export const verifyEmail') &&
+    authController.includes('export const changePassword'),
+  'Auth controller should expose email verification and password change handlers'
+);
+
+assert(
   authRoutes.includes("router.post('/forgot-password'"),
   'Auth routes should register forgot-password endpoint'
 );
@@ -32,12 +39,22 @@ assert(
 );
 
 assert(
+  authRoutes.includes("router.post('/resend-verification'") &&
+    authRoutes.includes("router.post('/verify-email'") &&
+    authRoutes.includes("router.post('/change-password'"),
+  'Auth routes should register email verification and password change endpoints'
+);
+
+assert(
   userModel.includes('passwordResetTokenHash') &&
     userModel.includes('passwordResetExpiresAt') &&
+    userModel.includes('emailVerified') &&
+    userModel.includes('emailVerificationTokenHash') &&
+    userModel.includes('emailVerificationExpiresAt') &&
     userModel.includes('passwordChangedAt') &&
     userModel.includes('teamId') &&
     userModel.includes('teamName'),
-  'User model should include password reset and team fields'
+  'User model should include password reset, email verification and team fields'
 );
 
 assert(

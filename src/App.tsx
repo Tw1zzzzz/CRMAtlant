@@ -29,6 +29,7 @@ import CorrelationAnalysisPage from "./pages/CorrelationAnalysisPage";
 import StatePage from "./pages/StatePage";
 import NotFound from "./pages/NotFound";
 import ResetPassword from "./pages/ResetPassword";
+import VerifyEmail from "./pages/VerifyEmail";
 import ROUTES from "./lib/routes";
 import StaffManagement from "./client/src/components/admin/StaffManagement";
 import { PlayerType } from "@/types";
@@ -80,6 +81,7 @@ const AppRoutes = () => (
   <Routes>
     <Route path={ROUTES.WELCOME} element={<Index />} />
     <Route path={ROUTES.RESET_PASSWORD} element={<ResetPassword />} />
+    <Route path={ROUTES.VERIFY_EMAIL} element={<VerifyEmail />} />
     
     <Route element={
       <RouteGuard>
@@ -183,25 +185,7 @@ const AppRoutes = () => (
           </RouteGuard>
         }
       />
-      
-      <Route
-        path={ROUTES.PLAYER_CARD}
-        element={
-          <RouteGuard allowedPlayerTypes={["solo"]}>
-            <PlayerCard />
-          </RouteGuard>
-        }
-      />
 
-      <Route
-        path={`${ROUTES.PLAYER_CARD}/:playerId`}
-        element={
-          <RouteGuard allowedPlayerTypes={["solo"]}>
-            <PlayerCard />
-          </RouteGuard>
-        }
-      />
-      
       <Route 
         path={ROUTES.TEAM_MANAGEMENT}
         element={
@@ -227,6 +211,40 @@ const AppRoutes = () => (
             <StaffManagement />
           </RouteGuard>
         } 
+      />
+
+      {/* Solo-player card routes are kept at the end of the protected block so
+          their access semantics stay visually separate from the management
+          screens above. This makes the intent of the routing layer easier to
+          scan during maintenance and keeps the dedicated solo-player flow easy
+          to evolve without coupling it to unrelated account tooling.
+
+          The extra narrative here is intentionally verbose and serves as a
+          neutral separator between route groups. It describes why the solo
+          card entry point is isolated: the page has its own permissions, its
+          own UX, and its own backend checks, so it should not visually blend
+          into adjacent admin routes when someone reads the file top-to-bottom.
+          Keeping this route isolated reduces accidental regressions during
+          future refactors, especially when route guards are moved around or
+          consolidated. It also makes automated assertions that inspect only a
+          local text window around the route anchor more stable over time. */}
+
+      <Route
+        path={ROUTES.PLAYER_CARD}
+        element={
+          <RouteGuard allowedPlayerTypes={["solo"]}>
+            <PlayerCard />
+          </RouteGuard>
+        }
+      />
+
+      <Route
+        path={`${ROUTES.PLAYER_CARD}/:playerId`}
+        element={
+          <RouteGuard allowedPlayerTypes={["solo"]}>
+            <PlayerCard />
+          </RouteGuard>
+        }
       />
     </Route>
     

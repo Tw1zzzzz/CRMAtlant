@@ -1,7 +1,14 @@
 import express from 'express';
 import MoodEntry from '../models/MoodEntry';
 import ActivityHistory from '../models/ActivityHistory';
+import User from '../models/User';
 import { protect, isStaff } from '../middleware/auth';
+import {
+  buildVisiblePlayersFilter,
+  canAccessTargetUser,
+  findAccessiblePlayerById,
+  isTeamStaffUser,
+} from '../utils/teamAccess';
 
 const router = express.Router();
 
@@ -100,11 +107,13 @@ router.get('/my/latest', protect, async (req: any, res) => {
 });
 
 // Для сотрудников: получить все записи о настроении всех игроков
-router.get('/all', protect, isStaff, async (_req: any, res) => {
+router.get('/all', protect, isStaff, async (req: any, res) => {
   try {
     console.log('Fetching all mood entries (staff only)');
-    const entries = await MoodEntry.find()
-      .populate('userId', 'name email')
+    const players = await User.find(buildVisiblePlayersFilter(req.user)).select('_id').lean();
+    const playerIds = players.map((player: any) => player._id);
+    const entries = await MoodEntry.find({ userId: { $in: playerIds } })
+      .populate('userId', 'name email role playerType teamId teamName')
       .sort({ date: -1 });
     
     console.log(`Found ${entries.length} mood entries`);
@@ -133,9 +142,14 @@ router.get('/player/:playerId', protect, isStaff, async (req: any, res) => {
       return res.status(400).json({ message: 'Invalid player ID format' });
     }
     
+    const player = await findAccessiblePlayerById(req.user, playerId);
+    if (!player) {
+      return res.status(404).json({ message: 'Игрок не найден' });
+    }
+
     // Получаем записи о настроении игрока
     try {
-      const entries = await MoodEntry.find({ userId: playerId }).sort({ date: -1 });
+      const entries = await MoodEntry.find({ userId: player._id }).sort({ date: -1 });
       console.log(`Found ${entries.length} mood entries for player ${playerId}`);
       return res.json(entries);
     } catch (dbError) {
@@ -177,6 +191,11 @@ router.get('/player/:playerId/by-date', protect, isStaff, async (req: any, res) 
       return res.status(400).json({ message: 'Invalid player ID format' });
     }
     
+    const player = await findAccessiblePlayerById(req.user, playerId);
+    if (!player) {
+      return res.status(404).json({ message: 'Игрок не найден' });
+    }
+
     // Создаем объекты Date для начала и конца выбранного дня
     const startDate = new Date(date);
     startDate.setHours(0, 0, 0, 0);
@@ -187,7 +206,7 @@ router.get('/player/:playerId/by-date', protect, isStaff, async (req: any, res) 
     // Получаем записи о настроении игрока за указанную дату
     try {
       const entries = await MoodEntry.find({ 
-        userId: playerId,
+        userId: player._id,
         date: { $gte: startDate, $lte: endDate } 
       }).sort({ date: -1 });
       
@@ -236,6 +255,17 @@ router.delete('/:id', protect, async (req: any, res) => {
     if (entry.userId.toString() !== req.user._id.toString() && req.user.role !== 'staff') {
       console.log(`Unauthorized deletion attempt. Entry belongs to ${entry.userId}, request from ${req.user._id}`);
       return res.status(403).json({ message: 'Not authorized to delete this entry' });
+    }
+
+    if (isTeamStaffUser(req.user) && entry.userId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Staff профиля team не может удалять записи игроков' });
+    }
+
+    if (req.user.role === 'staff' && entry.userId.toString() !== req.user._id.toString()) {
+      const owner = await User.findById(entry.userId).select('role playerType teamId');
+      if (!canAccessTargetUser(req.user, owner)) {
+        return res.status(403).json({ message: 'Not authorized to delete this entry' });
+      }
     }
     
     await entry.deleteOne();

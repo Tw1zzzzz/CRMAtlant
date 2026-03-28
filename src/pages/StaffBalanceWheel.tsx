@@ -11,26 +11,6 @@ import { Button } from "@/components/ui/button";
 import { RefreshCw, AlertCircle } from "lucide-react";
 import { COLORS, COMPONENT_STYLES } from "@/styles/theme";
 
-// Тестовые данные игроков на случай, если API не работает
-const TEST_PLAYERS: User[] = [
-  { id: "valid-test-id-1", name: "Гриша", email: "grisha@test.com", role: "player" },
-  { id: "valid-test-id-2", name: "Алексей", email: "alexey@test.com", role: "player" },
-  { id: "valid-test-id-3", name: "nbl", email: "nbl@test.com", role: "player" },
-  { id: "valid-test-id-4", name: "Максим", email: "maxim@test.com", role: "player" },
-];
-
-// Тестовое колесо баланса
-const TEST_WHEEL_DATA = {
-  physical: 7,
-  emotional: 8,
-  intellectual: 6,
-  spiritual: 5,
-  occupational: 9,
-  social: 7,
-  environmental: 6,
-  financial: 8,
-};
-
 const StaffBalanceWheel = () => {
   const { user } = useAuth();
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>("");
@@ -82,22 +62,23 @@ const StaffBalanceWheel = () => {
               setSelectedPlayerId(processedPlayers[0].id);
             }
           } else {
-            // Если нет валидных игроков, используем тестовые данные
-            setPlayers(TEST_PLAYERS);
-            setSelectedPlayerId(TEST_PLAYERS[0].id);
+            setPlayers([]);
+            setSelectedPlayerId("");
             setPlayersDataError(true);
+            setApiError("Игроки команды не найдены");
           }
         } else {
-          // Если нет данных или неверный формат, используем тестовые данные
-          setPlayers(TEST_PLAYERS);
-          setSelectedPlayerId(TEST_PLAYERS[0].id);
+          setPlayers([]);
+          setSelectedPlayerId("");
           setPlayersDataError(true);
+          setApiError("Не удалось загрузить список игроков");
         }
       } catch (error) {
         console.error("Ошибка при загрузке игроков:", error);
-        setPlayers(TEST_PLAYERS);
-        setSelectedPlayerId(TEST_PLAYERS[0].id);
+        setPlayers([]);
+        setSelectedPlayerId("");
         setPlayersDataError(true);
+        setApiError("Не удалось загрузить список игроков");
       } finally {
         setLoadingPlayers(false);
       }
@@ -182,6 +163,9 @@ const StaffBalanceWheel = () => {
     // Загружаем данные только если есть игроки
     if (players.length > 0) {
       fetchAllPlayersWheelData();
+    } else {
+      setAllPlayersWheelData([]);
+      setBalanceWheels([]);
     }
   }, [players, refreshTrigger]);
 

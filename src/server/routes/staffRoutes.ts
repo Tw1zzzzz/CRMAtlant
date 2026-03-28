@@ -1,6 +1,12 @@
 import express from 'express';
 import User from '../models/User';
 import { protect, isStaff, hasPrivilegeKey } from '../middleware/auth';
+import {
+  buildVisibleStaffFilter,
+  findAccessibleStaffById,
+  getScopedTeamId,
+  isTeamStaffUser,
+} from '../utils/teamAccess';
 
 const router = express.Router();
 
@@ -12,7 +18,7 @@ router.use(isStaff);
 router.get('/', hasPrivilegeKey, async (_req, res) => {
   try {
     console.log('Fetching all staff members');
-    const staffMembers = await User.find({ role: 'staff' })
+    const staffMembers = await User.find(buildVisibleStaffFilter(_req.user))
       .select('name email role privilegeKey createdAt')
       .sort({ createdAt: -1 });
 
@@ -37,7 +43,7 @@ router.get('/', hasPrivilegeKey, async (_req, res) => {
 router.get('/:id', hasPrivilegeKey, async (req, res) => {
   try {
     const { id } = req.params;
-    const staffMember = await User.findById(id).select('name email role createdAt');
+    const staffMember = await findAccessibleStaffById(req.user, id, 'name email role playerType teamId teamName createdAt privilegeKey');
     
     if (!staffMember) {
       return res.status(404).json({ message: 'Сотрудник не найден' });
@@ -62,11 +68,15 @@ router.get('/:id', hasPrivilegeKey, async (req, res) => {
 // Обновить привилегии сотрудника (только для staff с ключом привилегий)
 router.patch('/:id/privileges', hasPrivilegeKey, async (req, res) => {
   try {
+    if (isTeamStaffUser(req.user)) {
+      return res.status(403).json({ message: 'Для staff профиля team ручное управление привилегиями не используется' });
+    }
+
     const { id } = req.params;
     const { grantPrivileges } = req.body;
 
     // Проверяем, что целевой пользователь существует и является сотрудником
-    const targetStaff = await User.findById(id);
+    const targetStaff = await findAccessibleStaffById(req.user, id);
     if (!targetStaff) {
       return res.status(404).json({ message: 'Сотрудник не найден' });
     }
@@ -125,12 +135,27 @@ router.post('/', hasPrivilegeKey, async (req, res) => {
       });
     }
 
+    const isTeamStaff = isTeamStaffUser(req.user);
+    const teamId = getScopedTeamId(req.user);
+    if (isTeamStaff && !teamId) {
+      return res.status(400).json({
+        message: 'Сначала создайте или выберите команду, чтобы добавлять staff'
+      });
+    }
+
     // Создаем нового сотрудника
     const newStaff = new User({
       name,
       email,
       password,
-      role: 'staff'
+      role: 'staff',
+      ...(isTeamStaff
+        ? {
+            playerType: 'team',
+            teamId,
+            teamName: req.user.teamName || '',
+          }
+        : {})
     });
 
     await newStaff.save();
@@ -167,7 +192,7 @@ router.delete('/:id', hasPrivilegeKey, async (req, res) => {
       });
     }
 
-    const staffMember = await User.findById(id);
+    const staffMember = await findAccessibleStaffById(req.user, id);
     if (!staffMember) {
       return res.status(404).json({ message: 'Сотрудник не найден' });
     }

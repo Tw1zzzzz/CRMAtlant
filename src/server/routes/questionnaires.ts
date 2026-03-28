@@ -6,6 +6,7 @@ import SleepEntry from '../models/SleepEntry';
 import User from '../models/User';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { badRequest } from '../utils/apiError';
+import { findAccessiblePlayerById, isTeamStaffUser } from '../utils/teamAccess';
 import {
   BASELINE_CS2_ROLES,
   BASELINE_ROUND_STRENGTHS,
@@ -63,6 +64,13 @@ function calculateSleepHours(startTime?: string, endTime?: string) {
 router.post(
   '/daily',
   asyncHandler(async (req: any, res) => {
+    if (isTeamStaffUser(req.user)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Staff профиля team доступен только read-only режим daily questionnaire'
+      });
+    }
+
     const {
       date,
       userId,
@@ -90,9 +98,17 @@ router.post(
       };
     } = req.body || {};
 
-    const targetUserId = req.user.role === 'staff' && userId ? userId : req.user._id;
+    let targetUserId = req.user.role === 'staff' && userId ? userId : req.user._id;
     const day = parseDateOnly(date);
     if (!day) throw badRequest('Некорректная дата (ожидается YYYY-MM-DD)');
+
+    if (req.user.role === 'staff' && userId) {
+      const player = await findAccessiblePlayerById(req.user, userId, '_id');
+      if (!player) {
+        throw badRequest('Игрок недоступен для этой команды');
+      }
+      targetUserId = player._id;
+    }
 
     const ops: Array<Promise<any>> = [];
 
@@ -203,10 +219,13 @@ router.get(
     const dateTo = parseDateOnly(req.query.dateTo as string | undefined) || new Date();
     if (!dateFrom) throw badRequest('Некорректная dateFrom');
 
+    const player = await findAccessiblePlayerById(req.user, playerId, '_id');
+    if (!player) throw badRequest('Игрок недоступен для этой команды');
+
     const [mood, sleep, screen] = await Promise.all([
-      MoodEntry.find({ userId: playerId, date: { $gte: dateFrom, $lte: dateTo } }).sort({ date: -1 }).lean(),
-      SleepEntry.find({ userId: playerId, date: { $gte: dateFrom, $lte: dateTo } }).sort({ date: -1 }).lean(),
-      ScreenTime.find({ userId: playerId, date: { $gte: dateFrom, $lte: dateTo } }).sort({ date: -1 }).lean()
+      MoodEntry.find({ userId: player._id, date: { $gte: dateFrom, $lte: dateTo } }).sort({ date: -1 }).lean(),
+      SleepEntry.find({ userId: player._id, date: { $gte: dateFrom, $lte: dateTo } }).sort({ date: -1 }).lean(),
+      ScreenTime.find({ userId: player._id, date: { $gte: dateFrom, $lte: dateTo } }).sort({ date: -1 }).lean()
     ]);
 
     return res.json({ success: true, mood, sleep, screen });

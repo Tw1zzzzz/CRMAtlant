@@ -3,6 +3,7 @@ export const ROUTES = {
   // Публичные маршруты
   WELCOME: '/welcome',
   RESET_PASSWORD: '/reset-password',
+  VERIFY_EMAIL: '/verify-email',
 
   // Защищенные маршруты
   DASHBOARD: '/',
@@ -39,7 +40,7 @@ export const ROUTES = {
 };
 
 export const isProtectedRoute = (path: string): boolean => {
-  return path !== ROUTES.WELCOME && path !== ROUTES.RESET_PASSWORD && path !== ROUTES.NOT_FOUND;
+  return path !== ROUTES.WELCOME && path !== ROUTES.RESET_PASSWORD && path !== ROUTES.VERIFY_EMAIL && path !== ROUTES.NOT_FOUND;
 };
 
 export const isStaffRoute = (path: string): boolean => {

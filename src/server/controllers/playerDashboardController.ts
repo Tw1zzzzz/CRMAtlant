@@ -18,6 +18,7 @@ import {
   toDayKey
 } from '../domain/scores';
 import { buildBrainPerformanceSummary } from '../services/brainTestsService';
+import { findAccessiblePlayerById } from '../utils/teamAccess';
 
 function startOfDayUTC(d: Date) {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
@@ -49,7 +50,11 @@ export const getPlayerDashboardByUserId = asyncHandler(async (req: Request, res:
     throw badRequest('Некорректный формат userId');
   }
 
-  const user = await User.findById(userId).select('name email avatar role');
+  const user = await findAccessiblePlayerById(
+    (req as any).user,
+    userId,
+    'name email avatar role playerType teamId'
+  );
   if (!user) throw notFound('Пользователь не найден');
 
   const playerCard = await PlayerCard.findOne({ userId: user._id });

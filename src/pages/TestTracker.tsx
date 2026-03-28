@@ -10,7 +10,7 @@ import { Plus, Link as LinkIcon, Calendar as CalendarIcon, Image, ExternalLink, 
 import { useToast } from "@/hooks/use-toast";
 import { TestEntry } from "@/types";
 import { testRepository } from "@/lib/dataRepository";
-import { createTestEntry, deleteTestEntry, getMyTestEntries, getTestsStateImpact } from "@/lib/api";
+import { createTestEntry, deleteTestEntry, getMyTestEntries, getTeamTestSummary, getTestsStateImpact } from "@/lib/api";
 import { formatDate, getCurrentWeekRange, getWeekLabel, getPrevWeek, getNextWeek } from "@/utils/dateUtils";
 import { useAuth } from "@/hooks/useAuth";
 import { COLORS } from "@/styles/theme";
@@ -41,6 +41,46 @@ type StateImpactSummary = {
     focus: { low: number; mid: number; high: number };
     stress: { low: number; mid: number; high: number };
   };
+};
+
+type TeamTestSummary = {
+  summary: {
+    teamId: string | null;
+    teamName: string;
+    playersCount: number;
+    totalEntries: number;
+    weeklyEntries: number;
+    scoredEntries: number;
+    avgScore: number | null;
+    avgStateIndex: number | null;
+    avgSleepHours: number | null;
+    avgScreenTimeHours: number | null;
+  };
+  byPlayer: Array<{
+    userId: string;
+    name: string;
+    entries: number;
+    weeklyEntries: number;
+    avgScore: number | null;
+    avgSleepHours: number | null;
+    avgScreenTimeHours: number | null;
+    lastTestAt: string | null;
+  }>;
+  byTestType: Array<{
+    type: string;
+    entries: number;
+    avgScore: number | null;
+  }>;
+  recentEntries: Array<{
+    id: string;
+    userId: string;
+    playerName: string;
+    name: string;
+    testType: string;
+    scoreNormalized: number | null;
+    measuredAt: string;
+    isWeeklyTest: boolean;
+  }>;
 };
 
 const TestTracker = () => {
@@ -90,8 +130,10 @@ const TestTracker = () => {
   const [contextRoleFilter, setContextRoleFilter] = useState<string>("all");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [stateImpact, setStateImpact] = useState<StateImpactSummary | null>(null);
+  const [teamSummary, setTeamSummary] = useState<TeamTestSummary | null>(null);
   
   const isStaff = user?.role === "staff";
+  const isTeamStaff = isStaff && user?.playerType === "team";
   const hasPerformanceCoachCrmAccess = isStaff || Boolean(user?.hasPerformanceCoachCrmAccess);
 
   const parseOptionalNumber = (value: string) => {
@@ -188,7 +230,7 @@ const TestTracker = () => {
   
   useEffect(() => {
     void loadEntries();
-  }, [hasPerformanceCoachCrmAccess, user]);
+  }, [hasPerformanceCoachCrmAccess, user, isTeamStaff]);
 
   useEffect(() => {
     const requestedTab = searchParams.get("tab");
@@ -232,12 +274,43 @@ const TestTracker = () => {
 
     setStateImpact(null);
   }, [user, hasPerformanceCoachCrmAccess, periodFilter, testTypeFilter, contextRoleFilter, sourceFilter]);
+
+  useEffect(() => {
+    const loadTeamSummary = async () => {
+      if (!user || !hasPerformanceCoachCrmAccess || !isTeamStaff) {
+        setTeamSummary(null);
+        return;
+      }
+
+      try {
+        const now = new Date();
+        const days = Number(periodFilter);
+        const fromDate = new Date(now);
+        fromDate.setDate(now.getDate() - days);
+        const response = await getTeamTestSummary({
+          from: fromDate.toISOString().slice(0, 10),
+          to: now.toISOString().slice(0, 10),
+        });
+        setTeamSummary(response.data);
+      } catch (error) {
+        console.error("Error loading team test summary:", error);
+        setTeamSummary(null);
+      }
+    };
+
+    void loadTeamSummary();
+  }, [user, hasPerformanceCoachCrmAccess, isTeamStaff, periodFilter]);
   
   const loadEntries = async () => {
     try {
       setIsLoading(true);
 
       if (!hasPerformanceCoachCrmAccess) {
+        setEntries([]);
+        return;
+      }
+
+      if (isTeamStaff) {
         setEntries([]);
         return;
       }
@@ -498,6 +571,10 @@ const TestTracker = () => {
     ? Number((scoredEntries.reduce((sum, test) => sum + (test.scoreNormalized || 0), 0) / scoredEntries.length).toFixed(1))
     : null;
   const currentWeekTestsCount = getWeekTests().length;
+  const heroEntriesCount = isTeamStaff ? teamSummary?.summary.totalEntries ?? 0 : filteredEntries.length;
+  const heroAverageScore = isTeamStaff ? teamSummary?.summary.avgScore ?? null : averageNormalizedScore;
+  const heroWeeklyEntries = isTeamStaff ? teamSummary?.summary.weeklyEntries ?? 0 : currentWeekTestsCount;
+  const heroStateIndex = stateImpact?.totals.avgStateIndex ?? (isTeamStaff ? teamSummary?.summary.avgStateIndex ?? "-" : "-");
   const questionnaireBreakdownSum = (parseFloat(qScreenEntertainment) || 0) +
     (parseFloat(qScreenCommunication) || 0) +
     (parseFloat(qScreenBrowser) || 0) +
@@ -554,22 +631,22 @@ const TestTracker = () => {
             <div className="grid grid-cols-2 gap-3 xl:min-w-[420px]">
               <div className="rounded-[22px] border p-4" style={{ backgroundColor: "rgba(9, 14, 26, 0.34)", borderColor: "rgba(148, 163, 184, 0.18)" }}>
                 <div className="text-[11px] uppercase tracking-[0.22em]" style={{ color: "rgba(191, 219, 254, 0.78)" }}>Записей</div>
-                <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{filteredEntries.length}</div>
+                <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{heroEntriesCount}</div>
                 <div className="mt-1 text-sm" style={{ color: "rgba(226, 232, 240, 0.68)" }}>за выбранный период</div>
               </div>
               <div className="rounded-[22px] border p-4" style={{ backgroundColor: "rgba(9, 14, 26, 0.34)", borderColor: "rgba(148, 163, 184, 0.18)" }}>
                 <div className="text-[11px] uppercase tracking-[0.22em]" style={{ color: "rgba(191, 219, 254, 0.78)" }}>Средний score</div>
-                <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{averageNormalizedScore ?? "-"}</div>
+                <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{heroAverageScore ?? "-"}</div>
                 <div className="mt-1 text-sm" style={{ color: "rgba(226, 232, 240, 0.68)" }}>по сохранённым результатам</div>
               </div>
               <div className="rounded-[22px] border p-4" style={{ backgroundColor: "rgba(9, 14, 26, 0.34)", borderColor: "rgba(148, 163, 184, 0.18)" }}>
                 <div className="text-[11px] uppercase tracking-[0.22em]" style={{ color: "rgba(191, 219, 254, 0.78)" }}>Эта неделя</div>
-                <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{currentWeekTestsCount}</div>
+                <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{heroWeeklyEntries}</div>
                 <div className="mt-1 text-sm" style={{ color: "rgba(226, 232, 240, 0.68)" }}>тестов в текущем окне</div>
               </div>
               <div className="rounded-[22px] border p-4" style={{ backgroundColor: "rgba(9, 14, 26, 0.34)", borderColor: "rgba(148, 163, 184, 0.18)" }}>
                 <div className="text-[11px] uppercase tracking-[0.22em]" style={{ color: "rgba(191, 219, 254, 0.78)" }}>State index</div>
-                <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{stateImpact?.totals.avgStateIndex ?? "-"}</div>
+                <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{heroStateIndex}</div>
                 <div className="mt-1 text-sm" style={{ color: "rgba(226, 232, 240, 0.68)" }}>связь состояния и результата</div>
               </div>
             </div>
@@ -715,6 +792,149 @@ const TestTracker = () => {
             )}
           </section>
 
+          {isTeamStaff ? (
+            <div className="space-y-5">
+              <section
+                className="rounded-[28px] border p-5 md:p-6"
+                style={{
+                  background: "linear-gradient(150deg, rgba(0, 227, 150, 0.08), rgba(17, 24, 39, 0.96) 68%)",
+                  borderColor: "rgba(52, 211, 153, 0.2)"
+                }}
+              >
+                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <div className="text-[11px] uppercase tracking-[0.24em]" style={{ color: COLORS.textColorSecondary }}>
+                      Team mode
+                    </div>
+                    <h3 className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>
+                      Командная статистика тестов и daily-сигналов
+                    </h3>
+                    <p className="mt-2 max-w-2xl text-sm leading-7" style={{ color: COLORS.textColorSecondary }}>
+                      Для staff профиля `team` вкладка переведена в read-only режим: здесь собраны только данные вашей команды без форм заполнения.
+                    </p>
+                  </div>
+                  <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                    <div className="text-[11px] uppercase tracking-[0.22em]" style={{ color: COLORS.textColorSecondary }}>Команда</div>
+                    <div className="mt-2 text-xl font-semibold" style={{ color: COLORS.textColor }}>
+                      {teamSummary?.summary.teamName || user?.teamName || "Моя команда"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-5 grid gap-3 md:grid-cols-4">
+                  <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                    <div className="text-[11px] uppercase tracking-[0.18em]" style={{ color: COLORS.textColorSecondary }}>Игроков</div>
+                    <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{teamSummary?.summary.playersCount ?? 0}</div>
+                  </div>
+                  <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                    <div className="text-[11px] uppercase tracking-[0.18em]" style={{ color: COLORS.textColorSecondary }}>Сон</div>
+                    <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{teamSummary?.summary.avgSleepHours ?? "-"}</div>
+                    <div className="mt-1 text-sm" style={{ color: COLORS.textColorSecondary }}>среднее по команде</div>
+                  </div>
+                  <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                    <div className="text-[11px] uppercase tracking-[0.18em]" style={{ color: COLORS.textColorSecondary }}>Экранное время</div>
+                    <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{teamSummary?.summary.avgScreenTimeHours ?? "-"}</div>
+                    <div className="mt-1 text-sm" style={{ color: COLORS.textColorSecondary }}>часов в среднем</div>
+                  </div>
+                  <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                    <div className="text-[11px] uppercase tracking-[0.18em]" style={{ color: COLORS.textColorSecondary }}>State index</div>
+                    <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{teamSummary?.summary.avgStateIndex ?? "-"}</div>
+                    <div className="mt-1 text-sm" style={{ color: COLORS.textColorSecondary }}>связь состояния и результата</div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
+                <Card style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor }}>
+                  <CardHeader>
+                    <CardTitle style={{ color: COLORS.textColor }}>Игроки команды</CardTitle>
+                    <CardDescription style={{ color: COLORS.textColorSecondary }}>
+                      Сводка по тестовой активности, сну и экранному времени вашей команды.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {(teamSummary?.byPlayer || []).length === 0 ? (
+                      <p style={{ color: COLORS.textColorSecondary }}>Пока нет данных по игрокам команды.</p>
+                    ) : (
+                      teamSummary!.byPlayer.map((player) => (
+                        <div key={player.userId} className="rounded-[18px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="text-lg font-semibold" style={{ color: COLORS.textColor }}>{player.name}</div>
+                              <div className="mt-1 text-sm" style={{ color: COLORS.textColorSecondary }}>
+                                Записей: {player.entries} • Weekly: {player.weeklyEntries}
+                              </div>
+                            </div>
+                            <div className="text-right text-sm" style={{ color: COLORS.textColorSecondary }}>
+                              <div>Score: {player.avgScore ?? "-"}</div>
+                              <div>Сон: {player.avgSleepHours ?? "-"}</div>
+                              <div>Экран: {player.avgScreenTimeHours ?? "-"}</div>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </CardContent>
+                </Card>
+
+                <div className="space-y-5">
+                  <Card style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor }}>
+                    <CardHeader>
+                      <CardTitle style={{ color: COLORS.textColor }}>По типам тестов</CardTitle>
+                      <CardDescription style={{ color: COLORS.textColorSecondary }}>
+                        Какие типы тестов чаще встречаются и каков средний score.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {(teamSummary?.byTestType || []).length === 0 ? (
+                        <p style={{ color: COLORS.textColorSecondary }}>Пока нет сохранённых результатов.</p>
+                      ) : (
+                        teamSummary!.byTestType.map((item) => (
+                          <div key={item.type} className="flex items-center justify-between rounded-[16px] border px-4 py-3" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                            <span style={{ color: COLORS.textColor }}>{getTestTypeLabel(item.type)}</span>
+                            <span style={{ color: COLORS.textColorSecondary }}>
+                              {item.entries} • score {item.avgScore ?? "-"}
+                            </span>
+                          </div>
+                        ))
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  <Card style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor }}>
+                    <CardHeader>
+                      <CardTitle style={{ color: COLORS.textColor }}>Последние записи</CardTitle>
+                      <CardDescription style={{ color: COLORS.textColorSecondary }}>
+                        Последние результаты игроков вашей команды.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {(teamSummary?.recentEntries || []).length === 0 ? (
+                        <p style={{ color: COLORS.textColorSecondary }}>Последних записей пока нет.</p>
+                      ) : (
+                        teamSummary!.recentEntries.map((entry) => (
+                          <div key={entry.id} className="rounded-[16px] border px-4 py-3" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <div className="font-medium" style={{ color: COLORS.textColor }}>{entry.playerName}</div>
+                                <div className="text-sm" style={{ color: COLORS.textColorSecondary }}>
+                                  {entry.name} • {getTestTypeLabel(entry.testType)}
+                                </div>
+                              </div>
+                              <div className="text-right text-sm" style={{ color: COLORS.textColorSecondary }}>
+                                <div>{entry.scoreNormalized ?? "-"}</div>
+                                <div>{new Date(entry.measuredAt).toLocaleDateString("ru-RU")}</div>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              </section>
+            </div>
+          ) : (
           <Tabs
             defaultValue="questionnaire"
             value={activeTab}
@@ -996,6 +1216,7 @@ const TestTracker = () => {
             <DailyQuestionnairePanel onSaved={loadEntries} />
           </TabsContent>
           </Tabs>
+          )}
         </SubscriptionFeatureGate>
       </div>
       

@@ -48,6 +48,7 @@ const normalizePlayer = (player: any): User => {
 
 const PlayersManagement = () => {
   const { user } = useAuth();
+  const isTeamStaff = user?.role === "staff" && user?.playerType === "team";
   const [players, setPlayers] = useState<User[]>([]);
   const [selectedPlayer, setSelectedPlayer] = useState<User | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -234,14 +235,18 @@ const PlayersManagement = () => {
           <CardHeader>
             <CardTitle style={{ color: COLORS.textColor }}>Доступ ограничен</CardTitle>
             <CardDescription style={{ color: COLORS.textColorSecondary }}>
-              Для управления составом участников требуется ключ привилегий
+              {isTeamStaff
+                ? "Для этого профиля уже должен быть открыт доступ к управлению своей командой"
+                : "Для управления составом участников требуется ключ привилегий"}
             </CardDescription>
           </CardHeader>
           <CardContent className="py-4">
             <div className="flex flex-col items-center gap-4 py-6">
               <Key size={48} className="text-muted-foreground" />
               <p className="text-center" style={{ color: COLORS.textColor }}>
-                Для получения доступа к управлению игроками необходимо добавить ключ привилегий в вашем профиле.
+                {isTeamStaff
+                  ? "Если экран открылся без доступа, значит профиль еще не привязан к команде."
+                  : "Для получения доступа к управлению игроками необходимо добавить ключ привилегий в вашем профиле."}
               </p>
               <Button 
                 onClick={() => navigate("/profile")}

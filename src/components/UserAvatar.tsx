@@ -89,8 +89,6 @@ const UserAvatar: React.FC<UserAvatarProps> = ({
   // Получаем URL аватара с помощью нашей утилиты
   const avatarUrl = getUserAvatarUrl(user.avatar);
 
-  console.log('Avatar URL:', avatarUrl); // Логируем URL для отладки
-
   // Получаем инициалы пользователя для аватара
   const getInitials = (name: string): string => {
     return name
@@ -103,7 +101,6 @@ const UserAvatar: React.FC<UserAvatarProps> = ({
 
   // Обработчик успешной загрузки изображения
   const handleImageLoad = () => {
-    console.log('Avatar image loaded successfully');
     setImageLoaded(true);
     setImageError(false);
   };

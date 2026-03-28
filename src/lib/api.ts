@@ -324,6 +324,13 @@ export const getTestsStateImpact = (params?: {
   role?: string;
   source?: string;
 }) => retryRequest(() => api.get(buildTestsStateImpactPath(params)));
+export const getTeamTestSummary = (params?: { from?: string; to?: string }) => {
+  const search = new URLSearchParams();
+  if (params?.from) search.append('from', params.from);
+  if (params?.to) search.append('to', params.to);
+  const query = search.toString();
+  return retryRequest(() => api.get(`/tests/team-summary${query ? `?${query}` : ''}`));
+};
 
 export const getNotifications = () => retryRequest(() => api.get('/notifications'));
 export const submitDailyQuestionnaire = (data: DailyQuestionnairePayload) =>

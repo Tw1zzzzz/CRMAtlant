@@ -509,10 +509,10 @@ const Dashboard = () => {
 
   const moodDistributionData = isStaff
     ? [
-        { name: 'Отличное', range: '8-10', value: playersMoodStats.filter((p: any) => p.mood >= 8 || p.value >= 8).length || 5, color: '#22c55e' },
-        { name: 'Хорошее', range: '6-7', value: playersMoodStats.filter((p: any) => (p.mood >= 6 && p.mood < 8) || (p.value >= 6 && p.value < 8)).length || 8, color: '#38bdf8' },
-        { name: 'Среднее', range: '4-5', value: playersMoodStats.filter((p: any) => (p.mood >= 4 && p.mood < 6) || (p.value >= 4 && p.value < 6)).length || 4, color: '#f59e0b' },
-        { name: 'Плохое', range: '1-3', value: playersMoodStats.filter((p: any) => (p.mood >= 1 && p.mood < 4) || (p.value >= 1 && p.value < 4)).length || 2, color: '#f43f5e' }
+        { name: 'Отличное', range: '8-10', value: playersMoodStats.filter((p: any) => p.mood >= 8 || p.value >= 8).length, color: '#22c55e' },
+        { name: 'Хорошее', range: '6-7', value: playersMoodStats.filter((p: any) => (p.mood >= 6 && p.mood < 8) || (p.value >= 6 && p.value < 8)).length, color: '#38bdf8' },
+        { name: 'Среднее', range: '4-5', value: playersMoodStats.filter((p: any) => (p.mood >= 4 && p.mood < 6) || (p.value >= 4 && p.value < 6)).length, color: '#f59e0b' },
+        { name: 'Плохое', range: '1-3', value: playersMoodStats.filter((p: any) => (p.mood >= 1 && p.mood < 4) || (p.value >= 1 && p.value < 4)).length, color: '#f43f5e' }
       ]
     : [
         { name: 'Отличное', range: '8-10', value: moodEntries.filter(e => e.mood >= 8 || e.value >= 8).length || 0, color: '#22c55e' },
@@ -523,14 +523,17 @@ const Dashboard = () => {
   const moodDistributionTotal = moodDistributionData.reduce((sum, item) => sum + item.value, 0);
   const dominantMoodBucket = moodDistributionData.reduce((top, item) => (item.value > top.value ? item : top), moodDistributionData[0]);
 
+  const staffEnergyByDay = new Map(
+    weeklyData.map((entry: any) => [entry.date, typeof entry.energy === 'number' ? entry.energy : 0])
+  );
   const energyDistributionData = [
-    { day: 'Пн', энергия: isStaff ? (Math.random() * 3 + 6) : calcDayAvgEnergy(moodEntries, 1) },
-    { day: 'Вт', энергия: isStaff ? (Math.random() * 3 + 6) : calcDayAvgEnergy(moodEntries, 2) },
-    { day: 'Ср', энергия: isStaff ? (Math.random() * 3 + 5) : calcDayAvgEnergy(moodEntries, 3) },
-    { day: 'Чт', энергия: isStaff ? (Math.random() * 3 + 5) : calcDayAvgEnergy(moodEntries, 4) },
-    { day: 'Пт', энергия: isStaff ? (Math.random() * 3 + 4) : calcDayAvgEnergy(moodEntries, 5) },
-    { day: 'Сб', энергия: isStaff ? (Math.random() * 3 + 7) : calcDayAvgEnergy(moodEntries, 6) },
-    { day: 'Вс', энергия: isStaff ? (Math.random() * 3 + 7) : calcDayAvgEnergy(moodEntries, 0) }
+    { day: 'Пн', энергия: isStaff ? (staffEnergyByDay.get('Пн') ?? 0) : calcDayAvgEnergy(moodEntries, 1) },
+    { day: 'Вт', энергия: isStaff ? (staffEnergyByDay.get('Вт') ?? 0) : calcDayAvgEnergy(moodEntries, 2) },
+    { day: 'Ср', энергия: isStaff ? (staffEnergyByDay.get('Ср') ?? 0) : calcDayAvgEnergy(moodEntries, 3) },
+    { day: 'Чт', энергия: isStaff ? (staffEnergyByDay.get('Чт') ?? 0) : calcDayAvgEnergy(moodEntries, 4) },
+    { day: 'Пт', энергия: isStaff ? (staffEnergyByDay.get('Пт') ?? 0) : calcDayAvgEnergy(moodEntries, 5) },
+    { day: 'Сб', энергия: isStaff ? (staffEnergyByDay.get('Сб') ?? 0) : calcDayAvgEnergy(moodEntries, 6) },
+    { day: 'Вс', энергия: isStaff ? (staffEnergyByDay.get('Вс') ?? 0) : calcDayAvgEnergy(moodEntries, 0) }
   ];
   const nonZeroEnergyDays = energyDistributionData.filter((item) => item.энергия > 0);
   const averageEnergyLevel = nonZeroEnergyDays.length

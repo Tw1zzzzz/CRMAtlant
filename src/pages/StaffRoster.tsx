@@ -99,6 +99,7 @@ interface StaffMember {
 
 const StaffRoster = () => {
   const { user } = useAuth();
+  const isTeamStaff = user?.role === "staff" && user?.playerType === "team";
   const navigate = useNavigate();
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -538,10 +539,10 @@ const StaffRoster = () => {
       </div>
       
       <Card style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor }}>
-        <CardHeader className="pb-2">
+          <CardHeader className="pb-2">
           <CardTitle style={{ color: COLORS.textColor }}>Персонал команды</CardTitle>
           <CardDescription style={{ color: COLORS.textColorSecondary }}>
-            Управление составом персонала и их привилегиями
+            {isTeamStaff ? 'Управление составом персонала своей команды' : 'Управление составом персонала и их привилегиями'}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -572,9 +573,11 @@ const StaffRoster = () => {
                     <th className="px-4 py-3 text-left font-semibold" style={{ color: COLORS.textColor }}>
                       Email
                     </th>
-                    <th className="px-4 py-3 text-center font-semibold" style={{ color: COLORS.textColor }}>
-                      Привилегии
-                    </th>
+                    {!isTeamStaff && (
+                      <th className="px-4 py-3 text-center font-semibold" style={{ color: COLORS.textColor }}>
+                        Привилегии
+                      </th>
+                    )}
                     <th className="px-4 py-3 text-center font-semibold" style={{ color: COLORS.textColor }}>
                       Действия
                     </th>
@@ -593,35 +596,39 @@ const StaffRoster = () => {
                       <td className="px-4 py-4" style={{ color: COLORS.textColor }}>
                         {staff.email}
                       </td>
-                      <td className="px-4 py-4 text-center">
-                        {staff.hasPrivileges ? (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            <Shield className="w-3 h-3 mr-1" />
-                            Есть
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                            Нет
-                          </span>
-                        )}
-                      </td>
+                      {!isTeamStaff && (
+                        <td className="px-4 py-4 text-center">
+                          {staff.hasPrivileges ? (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              <Shield className="w-3 h-3 mr-1" />
+                              Есть
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                              Нет
+                            </span>
+                          )}
+                        </td>
+                      )}
                       <td className="px-4 py-4">
                         <div className="flex justify-center space-x-2">
                           {/* Проверяем, что это не текущий пользователь */}
                           {user?.id !== getStaffId(staff) && (
                             <>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleTogglePrivileges(getStaffId(staff), staff.name, staff.hasPrivileges)}
-                                className={staff.hasPrivileges ? 
-                                  "text-yellow-600 border-yellow-300 hover:bg-yellow-50" : 
-                                  "text-blue-600 border-blue-300 hover:bg-blue-50"
-                                }
-                                disabled={isLoading}
-                              >
-                                {staff.hasPrivileges ? 'Отозвать' : 'Предоставить'}
-                              </Button>
+                              {!isTeamStaff && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleTogglePrivileges(getStaffId(staff), staff.name, staff.hasPrivileges)}
+                                  className={staff.hasPrivileges ? 
+                                    "text-yellow-600 border-yellow-300 hover:bg-yellow-50" : 
+                                    "text-blue-600 border-blue-300 hover:bg-blue-50"
+                                  }
+                                  disabled={isLoading}
+                                >
+                                  {staff.hasPrivileges ? 'Отозвать' : 'Предоставить'}
+                                </Button>
+                              )}
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -646,7 +653,7 @@ const StaffRoster = () => {
 
                   {staffMembers.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="px-4 py-8 text-center" style={{ color: COLORS.textColorSecondary }}>
+                      <td colSpan={isTeamStaff ? 3 : 4} className="px-4 py-8 text-center" style={{ color: COLORS.textColorSecondary }}>
                         <div className="flex flex-col items-center space-y-2">
                           <Users className="w-8 h-8 text-gray-400" />
                           <p>Нет сотрудников в команде</p>

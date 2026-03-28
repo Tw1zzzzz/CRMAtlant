@@ -26,6 +26,10 @@ interface UserDocument extends mongoose.Document {
   name: string;
   email: string;
   password: string;
+  emailVerified: boolean;
+  emailVerifiedAt?: Date | null;
+  emailVerificationTokenHash?: string | null;
+  emailVerificationExpiresAt?: Date | null;
   role: string;
   playerType?: string;
   teamId?: mongoose.Types.ObjectId | null;
@@ -69,6 +73,24 @@ const userSchema = new mongoose.Schema(
       required: [true, "Пароль обязателен"],
       minlength: [6, "Пароль должен быть не менее 6 символов"],
       select: false, // Не включать пароль при запросах по умолчанию
+    },
+    emailVerified: {
+      type: Boolean,
+      default: true,
+    },
+    emailVerifiedAt: {
+      type: Date,
+      default: null,
+    },
+    emailVerificationTokenHash: {
+      type: String,
+      default: null,
+      select: false,
+    },
+    emailVerificationExpiresAt: {
+      type: Date,
+      default: null,
+      select: false,
     },
     role: {
       type: String,

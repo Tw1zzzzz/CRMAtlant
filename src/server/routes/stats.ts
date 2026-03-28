@@ -5,8 +5,21 @@ import SleepEntry from '../models/SleepEntry';
 import TestEntry from '../models/TestEntry';
 import User from '../models/User';
 import { protect, isStaff } from '../middleware/authMiddleware';
+import {
+  buildVisiblePlayersFilter,
+  canAccessTargetUser,
+  findAccessiblePlayerById,
+} from '../utils/teamAccess';
 
 const router = express.Router();
+
+const getVisiblePlayers = async (user: any) =>
+  User.find(buildVisiblePlayersFilter(user)).select('_id name email').lean();
+
+const getVisiblePlayerIds = async (user: any) => {
+  const players = await getVisiblePlayers(user);
+  return players.map((player: any) => player._id);
+};
 
 // Получить статистику настроения для текущего пользователя
 router.get('/mood', protect, async (req: any, res) => {
@@ -58,12 +71,19 @@ router.get('/sleep', protect, async (req: any, res) => {
 });
 
 // Для сотрудников: получить статистику настроения всех игроков
-router.get('/players/mood', protect, isStaff, async (_req: any, res) => {
+router.get('/players/mood', protect, isStaff, async (req: any, res) => {
   try {
     console.log('Fetching mood stats for all players (staff only)');
-    
-    // Получаем все записи о настроении
-    const allMoodEntries = await MoodEntry.find().populate('userId', 'name email');
+    const visiblePlayerIds = await getVisiblePlayerIds(req.user);
+    const filter: any = { userId: { $in: visiblePlayerIds } };
+    if (req.query.date) {
+      const startDate = new Date(req.query.date as string);
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = new Date(req.query.date as string);
+      endDate.setHours(23, 59, 59, 999);
+      filter.date = { $gte: startDate, $lte: endDate };
+    }
+    const allMoodEntries = await MoodEntry.find(filter).populate('userId', 'name email');
     console.log(`Found ${allMoodEntries.length} total mood entries`);
     
     // Группируем записи по пользователям и вычисляем средние значения
@@ -124,11 +144,12 @@ router.get('/players/mood', protect, isStaff, async (_req: any, res) => {
 });
 
 // Для сотрудников: получить статистику сна всех игроков
-router.get('/players/sleep', protect, isStaff, async (_req: any, res) => {
+router.get('/players/sleep', protect, isStaff, async (req: any, res) => {
   try {
     console.log('Fetching sleep stats for all players (staff only)');
 
-    const allSleepEntries = await SleepEntry.find().populate('userId', 'name email');
+    const visiblePlayerIds = await getVisiblePlayerIds(req.user);
+    const allSleepEntries = await SleepEntry.find({ userId: { $in: visiblePlayerIds } }).populate('userId', 'name email');
     console.log(`Found ${allSleepEntries.length} total sleep entries`);
 
     const userSleepMap = new Map();
@@ -226,10 +247,15 @@ router.get('/players/:playerId/activity', protect, isStaff, async (req: any, res
         console.error(`Invalid MongoDB ObjectId format for activity data: ${actualPlayerId}`);
         return res.status(400).json({ message: 'Invalid player ID format' });
       }
+
+      const accessiblePlayer = await findAccessiblePlayerById(req.user, actualPlayerId, '_id');
+      if (!accessiblePlayer) {
+        return res.status(404).json({ message: 'Player not found' });
+      }
       
       // Получаем все записи о настроении игрока за указанный период
       const moodEntries = await MoodEntry.find({ 
-        userId: actualPlayerId,
+        userId: accessiblePlayer._id,
         date: { $gte: startDate, $lte: endDate }
       }).sort({ date: 1 });
       
@@ -258,12 +284,11 @@ router.get('/players/:playerId/activity', protect, isStaff, async (req: any, res
 });
 
 // Для сотрудников: получить статистику тестов всех игроков
-router.get('/players/tests', protect, isStaff, async (_req: any, res) => {
+router.get('/players/tests', protect, isStaff, async (req: any, res) => {
   try {
     console.log('Fetching test stats for all players (staff only)');
-    
-    // Получаем все записи о тестах
-    const allTestEntries = await TestEntry.find().populate('userId', 'name email');
+    const visiblePlayerIds = await getVisiblePlayerIds(req.user);
+    const allTestEntries = await TestEntry.find({ userId: { $in: visiblePlayerIds } }).populate('userId', 'name email');
     console.log(`Found ${allTestEntries.length} total test entries`);
     
     // Группируем записи по пользователям
@@ -313,12 +338,11 @@ router.get('/players/tests', protect, isStaff, async (_req: any, res) => {
 });
 
 // Для сотрудников: получить статистику колес баланса всех игроков
-router.get('/players/balance-wheel', protect, isStaff, async (_req: any, res) => {
+router.get('/players/balance-wheel', protect, isStaff, async (req: any, res) => {
   try {
     console.log('Fetching balance wheel stats for all players (staff only)');
-    
-    // Получаем все колеса баланса и группируем их по пользователям
-    const allWheels = await BalanceWheel.find()
+    const visiblePlayerIds = await getVisiblePlayerIds(req.user);
+    const allWheels = await BalanceWheel.find({ userId: { $in: visiblePlayerIds } })
       .populate('userId', 'name email')
       .sort({ date: -1 });
       
@@ -386,8 +410,13 @@ router.get('/players/:playerId/mood/chart', protect, isStaff, async (req: any, r
     }
     
     try {
+      const accessiblePlayer = await findAccessiblePlayerById(req.user, playerId, '_id');
+      if (!accessiblePlayer) {
+        return res.status(404).json({ message: 'Player not found' });
+      }
+
       // Создаем базовый фильтр для запроса
-      const filter: any = { userId: playerId };
+      const filter: any = { userId: accessiblePlayer._id };
       
       // Если указана дата, добавляем фильтр по дате
       if (date) {
@@ -460,12 +489,11 @@ router.get('/players/:playerId/mood/chart', protect, isStaff, async (req: any, r
 });
 
 // Для персонала: получить агрегированные данные настроения и энергии команды по дням
-router.get('/team/mood/chart', protect, isStaff, async (_req: any, res) => {
+router.get('/team/mood/chart', protect, isStaff, async (req: any, res) => {
   try {
     console.log('Fetching team mood chart data (staff only)');
-    
-    // Получаем все записи о настроении
-    const allMoodEntries = await MoodEntry.find().populate('userId', 'name email');
+    const visiblePlayerIds = await getVisiblePlayerIds(req.user);
+    const allMoodEntries = await MoodEntry.find({ userId: { $in: visiblePlayerIds } }).populate('userId', 'name email');
     console.log(`Found ${allMoodEntries.length} total mood entries for chart`);
     
     if (allMoodEntries.length === 0) {
@@ -531,8 +559,8 @@ router.get('/analytics/mood', protect, async (req: any, res) => {
     console.log('Fetching analytics mood data for user:', req.user._id);
     
     if (req.user.role === 'staff') {
-      // Для персонала: получаем данные всех игроков
-      const allMoodEntries = await MoodEntry.find().populate('userId', 'name email');
+      const visiblePlayerIds = await getVisiblePlayerIds(req.user);
+      const allMoodEntries = await MoodEntry.find({ userId: { $in: visiblePlayerIds } }).populate('userId', 'name email');
       console.log(`Found ${allMoodEntries.length} total mood entries for staff analytics`);
       
       // Группируем записи по пользователям и вычисляем средние значения
@@ -665,8 +693,8 @@ router.get('/analytics/tests', protect, async (req: any, res) => {
     console.log('Fetching analytics test data for user:', req.user._id);
     
     if (req.user.role === 'staff') {
-      // Для персонала: получаем данные всех игроков
-      const allTestEntries = await TestEntry.find().populate('userId', 'name email');
+      const visiblePlayerIds = await getVisiblePlayerIds(req.user);
+      const allTestEntries = await TestEntry.find({ userId: { $in: visiblePlayerIds } }).populate('userId', 'name email');
       console.log(`Found ${allTestEntries.length} total test entries for staff analytics`);
       
       // Группируем записи по пользователям
@@ -738,8 +766,8 @@ router.get('/analytics/balance-wheel', protect, async (req: any, res) => {
     console.log('Fetching analytics balance wheel data for user:', req.user._id);
     
     if (req.user.role === 'staff') {
-      // Для персонала: получаем данные всех игроков
-      const allWheels = await BalanceWheel.find()
+      const visiblePlayerIds = await getVisiblePlayerIds(req.user);
+      const allWheels = await BalanceWheel.find({ userId: { $in: visiblePlayerIds } })
         .populate('userId', 'name email')
         .sort({ date: -1 });
         
@@ -858,6 +886,8 @@ router.get('/tests/state-impact', protect, async (req: any, res) => {
 
     if (req.user.role !== 'staff') {
       filter.userId = req.user._id;
+    } else {
+      filter.userId = { $in: await getVisiblePlayerIds(req.user) };
     }
 
     if (testType) {
@@ -980,13 +1010,16 @@ router.get('/tests/state-impact', protect, async (req: any, res) => {
 // Единая сводка для новой аналитики
 router.get('/analytics/overview', protect, async (req: any, res) => {
   try {
-    const baseFilter = req.user.role === 'staff' ? {} : { userId: req.user._id };
+    const baseFilter =
+      req.user.role === 'staff'
+        ? { userId: { $in: await getVisiblePlayerIds(req.user) } }
+        : { userId: req.user._id };
     const [moodEntries, testEntries, wheels, usersCount] = await Promise.all([
       MoodEntry.find(baseFilter).sort({ date: 1 }),
       TestEntry.find(baseFilter).sort({ measuredAt: 1 }),
       BalanceWheel.find(baseFilter).sort({ date: 1 }),
       req.user.role === 'staff'
-        ? User.countDocuments({ role: 'player' })
+        ? User.countDocuments(buildVisiblePlayersFilter(req.user))
         : Promise.resolve(1)
     ]);
 

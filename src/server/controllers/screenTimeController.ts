@@ -2,6 +2,11 @@ import { Request, Response } from 'express';
 import ScreenTime from '../models/ScreenTime';
 import User from '../models/User';
 import { AuthRequest } from '../middleware/auth';
+import {
+  buildVisiblePlayersFilter,
+  canAccessTargetUser,
+  findAccessiblePlayerById,
+} from '../utils/teamAccess';
 
 /**
  * Получить экранное время для пользователя
@@ -24,6 +29,16 @@ export const getScreenTime = async (req: AuthRequest, res: Response) => {
         success: false,
         message: 'Недостаточно прав для просмотра данных'
       });
+    }
+
+    if (req.user?.role === 'staff' && req.user?.id !== targetUserId) {
+      const targetUser = await User.findById(targetUserId).select('role playerType teamId');
+      if (!canAccessTargetUser(req.user, targetUser)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Недостаточно прав для просмотра данных'
+        });
+      }
     }
 
     const query: any = { userId: targetUserId };
@@ -80,7 +95,7 @@ export const createOrUpdateScreenTime = async (req: AuthRequest, res: Response) 
     }
 
     // Проверяем существование пользователя
-    const user = await User.findById(userId);
+    const user = await findAccessiblePlayerById(req.user, userId);
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -153,7 +168,10 @@ export const getScreenTimeStats = async (req: AuthRequest, res: Response) => {
     }
 
     const { dateFrom, dateTo } = req.query;
-    const query: any = {};
+    const players = await User.find(buildVisiblePlayersFilter(req.user)).select('_id').lean();
+    const query: any = {
+      userId: { $in: players.map((player: any) => player._id) }
+    };
     
     if (dateFrom || dateTo) {
       query.date = {};

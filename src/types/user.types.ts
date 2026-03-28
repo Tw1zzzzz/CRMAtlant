@@ -50,6 +50,8 @@ export interface UserSubscription {
 export interface User {
   readonly id: string;
   email: string;
+  emailVerified?: boolean;
+  emailVerifiedAt?: string | null;
   name: string;
   role: UserRole;
   playerType?: PlayerType;
@@ -91,8 +93,11 @@ export interface LoginDto {
 
 /** РћС‚РІРµС‚ РѕС‚ СЃРµСЂРІРµСЂР° РїСЂРё Р°СѓС‚РµРЅС‚РёС„РёРєР°С†РёРё */
 export interface AuthResponse {
-  token: string;
-  user: User;
+  token?: string;
+  user?: User | null;
+  message?: string;
+  requiresEmailVerification?: boolean;
+  emailDeliveryFailed?: boolean;
 }
 
 export interface PasswordResetRequestDto {
@@ -102,6 +107,19 @@ export interface PasswordResetRequestDto {
 export interface PasswordResetConfirmDto {
   token: string;
   password: string;
+}
+
+export interface EmailVerificationConfirmDto {
+  token: string;
+}
+
+export interface EmailVerificationRequestDto {
+  email: string;
+}
+
+export interface ChangePasswordDto {
+  currentPassword: string;
+  newPassword: string;
 }
 
 export interface TeamSummary {

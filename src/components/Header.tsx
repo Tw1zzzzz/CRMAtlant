@@ -15,6 +15,8 @@ import UserAvatar from "./UserAvatar";
 const Header = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const teamName = user?.teamName?.trim() || "";
+  const showTeamBanner = user?.playerType === "team" && Boolean(teamName);
 
   // Стили для хедера
   const headerStyles = {
@@ -25,8 +27,8 @@ const Header = () => {
 
   // Подрезанный SVG можно показывать крупнее без потери читаемости
   const twizzLogoStyle = {
-    height: '6rem',
-    maxWidth: '520px',
+    height: '5.25rem',
+    maxWidth: '440px',
     objectFit: 'contain' as const,
     marginLeft: '10px',
     display: 'block' as const
@@ -36,18 +38,55 @@ const Header = () => {
     <header className="p-4 flex justify-between items-center border-b" style={headerStyles}>
       <div className="flex items-center space-x-4">
         <div className="flex items-center gap-4">
-          <div>
-            {user?.playerType === "team" && user.teamName ? (
-              <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em]" style={{ color: COLORS.primary }}>
-                {user.teamName}
+          <img 
+            src={twizzLogoSvg} 
+            alt="ATLANT Technology Logo" 
+            style={twizzLogoStyle}
+          />
+          {showTeamBanner && (
+            <div
+              className="hidden min-w-[220px] rounded-xl border px-4 py-2.5 lg:block"
+              style={{
+                borderColor: "rgba(148, 163, 184, 0.12)",
+                background: "rgba(255, 255, 255, 0.03)",
+                boxShadow: "none"
+              }}
+            >
+              <p
+                className="text-[10px] font-semibold uppercase tracking-[0.22em]"
+                style={{ color: COLORS.textColorSecondary }}
+              >
+                Текущая команда
               </p>
-            ) : null}
-            <img 
-              src={twizzLogoSvg} 
-              alt="ATLANT Technology Logo" 
-              style={twizzLogoStyle}
-            />
-          </div>
+              <p className="mt-1 text-base font-semibold leading-tight text-white">
+                {teamName}
+              </p>
+              <p className="mt-1 text-[11px]" style={{ color: COLORS.textColorSecondary }}>
+                {user?.role === "staff" ? "Staff / Team" : "Player / Team"}
+              </p>
+            </div>
+          )}
+          {showTeamBanner && (
+            <div
+              className="max-w-[170px] rounded-lg border px-3 py-2 lg:hidden"
+              style={{
+                borderColor: "rgba(148, 163, 184, 0.12)",
+                backgroundColor: "rgba(255, 255, 255, 0.03)"
+              }}
+            >
+              <p className="truncate text-sm font-medium text-white">{teamName}</p>
+            </div>
+          )}
+          {!showTeamBanner && (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: COLORS.primary }}>
+                ATLANT Technology
+              </p>
+              <p className="text-sm" style={{ color: COLORS.textColorSecondary }}>
+                Performance Coach CRM
+              </p>
+            </div>
+          )}
         </div>
       </div>
       

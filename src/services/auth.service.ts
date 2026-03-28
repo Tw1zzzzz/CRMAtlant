@@ -9,6 +9,9 @@ import {
   LoginDto, 
   CreateUserDto, 
   AuthResponse,
+  ChangePasswordDto,
+  EmailVerificationConfirmDto,
+  EmailVerificationRequestDto,
   PasswordResetConfirmDto,
   PasswordResetRequestDto,
 } from '@/types';
@@ -20,6 +23,10 @@ export interface AuthResult {
   success: boolean;
   user?: User | null;
   error?: string;
+  message?: string;
+  code?: string;
+  requiresEmailVerification?: boolean;
+  emailDeliveryFailed?: boolean;
 }
 
 /**
@@ -47,7 +54,7 @@ export class AuthService {
 
     const normalizedRole = rawUser.role === 'staff' ? 'staff' : 'player';
     const normalizedPlayerType =
-      normalizedRole === 'player' && (rawUser.playerType === 'solo' || rawUser.playerType === 'team')
+      rawUser.playerType === 'solo' || rawUser.playerType === 'team'
         ? rawUser.playerType
         : normalizedRole === 'player'
           ? 'team'
@@ -74,6 +81,8 @@ export class AuthService {
     return {
       ...rawUser,
       id,
+      emailVerified: typeof rawUser.emailVerified === 'boolean' ? rawUser.emailVerified : true,
+      emailVerifiedAt: rawUser.emailVerifiedAt || null,
       role: normalizedRole,
       playerType: normalizedPlayerType,
       teamId: rawUser.teamId ? String(rawUser.teamId) : null,
@@ -118,13 +127,15 @@ export class AuthService {
       
       return {
         success: true,
-        user: normalizedUser
+        user: normalizedUser,
+        message: response.message
       };
     } catch (error) {
       const apiError = error as ApiError;
       return {
         success: false,
-        error: apiError.message
+        error: apiError.message,
+        code: apiError.details?.code
       };
     }
   }
@@ -137,25 +148,37 @@ export class AuthService {
       const response = await apiClient.post<AuthResponse>('/auth/register', userData);
       
       const normalizedUser = this.normalizeUser(response.user);
-      if (!response.token || !normalizedUser) {
+      if (response.token && normalizedUser) {
+        apiClient.setAuthToken(response.token);
+
         return {
-          success: false,
-          error: 'Неверный ответ от сервера'
+          success: true,
+          user: normalizedUser,
+          message: response.message,
+          requiresEmailVerification: response.requiresEmailVerification,
+          emailDeliveryFailed: response.emailDeliveryFailed
         };
       }
 
-      // Сохраняем токен
-      apiClient.setAuthToken(response.token);
-      
+      if (response.requiresEmailVerification || response.message) {
+        return {
+          success: true,
+          message: response.message,
+          requiresEmailVerification: response.requiresEmailVerification,
+          emailDeliveryFailed: response.emailDeliveryFailed
+        };
+      }
+
       return {
-        success: true,
-        user: normalizedUser
+        success: false,
+        error: 'Неверный ответ от сервера'
       };
     } catch (error) {
       const apiError = error as ApiError;
       return {
         success: false,
-        error: apiError.message
+        error: apiError.message,
+        code: apiError.details?.code
       };
     }
   }
@@ -177,6 +200,51 @@ export class AuthService {
     try {
       await apiClient.post<{ message: string }>('/auth/reset-password', payload);
       return { success: true };
+    } catch (error) {
+      const apiError = error as ApiError;
+      return {
+        success: false,
+        error: apiError.message
+      };
+    }
+  }
+
+  public async resendVerificationEmail(
+    payload: EmailVerificationRequestDto
+  ): Promise<{ success: boolean; error?: string; message?: string }> {
+    try {
+      const response = await apiClient.post<{ message: string }>('/auth/resend-verification', payload);
+      return { success: true, message: response.message };
+    } catch (error) {
+      const apiError = error as ApiError;
+      return {
+        success: false,
+        error: apiError.message
+      };
+    }
+  }
+
+  public async verifyEmail(
+    payload: EmailVerificationConfirmDto
+  ): Promise<{ success: boolean; error?: string; message?: string }> {
+    try {
+      const response = await apiClient.post<{ message: string }>('/auth/verify-email', payload);
+      return { success: true, message: response.message };
+    } catch (error) {
+      const apiError = error as ApiError;
+      return {
+        success: false,
+        error: apiError.message
+      };
+    }
+  }
+
+  public async changePassword(
+    payload: ChangePasswordDto
+  ): Promise<{ success: boolean; error?: string; message?: string }> {
+    try {
+      const response = await apiClient.post<{ message: string }>('/auth/change-password', payload);
+      return { success: true, message: response.message };
     } catch (error) {
       const apiError = error as ApiError;
       return {

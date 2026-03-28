@@ -3,7 +3,7 @@ import Subscription from '../models/Subscription';
 import Team from '../models/Team';
 import PlayerCard from '../models/PlayerCard';
 import FaceitAccount from '../models/FaceitAccount';
-import { sendPasswordResetEmail } from '../services/mailService';
+import { sendPasswordResetEmail, sendVerificationEmail } from '../services/mailService';
 import faceitService, { FaceitProfileInfo } from '../services/faceitService';
 import { createOpaqueToken, hashOpaqueToken } from '../utils/securityTokens';
 import { signJwt } from '../utils/jwt';
@@ -46,6 +46,8 @@ const isDatabaseUnavailableError = (error: unknown): boolean => {
 const normalizeText = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
 const isFaceitLink = (value: string): boolean => /^https?:\/\/(www\.)?faceit\.com\//i.test(value);
 const PASSWORD_RESET_TTL_MS = 15 * 60 * 1000;
+const EMAIL_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
+const EMAIL_VERIFICATION_SUCCESS_MESSAGE = 'Если аккаунт существует и email ещё не подтвержден, письмо уже отправлено';
 
 const buildUserResponse = (
   user: any,
@@ -62,6 +64,8 @@ const buildUserResponse = (
     _id: user._id,
     name: user.name,
     email: user.email,
+    emailVerified: Boolean(user.emailVerified),
+    emailVerifiedAt: user.emailVerifiedAt || null,
     role: user.role,
     playerType: user.playerType,
     teamId: user.teamId || null,
@@ -225,6 +229,25 @@ const getResetPasswordUrl = (token: string): string => {
   }
 
   return `${clientUrl.replace(/\/+$/g, '')}/reset-password?token=${encodeURIComponent(token)}`;
+};
+
+const getVerifyEmailUrl = (token: string): string => {
+  const clientUrl = normalizeText(process.env.CLIENT_URL);
+  if (!clientUrl) {
+    throw new Error('CLIENT_URL не настроен');
+  }
+
+  return `${clientUrl.replace(/\/+$/g, '')}/verify-email?token=${encodeURIComponent(token)}`;
+};
+
+const createEmailVerificationPayload = () => {
+  const verificationToken = createOpaqueToken(24);
+
+  return {
+    verificationToken,
+    verificationTokenHash: hashOpaqueToken(verificationToken),
+    verificationExpiresAt: new Date(Date.now() + EMAIL_VERIFICATION_TTL_MS),
+  };
 };
 
 // Регистрация нового пользователя
@@ -400,10 +423,16 @@ export const registerUser = async (req: any, res: any) => {
         });
       }
 
+      const { verificationToken, verificationTokenHash, verificationExpiresAt } = createEmailVerificationPayload();
+
       const userData = {
         name: name.trim(),
         email: email.trim().toLowerCase(),
         password,
+        emailVerified: false,
+        emailVerifiedAt: null,
+        emailVerificationTokenHash: verificationTokenHash,
+        emailVerificationExpiresAt: verificationExpiresAt,
         role: finalRole,
         playerType: finalPlayerType,
         ...(teamAssignment
@@ -490,11 +519,24 @@ export const registerUser = async (req: any, res: any) => {
           teamName: user.teamName || null
         });
         
-        // Генерация JWT токена
-        const token = generateToken(user._id.toString());
-        
+        let emailDeliveryFailed = false;
+        try {
+          await sendVerificationEmail({
+            email: user.email,
+            name: user.name,
+            verificationUrl: getVerifyEmailUrl(verificationToken),
+          });
+        } catch (mailError) {
+          emailDeliveryFailed = true;
+          console.error('[AuthController] Ошибка отправки письма подтверждения email:', mailError);
+        }
+
         res.status(201).json({
-          token,
+          message: emailDeliveryFailed
+            ? 'Аккаунт создан, но письмо с подтверждением пока не отправлено. Запросите отправку повторно на экране входа.'
+            : 'Аккаунт создан. Подтвердите email по ссылке из письма, затем войдите в систему.',
+          requiresEmailVerification: true,
+          emailDeliveryFailed,
           user: {
             ...buildUserResponse(user),
             faceitConnected: finalRole === 'player' ? Boolean(resolvedFaceitProfile) : false
@@ -634,6 +676,261 @@ export const resetPassword = async (req: any, res: any) => {
   }
 };
 
+export const resendVerificationEmail = async (req: any, res: any) => {
+  try {
+    const email = normalizeEmail(req.body?.email);
+
+    if (!email) {
+      return res.status(400).json({ message: 'Укажите email' });
+    }
+
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        message: 'База данных инициализируется, повторите запрос через несколько секунд'
+      });
+    }
+
+    const user = await User.findOne({ email }).select('name email emailVerified');
+    if (!user || user.emailVerified) {
+      return res.json({ message: EMAIL_VERIFICATION_SUCCESS_MESSAGE });
+    }
+
+    const { verificationToken, verificationTokenHash, verificationExpiresAt } = createEmailVerificationPayload();
+
+    await User.updateOne(
+      { _id: user._id },
+      {
+        $set: {
+          emailVerificationTokenHash: verificationTokenHash,
+          emailVerificationExpiresAt: verificationExpiresAt,
+        },
+      }
+    );
+
+    try {
+      await sendVerificationEmail({
+        email: user.email,
+        name: user.name,
+        verificationUrl: getVerifyEmailUrl(verificationToken),
+      });
+    } catch (mailError) {
+      console.error('[AuthController] Ошибка повторной отправки письма подтверждения email:', mailError);
+      return res.status(503).json({
+        message: 'Почтовая система временно недоступна. Попробуйте позже.'
+      });
+    }
+
+    return res.json({ message: EMAIL_VERIFICATION_SUCCESS_MESSAGE });
+  } catch (error) {
+    console.error('[AuthController] Ошибка resend verification email:', error);
+    return res.status(500).json({
+      message: 'Ошибка при повторной отправке письма подтверждения',
+      error: error instanceof Error ? error.message : 'Неизвестная ошибка'
+    });
+  }
+};
+
+export const verifyEmail = async (req: any, res: any) => {
+  try {
+    const token = normalizeText(req.body?.token);
+
+    if (!token) {
+      return res.status(400).json({ message: 'Необходимо передать токен подтверждения' });
+    }
+
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        message: 'База данных инициализируется, повторите запрос через несколько секунд'
+      });
+    }
+
+    const user = await User.findOne({
+      emailVerificationTokenHash: hashOpaqueToken(token),
+      emailVerificationExpiresAt: { $gt: new Date() },
+    }).select('+emailVerificationTokenHash +emailVerificationExpiresAt');
+
+    if (!user) {
+      return res.status(400).json({ message: 'Ссылка подтверждения недействительна или устарела' });
+    }
+
+    user.emailVerified = true;
+    user.emailVerifiedAt = new Date();
+    user.emailVerificationTokenHash = null;
+    user.emailVerificationExpiresAt = null;
+    await user.save();
+
+    return res.json({ message: 'Email успешно подтвержден. Теперь можно войти в систему.' });
+  } catch (error) {
+    console.error('[AuthController] Ошибка verify email:', error);
+    return res.status(500).json({
+      message: 'Ошибка при подтверждении email',
+      error: error instanceof Error ? error.message : 'Неизвестная ошибка'
+    });
+  }
+};
+
+export const changePassword = async (req: any, res: any) => {
+  try {
+    if (!req.user?._id) {
+      return res.status(401).json({ message: 'Пользователь не авторизован' });
+    }
+
+    const currentPassword = typeof req.body?.currentPassword === 'string' ? req.body.currentPassword : '';
+    const newPassword = typeof req.body?.newPassword === 'string' ? req.body.newPassword : '';
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: 'Укажите текущий и новый пароль' });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({ message: 'Новый пароль должен содержать не менее 8 символов' });
+    }
+
+    if (currentPassword === newPassword) {
+      return res.status(400).json({ message: 'Новый пароль должен отличаться от текущего' });
+    }
+
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        message: 'База данных инициализируется, повторите запрос через несколько секунд'
+      });
+    }
+
+    const user = await User.findById(req.user._id).select('+password');
+    if (!user) {
+      return res.status(404).json({ message: 'Пользователь не найден' });
+    }
+
+    const isMatch = await user.matchPassword(currentPassword);
+    if (!isMatch) {
+      return res.status(400).json({ message: 'Текущий пароль указан неверно' });
+    }
+
+    user.password = newPassword;
+    user.passwordChangedAt = new Date();
+    await user.save();
+
+    return res.json({ message: 'Пароль успешно изменен. Выполните вход повторно.' });
+  } catch (error) {
+    console.error('[AuthController] Ошибка change password:', error);
+    return res.status(500).json({
+      message: 'Ошибка при смене пароля',
+      error: error instanceof Error ? error.message : 'Неизвестная ошибка'
+    });
+  }
+};
+
+export const updateCurrentUserProfile = async (req: any, res: any) => {
+  try {
+    if (!req.user?._id) {
+      return res.status(401).json({ success: false, message: 'Пользователь не авторизован' });
+    }
+
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        success: false,
+        message: 'База данных инициализируется, повторите запрос через несколько секунд'
+      });
+    }
+
+    const user = await User.findById(req.user._id).select('name');
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'Пользователь не найден' });
+    }
+
+    const updates: Record<string, unknown> = {};
+    let resolvedFaceitProfile: FaceitProfileInfo | null = null;
+    let faceitUrlResponse: string | null = null;
+
+    if (req.body?.name !== undefined) {
+      if (typeof req.body.name !== 'string') {
+        return res.status(400).json({ success: false, message: 'Имя должно быть строкой' });
+      }
+
+      const trimmedName = req.body.name.trim();
+      if (!trimmedName) {
+        return res.status(400).json({ success: false, message: 'Имя не может быть пустым' });
+      }
+
+      updates.name = trimmedName;
+      user.name = trimmedName;
+    }
+
+    const shouldUpdateFaceit = req.body?.faceitUrl !== undefined || req.body?.faceit !== undefined;
+    if (shouldUpdateFaceit) {
+      const normalizedFaceitUrl = normalizeText(req.body?.faceitUrl || req.body?.faceit);
+      if (!normalizedFaceitUrl) {
+        return res.status(400).json({ success: false, message: 'faceitUrl обязателен' });
+      }
+
+      if (!isFaceitLink(normalizedFaceitUrl)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Некорректная FACEIT ссылка. Ожидается https://faceit.com/...'
+        });
+      }
+
+      try {
+        resolvedFaceitProfile = await faceitService.resolveFaceitProfile(normalizedFaceitUrl);
+      } catch (error) {
+        return res.status(400).json({
+          success: false,
+          message: `Не удалось получить FACEIT профиль: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`
+        });
+      }
+
+      if (!resolvedFaceitProfile) {
+        return res.status(404).json({ success: false, message: 'FACEIT профиль не найден' });
+      }
+
+      await linkFaceitAccountToUser(user._id, resolvedFaceitProfile);
+      await createPlayerCardForUser(
+        user._id,
+        user.name,
+        normalizedFaceitUrl,
+        resolvedFaceitProfile.nickname || ''
+      );
+
+      faceitUrlResponse = normalizedFaceitUrl;
+    }
+
+    if (!Object.keys(updates).length && !shouldUpdateFaceit) {
+      return res.status(400).json({ success: false, message: 'Нет данных для обновления профиля' });
+    }
+
+    if (Object.keys(updates).length) {
+      await User.findByIdAndUpdate(req.user._id, updates);
+    }
+
+    const { user: updatedUser, accessFlags } = await loadUserWithAccessData(req.user._id);
+    if (!updatedUser) {
+      return res.status(404).json({ success: false, message: 'Пользователь не найден' });
+    }
+
+    return res.json({
+      success: true,
+      message: shouldUpdateFaceit ? 'Профиль и FACEIT данные обновлены' : 'Профиль обновлен',
+      user: buildUserResponse(updatedUser, accessFlags),
+      faceitUrl: faceitUrlResponse,
+      faceitId: resolvedFaceitProfile?.faceitId || null
+    });
+  } catch (error) {
+    console.error('[AuthController] Ошибка при обновлении профиля:', error);
+    if (isDatabaseUnavailableError(error)) {
+      return res.status(503).json({
+        success: false,
+        message: 'База данных временно недоступна. Повторите попытку через несколько секунд.'
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: 'Ошибка при обновлении профиля',
+      error: error instanceof Error ? error.message : 'Неизвестная ошибка'
+    });
+  }
+};
+
 // Аутентификация пользователя
 export const loginUser = async (req: any, res: any) => {
   try {
@@ -679,6 +976,13 @@ export const loginUser = async (req: any, res: any) => {
     if (!isMatch) {
       console.log(`[AuthController] Ошибка: неверный пароль для пользователя ${email}`);
       return res.status(401).json({ message: 'Неверный email или пароль' });
+    }
+
+    if (!user.emailVerified) {
+      return res.status(403).json({
+        message: 'Подтвердите email перед входом в систему',
+        code: 'EMAIL_NOT_VERIFIED'
+      });
     }
     
     console.log(`[AuthController] Успешный вход пользователя:`, {

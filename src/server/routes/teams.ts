@@ -111,6 +111,19 @@ router.post('/', protect, isStaff, async (req: any, res) => {
       return res.status(400).json({ message: 'Укажите название команды' });
     }
 
+    if (req.user?.teamId) {
+      return res.status(409).json({
+        message: 'К этому staff/team уже привязана команда. Используйте текущую команду и её коды приглашения'
+      });
+    }
+
+    const alreadyCreatedTeam = await Team.findOne({ createdBy: req.user._id }).lean();
+    if (alreadyCreatedTeam) {
+      return res.status(409).json({
+        message: 'Для этого staff/team уже создана команда'
+      });
+    }
+
     const existingTeam = await Team.findOne({ name, createdBy: req.user._id });
     if (existingTeam) {
       return res.status(409).json({ message: 'Команда с таким названием уже создана' });
@@ -128,12 +141,10 @@ router.post('/', protect, isStaff, async (req: any, res) => {
       isActive: true,
     });
 
-    if (!req.user?.teamId) {
-      await User.findByIdAndUpdate(req.user._id, {
-        teamId: team._id,
-        teamName: team.name,
-      });
-    }
+    await User.findByIdAndUpdate(req.user._id, {
+      teamId: team._id,
+      teamName: team.name,
+    });
 
     return res.status(201).json({
       team: {

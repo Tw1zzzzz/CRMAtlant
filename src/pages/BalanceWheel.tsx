@@ -65,7 +65,6 @@ const BalanceWheel = () => {
   const [savingWheel, setSavingWheel] = useState(false);
   const [players, setPlayers] = useState<User[]>([]);
   const [loadingPlayers, setLoadingPlayers] = useState(false);
-  const [usingTestData, setUsingTestData] = useState(false);
   const [refreshCount, setRefreshCount] = useState(0);
   
   // Initial values for each category
@@ -94,15 +93,7 @@ const BalanceWheel = () => {
           
           if (response.data && Array.isArray(response.data)) {
             setPlayers(response.data);
-            
-            // Ищем специально игрока nbl
-            const nblPlayer = response.data.find(p => p.name?.toLowerCase().includes('nbl'));
-            if (nblPlayer) {
-              console.log(`[DEBUG] Найден игрок nbl с ID: ${nblPlayer.id}`);
-              setSelectedPlayer(nblPlayer.id);
-            } else if (response.data.length > 0) {
-              // Если nbl не найден, берем первого игрока
-              console.log(`[DEBUG] Игрок nbl не найден, устанавливаем первого игрока с ID: ${response.data[0].id}`);
+            if (response.data.length > 0) {
               setSelectedPlayer(response.data[0].id);
             }
           } else {
@@ -126,7 +117,6 @@ const BalanceWheel = () => {
     const fetchBalanceWheels = async () => {
       try {
         setIsLoading(true);
-        setUsingTestData(false);
         
         let response;
         if (isStaffView && selectedPlayer) {
@@ -214,33 +204,17 @@ const BalanceWheel = () => {
             
             console.log(`[DEBUG] Отформатированные данные:`, formattedWheels);
             setWheels(formattedWheels);
-            setUsingTestData(false);
             console.log(`[DEBUG] Данные успешно обработаны и установлены`);
             return;
           }
         }
         
-        console.log(`[DEBUG] Нет валидных данных колеса баланса, создаем тестовые данные`);
-        setUsingTestData(true);
-        // Создаем тестовые данные только если реальных нет
-        const testWheel = {
-          id: `test-${Date.now()}`,
-          userId: user?.id || 'unknown',
-          date: new Date(),
-          physical: Math.floor(Math.random() * 10) + 1,
-          emotional: Math.floor(Math.random() * 10) + 1,
-          intellectual: Math.floor(Math.random() * 10) + 1,
-          spiritual: Math.floor(Math.random() * 10) + 1,
-          occupational: Math.floor(Math.random() * 10) + 1,
-          social: Math.floor(Math.random() * 10) + 1,
-          environmental: Math.floor(Math.random() * 10) + 1,
-          financial: Math.floor(Math.random() * 10) + 1
-        };
-        setWheels([testWheel as BalanceWheelType]);
+        console.log(`[DEBUG] Нет валидных данных колеса баланса`);
+        setWheels([]);
       } catch (error) {
         console.error('[ERROR] Ошибка при загрузке колес баланса:', error);
         toast.error('Ошибка при загрузке истории колес баланса');
-        setUsingTestData(true);
+        setWheels([]);
       } finally {
         setIsLoading(false);
       }
