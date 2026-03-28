@@ -82,7 +82,7 @@ export const getPlayerCard = async (req: Request, res: Response) => {
     }
 
     // Поиск пользователя
-    const user = await User.findById(userId);
+    const user = await User.findById(userId).select('name avatar baselineAssessment');
     if (!user) {
       return res.status(404).json({ success: false, message: 'Пользователь не найден' });
     }
@@ -102,6 +102,7 @@ export const getPlayerCard = async (req: Request, res: Response) => {
     return res.status(200).json({
       success: true,
       playerCard,
+      baselineAssessment: user.baselineAssessment || null,
       user: {
         id: user._id.toString(),
         name: user.name,

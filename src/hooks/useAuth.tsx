@@ -17,6 +17,8 @@ import { User, LoginDto, CreateUserDto, AsyncState } from "@/types";
 import { authService, AuthResult } from "@/services/auth.service";
 import ROUTES from "@/lib/routes";
 
+const BASELINE_REGISTER_MODAL_FLAG = "baselineAssessmentAfterRegister";
+
 /**
  * Тип контекста аутентификации
  */
@@ -26,6 +28,8 @@ interface AuthContextType {
   error: string | null;
   login: (credentials: LoginDto) => Promise<AuthResult>;
   register: (userData: CreateUserDto) => Promise<AuthResult>;
+  requestPasswordReset: (email: string) => Promise<{ success: boolean; error?: string }>;
+  resetPassword: (token: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   deleteAccount: () => Promise<void>;
   updateAvatar: (file: File) => Promise<AuthResult>;
@@ -41,6 +45,8 @@ const defaultContextValue: AuthContextType = {
   error: null,
   login: async () => ({ success: false, error: 'Context not initialized' }),
   register: async () => ({ success: false, error: 'Context not initialized' }),
+  requestPasswordReset: async () => ({ success: false, error: 'Context not initialized' }),
+  resetPassword: async () => ({ success: false, error: 'Context not initialized' }),
   logout: () => {},
   deleteAccount: async () => {},
   updateAvatar: async () => ({ success: false, error: 'Context not initialized' }),
@@ -110,6 +116,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const result = await authService.login(credentials);
       
       if (result.success && result.user) {
+        sessionStorage.removeItem(BASELINE_REGISTER_MODAL_FLAG);
         setAuthState({
           data: result.user,
           loading: false,
@@ -154,6 +161,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const result = await authService.register(userData);
       
       if (result.success && result.user) {
+        sessionStorage.setItem(BASELINE_REGISTER_MODAL_FLAG, "1");
         setAuthState({
           data: result.user,
           loading: false,
@@ -188,10 +196,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [navigate]);
 
+  const requestPasswordReset = useCallback(async (email: string) => {
+    const result = await authService.requestPasswordReset({ email });
+
+    if (result.success) {
+      toast.success('Если аккаунт существует, письмо для сброса уже отправлено');
+    } else {
+      toast.error(result.error || 'Не удалось отправить письмо для сброса');
+    }
+
+    return result;
+  }, []);
+
+  const resetPassword = useCallback(async (token: string, password: string) => {
+    const result = await authService.resetPassword({ token, password });
+
+    if (result.success) {
+      toast.success('Пароль обновлен. Теперь можно войти.');
+    } else {
+      toast.error(result.error || 'Не удалось обновить пароль');
+    }
+
+    return result;
+  }, []);
+
   /**
    * Выход из системы
    */
   const logout = useCallback(() => {
+    sessionStorage.removeItem(BASELINE_REGISTER_MODAL_FLAG);
     authService.logout();
     setAuthState({
       data: null,
@@ -318,11 +351,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     error: authState.error,
     login,
     register,
+    requestPasswordReset,
+    resetPassword,
     logout,
     deleteAccount,
     updateAvatar,
     refreshUser
-  }), [authState, login, register, logout, deleteAccount, updateAvatar, refreshUser]);
+  }), [authState, login, register, requestPasswordReset, resetPassword, logout, deleteAccount, updateAvatar, refreshUser]);
 
   return (
     <AuthContext.Provider value={contextValue}>

@@ -17,6 +17,9 @@ import { COLORS } from "@/styles/theme";
 import { getReadableTestTypeLabel } from "@/utils/testTypeMetadata";
 import axios from "axios";
 import BrainLabPanel from "@/components/brain-lab/BrainLabPanel";
+import DailyQuestionnairePanel from "@/components/questionnaires/DailyQuestionnairePanel";
+import { useSearchParams } from "react-router-dom";
+import SubscriptionFeatureGate from "@/components/SubscriptionFeatureGate";
 
 const predefinedTests = [
   {
@@ -43,6 +46,7 @@ type StateImpactSummary = {
 const TestTracker = () => {
   const { toast } = useToast();
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
   const [entries, setEntries] = useState<TestEntry[]>([]);
   const [currentWeek, setCurrentWeek] = useState<Date>(new Date());
   const [name, setName] = useState<string>("");
@@ -88,6 +92,7 @@ const TestTracker = () => {
   const [stateImpact, setStateImpact] = useState<StateImpactSummary | null>(null);
   
   const isStaff = user?.role === "staff";
+  const hasPerformanceCoachCrmAccess = isStaff || Boolean(user?.hasPerformanceCoachCrmAccess);
 
   const parseOptionalNumber = (value: string) => {
     if (!value.trim()) return undefined;
@@ -182,8 +187,20 @@ const TestTracker = () => {
   };
   
   useEffect(() => {
-    loadEntries();
-  }, []);
+    void loadEntries();
+  }, [hasPerformanceCoachCrmAccess, user]);
+
+  useEffect(() => {
+    const requestedTab = searchParams.get("tab");
+    if (requestedTab === "weekly" || requestedTab === "questionnaire") {
+      setActiveTab(requestedTab);
+      return;
+    }
+
+    if (requestedTab === "brain") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     const loadStateImpact = async () => {
@@ -208,14 +225,22 @@ const TestTracker = () => {
       }
     };
 
-    if (user) {
+    if (user && hasPerformanceCoachCrmAccess) {
       loadStateImpact();
+      return;
     }
-  }, [user, periodFilter, testTypeFilter, contextRoleFilter, sourceFilter]);
+
+    setStateImpact(null);
+  }, [user, hasPerformanceCoachCrmAccess, periodFilter, testTypeFilter, contextRoleFilter, sourceFilter]);
   
   const loadEntries = async () => {
     try {
       setIsLoading(true);
+
+      if (!hasPerformanceCoachCrmAccess) {
+        setEntries([]);
+        return;
+      }
       
       if (user) {
         // Р—Р°РіСЂСѓР¶Р°РµРј РґР°РЅРЅС‹Рµ СЃ СЃРµСЂРІРµСЂР°
@@ -551,144 +576,151 @@ const TestTracker = () => {
           </div>
         </section>
 
-        {!isStaff && <BrainLabPanel />}
-
-        <section
-          className="rounded-[28px] border p-5 md:p-6"
-          style={{
-            background: "linear-gradient(160deg, rgba(26, 32, 44, 0.96), rgba(17, 24, 39, 0.96))",
-            borderColor: "rgba(96, 165, 250, 0.16)"
-          }}
+        <SubscriptionFeatureGate
+          hasAccess={hasPerformanceCoachCrmAccess}
+          title="Этот рабочий контур доступен после покупки"
+          description="Brain Lab, weekly-тесты и ежедневный self-check уже показаны в интерфейсе, но становятся интерактивными только после покупки PerformanceCoach CRM."
+          minHeightClassName="min-h-[980px]"
+          className="mt-2"
         >
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div className="space-y-2">
-              <div className="text-[11px] uppercase tracking-[0.24em]" style={{ color: COLORS.textColorSecondary }}>
-                Аналитический фильтр
+          {!isStaff && <BrainLabPanel />}
+
+          <section
+            className="rounded-[28px] border p-5 md:p-6"
+            style={{
+              background: "linear-gradient(160deg, rgba(26, 32, 44, 0.96), rgba(17, 24, 39, 0.96))",
+              borderColor: "rgba(96, 165, 250, 0.16)"
+            }}
+          >
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div className="space-y-2">
+                <div className="text-[11px] uppercase tracking-[0.24em]" style={{ color: COLORS.textColorSecondary }}>
+                  Аналитический фильтр
+                </div>
+                <p className="text-sm leading-6" style={{ color: COLORS.textColorSecondary }}>
+                  Отсекайте период, типы тестов и игровой контекст, чтобы быстрее находить полезные паттерны.
+                </p>
               </div>
-              <p className="text-sm leading-6" style={{ color: COLORS.textColorSecondary }}>
-                Отсекайте период, типы тестов и игровой контекст, чтобы быстрее находить полезные паттерны.
-              </p>
+              {!isStaff && (
+                <Button
+                  onClick={() => {
+                    resetForm();
+                    setDate(new Date().toISOString().split("T")[0]);
+                    setIsDialogOpen(true);
+                  }}
+                  className="h-12 rounded-2xl px-5"
+                  style={{ backgroundColor: COLORS.primary, color: "white" }}
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Добавить тест
+                </Button>
+              )}
             </div>
-            {!isStaff && (
-              <Button
-                onClick={() => {
-                  resetForm();
-                  setDate(new Date().toISOString().split("T")[0]);
-                  setIsDialogOpen(true);
-                }}
-                className="h-12 rounded-2xl px-5"
-                style={{ backgroundColor: COLORS.primary, color: "white" }}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Добавить тест
-              </Button>
-            )}
-          </div>
 
-          <div className="mt-5 grid gap-3 md:grid-cols-4">
-            <div className="space-y-2">
-              <Label style={{ color: COLORS.textColor }}>Период</Label>
-              <select
-                value={periodFilter}
-                onChange={(e) => setPeriodFilter(e.target.value)}
-                className="w-full rounded-2xl border px-4 py-3"
-                style={fieldStyle}
-              >
-                <option value="7">7 дней</option>
-                <option value="30">30 дней</option>
-                <option value="90">90 дней</option>
-              </select>
-            </div>
-            <div className="space-y-2">
-              <Label style={{ color: COLORS.textColor }}>Тип теста</Label>
-              <select
-                value={testTypeFilter}
-                onChange={(e) => setTestTypeFilter(e.target.value)}
-                className="w-full rounded-2xl border px-4 py-3"
-                style={fieldStyle}
-              >
-                <option value="all">Все типы</option>
-                <option value="generic">{getTestTypeLabel("generic")}</option>
-                <option value="reaction">{getTestTypeLabel("reaction")}</option>
-                <option value="aim">{getTestTypeLabel("aim")}</option>
-                <option value="cognitive">{getTestTypeLabel("cognitive")}</option>
-                <option value="visual_search">{getTestTypeLabel("visual_search")}</option>
-                <option value="go_no_go">{getTestTypeLabel("go_no_go")}</option>
-                <option value="n_back_2">{getTestTypeLabel("n_back_2")}</option>
-                <option value="stroop_switch">{getTestTypeLabel("stroop_switch")}</option>
-                <option value="spatial_span">{getTestTypeLabel("spatial_span")}</option>
-              </select>
-            </div>
-            <div className="space-y-2">
-              <Label style={{ color: COLORS.textColor }}>Контекст / роль</Label>
-              <select
-                value={contextRoleFilter}
-                onChange={(e) => setContextRoleFilter(e.target.value)}
-                className="w-full rounded-2xl border px-4 py-3"
-                style={fieldStyle}
-              >
-                <option value="all">Все роли</option>
-                <option value="entry">Entry</option>
-                <option value="support">Support</option>
-                <option value="awp">AWP</option>
-                <option value="igl">IGL</option>
-              </select>
-            </div>
-            <div className="space-y-2">
-              <Label style={{ color: COLORS.textColor }}>Источник</Label>
-              <select
-                value={sourceFilter}
-                onChange={(e) => setSourceFilter(e.target.value)}
-                className="w-full rounded-2xl border px-4 py-3"
-                style={fieldStyle}
-              >
-                <option value="all">Все источники</option>
-                <option value="manual">Ручной ввод</option>
-                <option value="brain_lab">Brain Lab</option>
-              </select>
-            </div>
-          </div>
-
-          {stateImpact && (
             <div className="mt-5 grid gap-3 md:grid-cols-4">
-              <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
-                <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em]" style={{ color: COLORS.textColorSecondary }}>
-                  <Gauge className="h-3.5 w-3.5" />
-                  Средний score
-                </div>
-                <div className="mt-3 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{stateImpact.totals.avgScore}</div>
+              <div className="space-y-2">
+                <Label style={{ color: COLORS.textColor }}>Период</Label>
+                <select
+                  value={periodFilter}
+                  onChange={(e) => setPeriodFilter(e.target.value)}
+                  className="w-full rounded-2xl border px-4 py-3"
+                  style={fieldStyle}
+                >
+                  <option value="7">7 дней</option>
+                  <option value="30">30 дней</option>
+                  <option value="90">90 дней</option>
+                </select>
               </div>
-              <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
-                <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em]" style={{ color: COLORS.textColorSecondary }}>
-                  <Brain className="h-3.5 w-3.5" />
-                  Индекс состояния
-                </div>
-                <div className="mt-3 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{stateImpact.totals.avgStateIndex}</div>
+              <div className="space-y-2">
+                <Label style={{ color: COLORS.textColor }}>Тип теста</Label>
+                <select
+                  value={testTypeFilter}
+                  onChange={(e) => setTestTypeFilter(e.target.value)}
+                  className="w-full rounded-2xl border px-4 py-3"
+                  style={fieldStyle}
+                >
+                  <option value="all">Все типы</option>
+                  <option value="generic">{getTestTypeLabel("generic")}</option>
+                  <option value="reaction">{getTestTypeLabel("reaction")}</option>
+                  <option value="aim">{getTestTypeLabel("aim")}</option>
+                  <option value="cognitive">{getTestTypeLabel("cognitive")}</option>
+                  <option value="visual_search">{getTestTypeLabel("visual_search")}</option>
+                  <option value="go_no_go">{getTestTypeLabel("go_no_go")}</option>
+                  <option value="n_back_2">{getTestTypeLabel("n_back_2")}</option>
+                  <option value="stroop_switch">{getTestTypeLabel("stroop_switch")}</option>
+                  <option value="spatial_span">{getTestTypeLabel("spatial_span")}</option>
+                </select>
               </div>
-              <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
-                <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em]" style={{ color: COLORS.textColorSecondary }}>
-                  <CheckCheck className="h-3.5 w-3.5" />
-                  Фокус high
-                </div>
-                <div className="mt-3 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{stateImpact.stateToResult.focus.high}</div>
+              <div className="space-y-2">
+                <Label style={{ color: COLORS.textColor }}>Контекст / роль</Label>
+                <select
+                  value={contextRoleFilter}
+                  onChange={(e) => setContextRoleFilter(e.target.value)}
+                  className="w-full rounded-2xl border px-4 py-3"
+                  style={fieldStyle}
+                >
+                  <option value="all">Все роли</option>
+                  <option value="entry">Entry</option>
+                  <option value="support">Support</option>
+                  <option value="awp">AWP</option>
+                  <option value="igl">IGL</option>
+                </select>
               </div>
-              <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
-                <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em]" style={{ color: COLORS.textColorSecondary }}>
-                  <Clock3 className="h-3.5 w-3.5" />
-                  Усталость high
-                </div>
-                <div className="mt-3 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{stateImpact.stateToResult.fatigue.high}</div>
+              <div className="space-y-2">
+                <Label style={{ color: COLORS.textColor }}>Источник</Label>
+                <select
+                  value={sourceFilter}
+                  onChange={(e) => setSourceFilter(e.target.value)}
+                  className="w-full rounded-2xl border px-4 py-3"
+                  style={fieldStyle}
+                >
+                  <option value="all">Все источники</option>
+                  <option value="manual">Ручной ввод</option>
+                  <option value="brain_lab">Brain Lab</option>
+                </select>
               </div>
             </div>
-          )}
-        </section>
 
-        <Tabs
-          defaultValue="questionnaire"
-          value={activeTab}
-          onValueChange={(value) => setActiveTab(value as "weekly" | "questionnaire")}
-          className="space-y-5"
-        >
+            {stateImpact && (
+              <div className="mt-5 grid gap-3 md:grid-cols-4">
+                <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                  <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em]" style={{ color: COLORS.textColorSecondary }}>
+                    <Gauge className="h-3.5 w-3.5" />
+                    Средний score
+                  </div>
+                  <div className="mt-3 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{stateImpact.totals.avgScore}</div>
+                </div>
+                <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                  <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em]" style={{ color: COLORS.textColorSecondary }}>
+                    <Brain className="h-3.5 w-3.5" />
+                    Индекс состояния
+                  </div>
+                  <div className="mt-3 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{stateImpact.totals.avgStateIndex}</div>
+                </div>
+                <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                  <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em]" style={{ color: COLORS.textColorSecondary }}>
+                    <CheckCheck className="h-3.5 w-3.5" />
+                    Фокус high
+                  </div>
+                  <div className="mt-3 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{stateImpact.stateToResult.focus.high}</div>
+                </div>
+                <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                  <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em]" style={{ color: COLORS.textColorSecondary }}>
+                    <Clock3 className="h-3.5 w-3.5" />
+                    Усталость high
+                  </div>
+                  <div className="mt-3 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{stateImpact.stateToResult.fatigue.high}</div>
+                </div>
+              </div>
+            )}
+          </section>
+
+          <Tabs
+            defaultValue="questionnaire"
+            value={activeTab}
+            onValueChange={(value) => setActiveTab(value as "weekly" | "questionnaire")}
+            className="space-y-5"
+          >
           <TabsList
             className="grid h-auto w-full grid-cols-2 rounded-[22px] border p-1.5 md:w-[420px]"
             style={{ backgroundColor: "rgba(255,255,255,0.03)", borderColor: "rgba(255,255,255,0.08)" }}
@@ -961,198 +993,10 @@ const TestTracker = () => {
           </TabsContent>
 
           <TabsContent value="questionnaire" className="space-y-5">
-            <section
-              className="rounded-[28px] border p-5 md:p-6"
-              style={{
-                background: "linear-gradient(150deg, rgba(0, 227, 150, 0.1), rgba(17, 24, 39, 0.96) 68%)",
-                borderColor: "rgba(16, 185, 129, 0.2)"
-              }}
-            >
-              <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-                <div className="space-y-3">
-                  <div className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] uppercase tracking-[0.24em]" style={{ backgroundColor: "rgba(255,255,255,0.05)", color: COLORS.textColorSecondary }}>
-                    <Brain className="h-3.5 w-3.5" />
-                    Daily self-check
-                  </div>
-                  <div>
-                    <h3 className="text-2xl font-semibold" style={{ color: COLORS.textColor }}>
-                      Ежедневный опросник без ощущения тяжёлой формы
-                    </h3>
-                    <p className="mt-2 max-w-2xl text-sm leading-7" style={{ color: COLORS.textColorSecondary }}>
-                      Разбил ввод на понятные блоки: сон, экранное время и итоговый контроль суммы. Так заполнять быстрее, а проверять себя проще.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 xl:min-w-[320px]">
-                  <div className="rounded-[20px] border px-4 py-3" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.04)" }}>
-                    <div className="text-[11px] uppercase tracking-[0.2em]" style={{ color: COLORS.textColorSecondary }}>Дата</div>
-                    <div className="mt-1 text-base font-semibold" style={{ color: COLORS.textColor }}>{qDateLabel}</div>
-                  </div>
-                  <div className="rounded-[20px] border px-4 py-3" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.04)" }}>
-                    <div className="text-[11px] uppercase tracking-[0.2em]" style={{ color: COLORS.textColorSecondary }}>Сон</div>
-                    <div className="mt-1 text-base font-semibold" style={{ color: COLORS.textColor }}>{qSleep || "-"}</div>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <section className="grid gap-5 xl:grid-cols-[1.02fr_0.98fr]">
-              <div className="space-y-5">
-                <Card style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor, boxShadow: "0 1px 20px 0 rgba(0,0,0,.1)" }}>
-                  <CardHeader className="pb-2">
-                    <div className="flex items-start gap-3">
-                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl border" style={{ backgroundColor: "rgba(53, 144, 255, 0.12)", borderColor: "rgba(53, 144, 255, 0.26)", color: COLORS.primary }}>
-                        <Clock3 className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <CardTitle style={{ color: COLORS.textColor }}>Сон и восстановление</CardTitle>
-                        <CardDescription style={{ color: COLORS.textColorSecondary }}>
-                          Заполните диапазон сна или скорректируйте часы вручную.
-                        </CardDescription>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <Label style={{ color: COLORS.textColor }}>Дата</Label>
-                      <Input type="date" value={qDate} onChange={(e) => setQDate(e.target.value)} className="rounded-2xl" style={fieldStyle} />
-                    </div>
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label style={{ color: COLORS.textColor }}>Сон: с</Label>
-                        <Input type="time" value={qSleepStart} onChange={(e) => setQSleepStart(e.target.value)} className="rounded-2xl" style={fieldStyle} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label style={{ color: COLORS.textColor }}>Сон: до</Label>
-                        <Input type="time" value={qSleepEnd} onChange={(e) => setQSleepEnd(e.target.value)} className="rounded-2xl" style={fieldStyle} />
-                      </div>
-                    </div>
-                    <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
-                      <Label style={{ color: COLORS.textColor }}>Сон (часы, авто или вручную)</Label>
-                      <Input
-                        value={qSleep}
-                        onChange={(e) => setQSleep(e.target.value)}
-                        inputMode="decimal"
-                        placeholder="Например: 7.5"
-                        className="mt-3 rounded-2xl"
-                        style={fieldStyle}
-                      />
-                      <p className="mt-3 text-sm leading-6" style={{ color: COLORS.textColorSecondary }}>
-                        Если вы задали время сна `с` и `до`, система уже подсказывает продолжительность. Поле можно оставить как есть или скорректировать вручную.
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor, boxShadow: "0 1px 20px 0 rgba(0,0,0,.1)" }}>
-                  <CardHeader className="pb-2">
-                    <div className="flex items-start gap-3">
-                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl border" style={{ backgroundColor: "rgba(0, 227, 150, 0.12)", borderColor: "rgba(0, 227, 150, 0.26)", color: "#7EF3D1" }}>
-                        <Monitor className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <CardTitle style={{ color: COLORS.textColor }}>Экранное время</CardTitle>
-                        <CardDescription style={{ color: COLORS.textColorSecondary }}>
-                          Общее время и аккуратная детализация по категориям.
-                        </CardDescription>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <Label style={{ color: COLORS.textColor }}>Общее экранное время</Label>
-                      <Input
-                        value={qScreen}
-                        onChange={(e) => setQScreen(e.target.value)}
-                        inputMode="decimal"
-                        placeholder="Можно оставить пустым, если заполнена детализация"
-                        className="rounded-2xl"
-                        style={fieldStyle}
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                      <Input value={qScreenEntertainment} onChange={(e) => setQScreenEntertainment(e.target.value)} inputMode="decimal" placeholder="Развлечения" className="rounded-2xl" style={fieldStyle} />
-                      <Input value={qScreenCommunication} onChange={(e) => setQScreenCommunication(e.target.value)} inputMode="decimal" placeholder="Общение" className="rounded-2xl" style={fieldStyle} />
-                      <Input value={qScreenBrowser} onChange={(e) => setQScreenBrowser(e.target.value)} inputMode="decimal" placeholder="Браузер" className="rounded-2xl" style={fieldStyle} />
-                      <Input value={qScreenStudy} onChange={(e) => setQScreenStudy(e.target.value)} inputMode="decimal" placeholder="Учёба / работа" className="rounded-2xl" style={fieldStyle} />
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              <Card style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor, boxShadow: "0 1px 20px 0 rgba(0,0,0,.1)" }}>
-                <CardHeader className="pb-2">
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl border" style={{ backgroundColor: "rgba(164, 108, 255, 0.12)", borderColor: "rgba(164, 108, 255, 0.26)", color: "#C4A5FF" }}>
-                      <Gauge className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <CardTitle style={{ color: COLORS.textColor }}>Контроль заполнения</CardTitle>
-                      <CardDescription style={{ color: COLORS.textColorSecondary }}>
-                        Перед сохранением сразу видно итог по категориям и возможные ошибки.
-                      </CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
-                    <div className="text-[11px] uppercase tracking-[0.2em]" style={{ color: COLORS.textColorSecondary }}>Сумма подкатегорий</div>
-                    <div className="mt-2 text-3xl font-semibold" style={{ color: COLORS.textColor }}>
-                      {questionnaireBreakdownSum > 0 ? `${questionnaireBreakdownSum.toFixed(1)} ч` : "-"}
-                    </div>
-                    <div className="mt-2 text-sm leading-6" style={{ color: COLORS.textColorSecondary }}>
-                      {hasQuestionnaireTotal
-                        ? `Общее время задано: ${questionnaireTotalScreen.toFixed(1)} ч`
-                        : "Можно не задавать общее время, если заполнена детализация по категориям."}
-                    </div>
-                  </div>
-
-                  <div
-                    className="rounded-[22px] border p-4"
-                    style={{
-                      borderColor: isQuestionnaireExceeded ? "rgba(255, 69, 96, 0.3)" : "rgba(0, 227, 150, 0.24)",
-                      backgroundColor: isQuestionnaireExceeded ? "rgba(255, 69, 96, 0.1)" : "rgba(0, 227, 150, 0.08)"
-                    }}
-                  >
-                    <div className="text-sm font-medium" style={{ color: COLORS.textColor }}>
-                      {questionnaireBreakdownSum === 0
-                        ? "Заполните хотя бы одну категорию или общее экранное время"
-                        : isQuestionnaireExceeded
-                          ? "Сумма подкатегорий превышает общее экранное время"
-                          : "Данные выглядят согласованно"}
-                    </div>
-                    <p className="mt-2 text-sm leading-6" style={{ color: COLORS.textColorSecondary }}>
-                      {questionnaireBreakdownSum === 0
-                        ? "Как только появятся данные, этот блок сразу покажет, всё ли логично сходится."
-                        : hasQuestionnaireTotal
-                          ? `${questionnaireBreakdownSum.toFixed(1)} ч из ${questionnaireTotalScreen.toFixed(1)} ч общего времени`
-                          : "Система будет использовать сумму категорий как итоговое экранное время."}
-                    </p>
-                  </div>
-
-                  <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
-                    <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.2em]" style={{ color: COLORS.textColorSecondary }}>
-                      <ClipboardList className="h-3.5 w-3.5" />
-                      Что мы сохраняем
-                    </div>
-                    <ul className="mt-3 space-y-2 text-sm leading-6" style={{ color: COLORS.textColorSecondary }}>
-                      <li>Дата среза: {qDateLabel}</li>
-                      <li>Сон: {qSleep || "не указан"}</li>
-                      <li>Экранное время: {qScreen || (questionnaireBreakdownSum > 0 ? `${questionnaireBreakdownSum.toFixed(1)} ч по детализации` : "не указано")}</li>
-                    </ul>
-                  </div>
-                </CardContent>
-                <CardFooter className="pt-0">
-                  <Button onClick={submitQuestionnaire} disabled={qSubmitting || isQuestionnaireExceeded} className="h-12 w-full rounded-2xl" style={{ backgroundColor: COLORS.primary, color: "white" }}>
-                    {qSubmitting ? "Сохранение..." : "Сохранить опросник"}
-                  </Button>
-                </CardFooter>
-              </Card>
-            </section>
+            <DailyQuestionnairePanel onSaved={loadEntries} />
           </TabsContent>
-        </Tabs>
+          </Tabs>
+        </SubscriptionFeatureGate>
       </div>
       
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

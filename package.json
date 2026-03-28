@@ -15,6 +15,7 @@
     "server:start": "cd src/server && npm run start",
     "server:dev": "cd src/server && npm run dev",
     "server:build": "cd src/server && npm run build",
+    "unlock-subscription": "cd src/server && npm run unlock-subscription --",
     "seed": "cd src/server && npx ts-node seed.ts",
     "seed:activity": "ts-node src/server/scripts/seedActivityData.ts",
     "clean:activity": "ts-node src/server/scripts/cleanActivityData.ts",

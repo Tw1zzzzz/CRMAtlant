@@ -5,9 +5,12 @@
 import { apiClient, ApiError } from '@/utils/api/api-client';
 import { 
   User, 
+  UserSubscription,
   LoginDto, 
   CreateUserDto, 
-  AuthResponse 
+  AuthResponse,
+  PasswordResetConfirmDto,
+  PasswordResetRequestDto,
 } from '@/types';
 
 /**
@@ -55,11 +58,43 @@ export class AuthService {
       return null;
     }
 
+    const normalizedSubscription =
+      rawUser.subscription && typeof rawUser.subscription === 'object'
+        ? ({
+            id: String(rawUser.subscription.id || rawUser.subscription._id || ''),
+            status: rawUser.subscription.status,
+            startedAt: rawUser.subscription.startedAt || null,
+            expiresAt: rawUser.subscription.expiresAt || null,
+            planId: rawUser.subscription.planId ? String(rawUser.subscription.planId) : null,
+            planName: typeof rawUser.subscription.planName === 'string' ? rawUser.subscription.planName : null,
+            periodDays: typeof rawUser.subscription.periodDays === 'number' ? rawUser.subscription.periodDays : null,
+          } as UserSubscription)
+        : null;
+
     return {
       ...rawUser,
       id,
       role: normalizedRole,
-      playerType: normalizedPlayerType
+      playerType: normalizedPlayerType,
+      teamId: rawUser.teamId ? String(rawUser.teamId) : null,
+      teamName: typeof rawUser.teamName === 'string' ? rawUser.teamName : '',
+      subscription: normalizedSubscription,
+      hasPerformanceCoachCrmAccess:
+        typeof rawUser.hasPerformanceCoachCrmAccess === 'boolean'
+          ? rawUser.hasPerformanceCoachCrmAccess
+          : false,
+      hasCorrelationAnalysisAccess:
+        typeof rawUser.hasCorrelationAnalysisAccess === 'boolean'
+          ? rawUser.hasCorrelationAnalysisAccess
+          : false,
+      hasGameStatsAccess:
+        typeof rawUser.hasGameStatsAccess === 'boolean'
+          ? rawUser.hasGameStatsAccess
+          : false,
+      staffHasPrivilegeKey:
+        typeof rawUser.staffHasPrivilegeKey === 'boolean'
+          ? rawUser.staffHasPrivilegeKey
+          : Boolean(normalizedRole === 'staff' && typeof rawUser.privilegeKey === 'string' && rawUser.privilegeKey.trim())
     } as User;
   }
 
@@ -116,6 +151,32 @@ export class AuthService {
         success: true,
         user: normalizedUser
       };
+    } catch (error) {
+      const apiError = error as ApiError;
+      return {
+        success: false,
+        error: apiError.message
+      };
+    }
+  }
+
+  public async requestPasswordReset(payload: PasswordResetRequestDto): Promise<{ success: boolean; error?: string }> {
+    try {
+      await apiClient.post<{ message: string }>('/auth/forgot-password', payload);
+      return { success: true };
+    } catch (error) {
+      const apiError = error as ApiError;
+      return {
+        success: false,
+        error: apiError.message
+      };
+    }
+  }
+
+  public async resetPassword(payload: PasswordResetConfirmDto): Promise<{ success: boolean; error?: string }> {
+    try {
+      await apiClient.post<{ message: string }>('/auth/reset-password', payload);
+      return { success: true };
     } catch (error) {
       const apiError = error as ApiError;
       return {

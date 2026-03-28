@@ -9,6 +9,7 @@ import { useNavigate } from "react-router-dom";
 import { Camera, Upload, Pencil, X, Check } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
 import StaffPrivilegeUpgrade from "@/components/StaffPrivilegeUpgrade";
+import TeamManagement from "@/pages/TeamManagement";
 import { toast } from "sonner";
 
 
@@ -452,6 +453,10 @@ const Profile: React.FC = () => {
               />
             </CardContent>
           </Card>
+        )}
+
+        {user.role === "staff" && user.playerType === "team" && (
+          <TeamManagement />
         )}
       </div>
     </div>

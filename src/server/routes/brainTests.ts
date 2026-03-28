@@ -2,7 +2,7 @@ import express from 'express';
 import BrainTestAttempt from '../models/BrainTestAttempt';
 import TestEntry from '../models/TestEntry';
 import User from '../models/User';
-import { protect } from '../middleware/auth';
+import { protect, hasPerformanceCoachCrmSubscription } from '../middleware/auth';
 import {
   BRAIN_DOMAINS,
   BrainTestKey,
@@ -19,6 +19,7 @@ import {
 const router = express.Router();
 
 router.use(protect);
+router.use(hasPerformanceCoachCrmSubscription);
 
 router.get('/catalog', (_req, res) => {
   return res.json(getCatalog());

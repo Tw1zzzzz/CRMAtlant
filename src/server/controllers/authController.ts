@@ -1,8 +1,13 @@
 ﻿import User from '../models/User';
+import Subscription from '../models/Subscription';
+import Team from '../models/Team';
 import PlayerCard from '../models/PlayerCard';
 import FaceitAccount from '../models/FaceitAccount';
+import { sendPasswordResetEmail } from '../services/mailService';
 import faceitService, { FaceitProfileInfo } from '../services/faceitService';
+import { createOpaqueToken, hashOpaqueToken } from '../utils/securityTokens';
 import { signJwt } from '../utils/jwt';
+import { buildSubscriptionSummary, buildSubscriptionAccessFlags, hasPerformanceCoachCrmAccess } from '../utils/subscriptionAccess';
 import mongoose from 'mongoose';
 
 // Генерация JWT токена
@@ -40,6 +45,66 @@ const isDatabaseUnavailableError = (error: unknown): boolean => {
 
 const normalizeText = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
 const isFaceitLink = (value: string): boolean => /^https?:\/\/(www\.)?faceit\.com\//i.test(value);
+const PASSWORD_RESET_TTL_MS = 15 * 60 * 1000;
+
+const buildUserResponse = (
+  user: any,
+  accessFlags = {
+    hasPerformanceCoachCrmAccess: false,
+    hasCorrelationAnalysisAccess: false,
+    hasGameStatsAccess: false,
+  }
+) => {
+  const baselineAssessmentCompleted = Boolean(user?.baselineAssessment?.completedAt);
+  const subscription = buildSubscriptionSummary(user?.subscription);
+
+  return {
+    _id: user._id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    playerType: user.playerType,
+    teamId: user.teamId || null,
+    teamName: user.teamName || '',
+    avatar: user.avatar,
+    privilegeKey: user.privilegeKey,
+    staffHasPrivilegeKey: Boolean(user.role === 'staff' && typeof user.privilegeKey === 'string' && user.privilegeKey.trim()),
+    subscription,
+    hasPerformanceCoachCrmAccess: accessFlags.hasPerformanceCoachCrmAccess || hasPerformanceCoachCrmAccess(subscription),
+    hasCorrelationAnalysisAccess: accessFlags.hasCorrelationAnalysisAccess,
+    hasGameStatsAccess: accessFlags.hasGameStatsAccess,
+    completedTests: user.completedTests,
+    completedBalanceWheel: user.completedBalanceWheel,
+    createdAt: user.createdAt,
+    baselineAssessmentCompleted,
+    baselineAssessment: user.baselineAssessment || null
+  };
+};
+
+const loadUserWithAccessData = async (userId: mongoose.Types.ObjectId | string) => {
+  const [user, activeSubscriptions] = await Promise.all([
+    User.findById(userId)
+      .select('-password')
+      .populate({
+        path: 'subscription',
+        populate: {
+          path: 'planId',
+          model: 'Plan',
+        },
+      }),
+    Subscription.find({
+      userId,
+      status: 'active',
+      expiresAt: { $gt: new Date() },
+    }).populate('planId'),
+  ]);
+
+  const accessFlags = buildSubscriptionAccessFlags(
+    activeSubscriptions.map((subscription) => buildSubscriptionSummary(subscription))
+  );
+
+  return { user, accessFlags };
+};
 
 const createPlayerCardForUser = async (
   userId: mongoose.Types.ObjectId,
@@ -108,22 +173,78 @@ const linkFaceitAccountToUser = async (
     .catch((error) => console.error(`[AuthController] Ошибка импорта матчей после регистрации пользователя ${userId}:`, error));
 };
 
+const findTeamByInviteCode = async (
+  code: string
+): Promise<{ team: any; invitedRole: 'player' | 'staff' } | null> => {
+  const normalizedCode = normalizeText(code);
+  if (!normalizedCode) {
+    return null;
+  }
+
+  const hashedCode = hashOpaqueToken(normalizedCode);
+  const teams = await Team.find({ isActive: true }).select(
+    '+playerInviteCodeHash +staffInviteCodeHash name playerLimit isActive'
+  );
+
+  for (const team of teams) {
+    if (team.playerInviteCodeHash === hashedCode) {
+      return { team, invitedRole: 'player' };
+    }
+
+    if (team.staffInviteCodeHash === hashedCode) {
+      return { team, invitedRole: 'staff' };
+    }
+  }
+
+  return null;
+};
+
+const ensureTeamPlayerCapacity = async (teamId: mongoose.Types.ObjectId): Promise<void> => {
+  const [team, playersCount] = await Promise.all([
+    Team.findById(teamId).select('playerLimit'),
+    User.countDocuments({
+      teamId,
+      role: 'player',
+      playerType: 'team',
+    }),
+  ]);
+
+  if (!team) {
+    throw new Error('Команда не найдена');
+  }
+
+  if (playersCount >= team.playerLimit) {
+    throw new Error('Лимит игроков в этой команде уже достигнут');
+  }
+};
+
+const getResetPasswordUrl = (token: string): string => {
+  const clientUrl = normalizeText(process.env.CLIENT_URL);
+  if (!clientUrl) {
+    throw new Error('CLIENT_URL не настроен');
+  }
+
+  return `${clientUrl.replace(/\/+$/g, '')}/reset-password?token=${encodeURIComponent(token)}`;
+};
+
 // Регистрация нового пользователя
 export const registerUser = async (req: any, res: any) => {
   try {
     console.log('[AuthController] Запрос на регистрацию:', {
       email: req.body.email,
       name: req.body.name,
-      role: req.body.role
+      playerType: req.body.playerType
     });
     
-    const { name, password, role = 'player' } = req.body;
+    const { name, password } = req.body;
     const email = normalizeEmail(req.body.email);
     const faceitUrl = normalizeText(req.body.faceitUrl || req.body.faceit);
     const nickname = normalizeText(req.body.nickname);
     const rawPlayerType = normalizeText(req.body.playerType || req.body.player_type);
+    const teamCode = normalizeText(req.body.teamCode);
+    const teamName = normalizeText(req.body.teamName);
+    const requestedRole = normalizeText(req.body.role);
     
-    // Улучшенная валидация входных данных
     if (!name || !email || !password) {
       console.log('[AuthController] Ошибка: отсутствуют обязательные поля');
       return res.status(400).json({ 
@@ -153,14 +274,52 @@ export const registerUser = async (req: any, res: any) => {
       });
     }
 
-    // Проверка допустимости роли - строго только "player" или "staff"
-    const validRoles = ['player', 'staff'];
-    if (!validRoles.includes(role)) {
-      console.log(`[AuthController] Недопустимая роль: ${role}, используем 'player' по умолчанию`);
-    }
-    const finalRole = validRoles.includes(role) ? role : 'player';
     const validPlayerTypes = ['solo', 'team'];
-    const finalPlayerType = validPlayerTypes.includes(rawPlayerType) ? rawPlayerType : 'team';
+    let finalPlayerType = validPlayerTypes.includes(rawPlayerType) ? rawPlayerType : 'solo';
+    let finalRole: 'player' | 'staff' = 'player';
+    let teamAssignment: { teamId: mongoose.Types.ObjectId; teamName: string } | null = null;
+
+    if (teamName) {
+      return res.status(403).json({
+        message: 'Создание команды доступно только авторизованному сотруднику через раздел управления командами'
+      });
+    }
+
+    if (teamCode) {
+      const resolvedTeamAccess = await findTeamByInviteCode(teamCode);
+      if (!resolvedTeamAccess) {
+        return res.status(400).json({
+          message: 'Код команды недействителен или уже устарел'
+        });
+      }
+
+      if (resolvedTeamAccess.invitedRole === 'player') {
+        await ensureTeamPlayerCapacity(resolvedTeamAccess.team._id);
+      }
+
+      finalRole = resolvedTeamAccess.invitedRole;
+      finalPlayerType = 'team';
+      teamAssignment = {
+        teamId: resolvedTeamAccess.team._id,
+        teamName: resolvedTeamAccess.team.name,
+      };
+    } else {
+      if (requestedRole === 'staff') {
+        if (finalPlayerType !== 'team') {
+          return res.status(400).json({
+            message: 'Сотрудник может зарегистрироваться только с типом профиля team'
+          });
+        }
+
+        finalRole = 'staff';
+      }
+
+      if (finalRole === 'player' && finalPlayerType === 'team') {
+        return res.status(400).json({
+          message: 'Для командной регистрации необходимо указать код команды'
+        });
+      }
+    }
 
     let resolvedFaceitProfile: FaceitProfileInfo | null = null;
     let faceitValidationWarning: string | null = null;
@@ -246,13 +405,21 @@ export const registerUser = async (req: any, res: any) => {
         email: email.trim().toLowerCase(),
         password,
         role: finalRole,
-        ...(finalRole === 'player' ? { playerType: finalPlayerType } : {}),
+        playerType: finalPlayerType,
+        ...(teamAssignment
+          ? {
+              teamId: teamAssignment.teamId,
+              teamName: teamAssignment.teamName,
+            }
+          : {}),
       };
       
       console.log(`[AuthController] Попытка создания пользователя с данными:`, {
         name: userData.name,
         email: userData.email,
         role: userData.role,
+        playerType: userData.playerType,
+        teamName: teamAssignment?.teamName || null,
         passwordLength: userData.password.length
       });
       
@@ -319,7 +486,8 @@ export const registerUser = async (req: any, res: any) => {
           id: user._id,
           name: user.name,
           email: user.email,
-          role: user.role
+          role: user.role,
+          teamName: user.teamName || null
         });
         
         // Генерация JWT токена
@@ -328,13 +496,7 @@ export const registerUser = async (req: any, res: any) => {
         res.status(201).json({
           token,
           user: {
-            _id: user._id,
-            name: user.name,
-            email: user.email,
-            role: user.role,
-            playerType: user.playerType,
-            avatar: user.avatar,
-            createdAt: user.createdAt,
+            ...buildUserResponse(user),
             faceitConnected: finalRole === 'player' ? Boolean(resolvedFaceitProfile) : false
           },
           warnings: faceitValidationWarning ? [faceitValidationWarning] : []
@@ -354,6 +516,119 @@ export const registerUser = async (req: any, res: any) => {
     console.error('[AuthController] Ошибка регистрации:', error);
     return res.status(500).json({ 
       message: 'Ошибка при регистрации пользователя',
+      error: error instanceof Error ? error.message : 'Неизвестная ошибка'
+    });
+  }
+};
+
+export const forgotPassword = async (req: any, res: any) => {
+  const successMessage = 'Если аккаунт существует, письмо со ссылкой для сброса уже отправлено';
+
+  try {
+    const email = normalizeEmail(req.body?.email);
+
+    if (!email) {
+      return res.status(400).json({ message: 'Укажите email' });
+    }
+
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        message: 'База данных инициализируется, повторите запрос через несколько секунд'
+      });
+    }
+
+    const user = await User.findOne({ email }).select('name email');
+    if (!user) {
+      return res.json({ message: successMessage });
+    }
+
+    const resetToken = createOpaqueToken(24);
+    const resetTokenHash = hashOpaqueToken(resetToken);
+    const resetExpiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
+
+    await User.updateOne(
+      { _id: user._id },
+      {
+        $set: {
+          passwordResetTokenHash: resetTokenHash,
+          passwordResetExpiresAt: resetExpiresAt,
+        },
+      }
+    );
+
+    try {
+      await sendPasswordResetEmail({
+        email: user.email,
+        name: user.name,
+        resetUrl: getResetPasswordUrl(resetToken),
+      });
+    } catch (mailError) {
+      await User.updateOne(
+        { _id: user._id },
+        {
+          $set: {
+            passwordResetTokenHash: null,
+            passwordResetExpiresAt: null,
+          },
+        }
+      );
+
+      console.error('[AuthController] Ошибка отправки письма для сброса пароля:', mailError);
+      return res.status(503).json({
+        message: 'Почтовая система временно недоступна. Попробуйте позже.'
+      });
+    }
+
+    return res.json({ message: successMessage });
+  } catch (error) {
+    console.error('[AuthController] Ошибка forgot password:', error);
+    return res.status(500).json({
+      message: 'Ошибка при запуске восстановления пароля',
+      error: error instanceof Error ? error.message : 'Неизвестная ошибка'
+    });
+  }
+};
+
+export const resetPassword = async (req: any, res: any) => {
+  try {
+    const token = normalizeText(req.body?.token);
+    const password = typeof req.body?.password === 'string' ? req.body.password : '';
+
+    if (!token || !password) {
+      return res.status(400).json({ message: 'Необходимо передать токен и новый пароль' });
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({ message: 'Новый пароль должен содержать не менее 8 символов' });
+    }
+
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        message: 'База данных инициализируется, повторите запрос через несколько секунд'
+      });
+    }
+
+    const hashedToken = hashOpaqueToken(token);
+    const user = await User.findOne({
+      passwordResetTokenHash: hashedToken,
+      passwordResetExpiresAt: { $gt: new Date() },
+    }).select('+passwordResetTokenHash +passwordResetExpiresAt +password');
+
+    if (!user) {
+      return res.status(400).json({ message: 'Ссылка для сброса пароля недействительна или устарела' });
+    }
+
+    user.password = password;
+    user.passwordResetTokenHash = null;
+    user.passwordResetExpiresAt = null;
+    user.passwordChangedAt = new Date();
+    await user.save();
+
+    return res.json({ message: 'Пароль успешно обновлен' });
+  } catch (error) {
+    console.error('[AuthController] Ошибка reset password:', error);
+    return res.status(500).json({
+      message: 'Ошибка при сбросе пароля',
       error: error instanceof Error ? error.message : 'Неизвестная ошибка'
     });
   }
@@ -416,20 +691,11 @@ export const loginUser = async (req: any, res: any) => {
     // Генерация JWT токена
     const token = generateToken(user._id.toString());
     
-    // Возвращаем данные пользователя (без пароля)
-    const userResponse = {
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-            playerType: user.playerType,
-      avatar: user.avatar,
-      createdAt: user.createdAt
-    };
-    
+    const { user: authUser, accessFlags } = await loadUserWithAccessData(user._id);
+
     res.json({
       token,
-      user: userResponse
+      user: buildUserResponse(authUser || user, accessFlags)
     });
     
   } catch (error) {
@@ -463,7 +729,7 @@ export const getCurrentUser = async (req: any, res: any) => {
     }
     
     // Получаем актуальную информацию о пользователе из базы данных
-    const user = await User.findById(req.user._id).select('-password');
+    const { user, accessFlags } = await loadUserWithAccessData(req.user._id);
     
     if (!user) {
       console.log('[AuthController] Ошибка: пользователь не найден в базе данных');
@@ -475,7 +741,7 @@ export const getCurrentUser = async (req: any, res: any) => {
     console.log(`[AuthController] Роль: ${user.role}`);
     console.log(`[AuthController] Есть ключ привилегий: ${!!(user.privilegeKey && user.privilegeKey.trim())}`);
     
-    res.json(user);
+    res.json(buildUserResponse(user, accessFlags));
   } catch (error) {
     console.error('[AuthController] Ошибка при получении данных текущего пользователя:', error);
     if (isDatabaseUnavailableError(error)) {
@@ -489,8 +755,3 @@ export const getCurrentUser = async (req: any, res: any) => {
     });
   }
 }; 
-
-
-
-
-

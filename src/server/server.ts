@@ -31,6 +31,9 @@ import excelImportRoutes from './routes/excelImport';
 import cs2AnalyticsRoutes from './routes/cs2Analytics';
 import notificationsRoutes from './routes/notifications';
 import brainTestsRoutes from './routes/brainTests';
+import playerStateRoutes from './routes/playerState.routes';
+import teamsRoutes from './routes/teams';
+import paymentsRoutes from './routes/payments';
 import { errorHandler } from './middleware/errorHandler';
 
 // Загрузка переменных окружения с явным указанием пути
@@ -190,6 +193,9 @@ app.use('/api/imports', excelImportRoutes);
 app.use('/api/cs2', cs2AnalyticsRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/brain-tests', brainTestsRoutes);
+app.use('/api/player-state', playerStateRoutes);
+app.use('/api/teams', teamsRoutes);
+app.use('/api/payments', paymentsRoutes);
 app.use('/health', healthRoutes);
 
 // Специальный middleware для обработки статических изображений с заголовками против кэширования

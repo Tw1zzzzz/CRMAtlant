@@ -10,6 +10,7 @@ import { Bot, BrainCircuit, Calendar, Clock, Sparkles, Target, TrendingUp, BarCh
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
+import SubscriptionFeatureGate from '@/components/SubscriptionFeatureGate';
 import {
   CorrelationAssistantResponse,
   getCorrelationAssistantInsight as requestCorrelationAssistantInsight,
@@ -248,6 +249,7 @@ const writePersistedCorrelationSession = (session: PersistedCorrelationSession) 
 const CorrelationAnalysisPage: React.FC = () => {
   const { user } = useAuth();
   const isSoloPlayer = user?.role === 'player' && user?.playerType === 'solo';
+  const hasCorrelationAnalysisAccess = Boolean(user?.hasCorrelationAnalysisAccess);
   const [restoredSession] = useState<PersistedCorrelationSession | null>(() => readPersistedCorrelationSession());
   const defaultDateRange = getDefaultDateRange();
   const hasRestoredResults = Boolean(
@@ -407,6 +409,11 @@ const CorrelationAnalysisPage: React.FC = () => {
    * Р—Р°РіСЂСѓР·РєР° СЃРїРёСЃРєР° игроков
    */
   const fetchPlayers = async () => {
+    if (!hasCorrelationAnalysisAccess) {
+      setPlayers([]);
+      return;
+    }
+
     setLoadingPlayers(true);
     try {
       // РСЃРїРѕР»СЊР·СѓРµРј РїСЂР°РІРёР»СЊРЅС‹Р№ API endpoint
@@ -434,6 +441,13 @@ const CorrelationAnalysisPage: React.FC = () => {
    * Р—Р°РіСЂСѓР·РєР° РґР°РЅРЅС‹С… РґР»СЏ Р°РЅР°Р»РёР·Р°
    */
   const fetchAnalysisData = async ({ resetAssistant = true, silent = false }: { resetAssistant?: boolean; silent?: boolean } = {}) => {
+    if (!hasCorrelationAnalysisAccess) {
+      if (!silent) {
+        toast.error('Для этого раздела нужен тариф "Корреляционный анализ"');
+      }
+      return;
+    }
+
     if (!dateFrom || !dateTo) {
       if (!silent) {
         toast.error('Выберите период для анализа');
@@ -813,6 +827,11 @@ const CorrelationAnalysisPage: React.FC = () => {
   };
 
   const handleGenerateAssistantInsight = async () => {
+    if (!hasCorrelationAnalysisAccess) {
+      toast.error('Для AI-разбора нужен тариф "Корреляционный анализ"');
+      return;
+    }
+
     if (!comparisonRows.length) {
       toast.error('Сначала загрузите данные за период');
       return;
@@ -888,10 +907,15 @@ const CorrelationAnalysisPage: React.FC = () => {
   };
 
   useEffect(() => {
+    if (!hasCorrelationAnalysisAccess) {
+      setPlayers([]);
+      return;
+    }
+
     if (!isSoloPlayer) {
       fetchPlayers();
     }
-  }, [isSoloPlayer]);
+  }, [hasCorrelationAnalysisAccess, isSoloPlayer]);
 
   useEffect(() => {
     if (isSoloPlayer && user?.id) {
@@ -920,7 +944,7 @@ const CorrelationAnalysisPage: React.FC = () => {
   }, [analysisMode, chartData, currentElo]);
 
   useEffect(() => {
-    if (!hasRestoredResults || autoRefreshDone) {
+    if (!hasCorrelationAnalysisAccess || !hasRestoredResults || autoRefreshDone) {
       return;
     }
 
@@ -934,7 +958,7 @@ const CorrelationAnalysisPage: React.FC = () => {
 
     setAutoRefreshDone(true);
     void fetchAnalysisData({ resetAssistant: false, silent: true });
-  }, [analysisMode, autoRefreshDone, dateFrom, dateTo, hasRestoredResults, selectedPlayerId]);
+  }, [analysisMode, autoRefreshDone, dateFrom, dateTo, hasCorrelationAnalysisAccess, hasRestoredResults, selectedPlayerId]);
 
   /**
    * РћР±СЂР°Р±РѕС‚РєР° СЃРѕС…СЂР°РЅРµРЅРёСЏ РёРіСЂРѕРІС‹С… РїРѕРєР°Р·Р°С‚РµР»РµР№
@@ -972,23 +996,6 @@ const CorrelationAnalysisPage: React.FC = () => {
     : null;
   const totalFaceitMatches = faceitRows.reduce((sum, row) => sum + (row.faceitMatches || 0), 0);
 
-  // Проверка доступа: стафф или solo-игрок
-  const canAccessCorrelation = user?.role === 'staff' || isSoloPlayer;
-  if (!canAccessCorrelation) {
-    return (
-      <div className="flex items-center justify-center min-h-screen performance-page">
-        <Card className="w-96 performance-hero">
-          <CardHeader>
-            <CardTitle className="text-center">Доступ ограничен</CardTitle>
-            <CardDescription className="text-center">
-              Корреляционный анализ доступен персоналу и одиночным игрокам
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    );
-  }
-
   return (
     <div className="container mx-auto p-6 space-y-6 performance-page">
       <div className="flex items-center space-x-2">
@@ -1003,7 +1010,12 @@ const CorrelationAnalysisPage: React.FC = () => {
       </div>
 
       <div className="w-full">
-
+        <SubscriptionFeatureGate
+          hasAccess={hasCorrelationAnalysisAccess}
+          title="Корреляционный анализ доступен после покупки"
+          description="После покупки откроются настройки периода, загрузка корреляций, графики, AI-вывод и сравнительная таблица метрик за выбранный период."
+          minHeightClassName="min-h-[1400px]"
+        >
         <div className="space-y-6">
           <Card>
             <CardHeader>
@@ -1757,6 +1769,7 @@ const CorrelationAnalysisPage: React.FC = () => {
             </>
           )}
         </div>
+        </SubscriptionFeatureGate>
 
       </div>
     </div>

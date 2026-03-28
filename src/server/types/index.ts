@@ -10,6 +10,9 @@ export interface AuthRequest extends Request {
     name: string;
     email: string;
     playerType?: string;
+    teamId?: mongoose.Types.ObjectId | string | null;
+    teamName?: string;
     faceitAccountId?: string;
+    passwordChangedAt?: Date | null;
   };
 }

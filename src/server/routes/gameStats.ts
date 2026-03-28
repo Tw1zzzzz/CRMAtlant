@@ -1,5 +1,5 @@
 import express from 'express';
-import { protect, isStaff } from '../middleware/auth';
+import { protect, isStaff, hasGameStatsSubscription } from '../middleware/auth';
 import {
   getGameStats,
   createGameStats,
@@ -13,6 +13,7 @@ const router = express.Router();
 
 // Применяем middleware авторизации ко всем маршрутам
 router.use(protect);
+router.use(hasGameStatsSubscription);
 
 /**
  * @route GET /api/game-stats

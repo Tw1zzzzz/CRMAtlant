@@ -11,7 +11,9 @@ import {
   getTeamMoodChartData,
   getAnalyticsMoodStats,
   getAnalyticsTestStats,
-  getBrainPerformanceSummary
+  getBrainPerformanceSummary,
+  getMyBaselineAssessment,
+  getMyDailyQuestionnaire
 } from "@/lib/api";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -24,6 +26,15 @@ import { COLORS, COMPONENT_STYLES } from "@/styles/theme";
 import { BalanceWheelChart } from "@/components/BalanceWheelChart";
 import { useNavigate } from "react-router-dom";
 import ROUTES from "@/lib/routes";
+import DailyQuestionnairePanel from "@/components/questionnaires/DailyQuestionnairePanel";
+import PlayerQuickStartPanel from "@/components/dashboard/PlayerQuickStartPanel";
+import PlayerTestsPanel from "@/components/dashboard/PlayerTestsPanel";
+import type { BaselineAssessment } from "@/types";
+import BaselineAssessmentCard from "@/components/onboarding/BaselineAssessmentCard";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import SubscriptionFeatureGate from "@/components/SubscriptionFeatureGate";
+
+const BASELINE_REGISTER_MODAL_FLAG = "baselineAssessmentAfterRegister";
 
 // Обновим тип MoodEntry
 type MoodEntry = {
@@ -52,8 +63,9 @@ type RecentStats = {
 };
 
 const Dashboard = () => {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const isStaff = user?.role === "staff";
+  const hasPerformanceCoachCrmAccess = Boolean(user?.hasPerformanceCoachCrmAccess);
   const navigate = useNavigate();
   
   const [moodEntries, setMoodEntries] = useState<MoodEntry[]>([]);
@@ -63,6 +75,10 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [brainSummary, setBrainSummary] = useState<BrainPerformanceSummary | null>(null);
+  const [baselineAssessment, setBaselineAssessment] = useState<BaselineAssessment | null>(user?.baselineAssessment || null);
+  const [dailyCheckDone, setDailyCheckDone] = useState(false);
+  const [playerTab, setPlayerTab] = useState<string>(user?.baselineAssessmentCompleted ? "overview" : "quick-start");
+  const [showBaselineRegistrationModal, setShowBaselineRegistrationModal] = useState(false);
   
   // Статистика всех игроков (для персонала)
   const [playersMoodStats, setPlayersMoodStats] = useState<any[]>([]);
@@ -73,6 +89,34 @@ const Dashboard = () => {
     completedTests: 0,
     totalPlayers: 0
   });
+
+  useEffect(() => {
+    setBaselineAssessment(user?.baselineAssessment || null);
+    setPlayerTab((current) => {
+      if (current === "quick-start" && user?.baselineAssessmentCompleted) {
+        return "overview";
+      }
+
+      if (!user?.baselineAssessmentCompleted) {
+        return "quick-start";
+      }
+
+      return current || "overview";
+    });
+  }, [user?.baselineAssessmentCompleted, user?.baselineAssessment?.completedAt]);
+
+  useEffect(() => {
+    if (isStaff || typeof window === "undefined") {
+      setShowBaselineRegistrationModal(false);
+      return;
+    }
+
+    const shouldShow =
+      sessionStorage.getItem(BASELINE_REGISTER_MODAL_FLAG) === "1" &&
+      !user?.baselineAssessmentCompleted;
+
+    setShowBaselineRegistrationModal(shouldShow);
+  }, [isStaff, user?.baselineAssessmentCompleted]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -86,8 +130,19 @@ const Dashboard = () => {
         } else {
           // Для игроков загружаем персональные данные из API
           try {
+            const todayKey = new Date().toISOString().slice(0, 10);
             // Получаем данные о настроении из API
-            const moodResponse = await getAnalyticsMoodStats();
+            const [moodResponse, testResponse] = await Promise.all([
+              getAnalyticsMoodStats(),
+              getAnalyticsTestStats(),
+            ]);
+            const [brainResponse, baselineResponse, dailyResponse] = hasPerformanceCoachCrmAccess
+              ? await Promise.all([
+                  getBrainPerformanceSummary(),
+                  getMyBaselineAssessment(),
+                  getMyDailyQuestionnaire(todayKey, todayKey)
+                ])
+              : [null, null, null];
             console.log("[Dashboard] API Mood Response:", moodResponse);
             
             // Обработка данных о настроении
@@ -121,8 +176,6 @@ const Dashboard = () => {
             
             console.log(`[Dashboard] Обработано ${loadedMoodEntries.length} записей о настроении из API`);
             
-            // Получаем данные о тестах из API
-            const testResponse = await getAnalyticsTestStats();
             console.log("[Dashboard] API Test Response:", testResponse);
             
             // Обработка данных о тестах
@@ -146,9 +199,11 @@ const Dashboard = () => {
             // Устанавливаем данные в состояние
             setMoodEntries(loadedMoodEntries as MoodEntry[]);
             setTestEntries(loadedTestEntries);
-
-            const brainResponse = await getBrainPerformanceSummary();
-            setBrainSummary(brainResponse.data.data || null);
+            setBrainSummary(brainResponse?.data?.data || null);
+            setBaselineAssessment(baselineResponse?.data?.data || user?.baselineAssessment || null);
+            setDailyCheckDone(
+              Boolean((dailyResponse?.data?.sleep?.length || 0) > 0 && (dailyResponse?.data?.screen?.length || 0) > 0)
+            );
     
             // Обрабатываем данные для графиков
             const recentStats = processRecentStats(loadedMoodEntries);
@@ -178,6 +233,8 @@ const Dashboard = () => {
             setMoodEntries(localMoodEntries);
             setTestEntries(localTestEntries);
             setBrainSummary(null);
+            setBaselineAssessment(user?.baselineAssessment || null);
+            setDailyCheckDone(false);
             
             // Обрабатываем данные для графиков из локального хранилища
             const recentStats = processRecentStats(localMoodEntries);
@@ -482,6 +539,21 @@ const Dashboard = () => {
   const peakEnergyDay = nonZeroEnergyDays.length
     ? nonZeroEnergyDays.reduce((peak, item) => (item.энергия > peak.энергия ? item : peak), nonZeroEnergyDays[0])
     : null;
+  const testsDone = Boolean(user?.completedTests || testEntries.length > 0);
+
+  const handleBaselineCompleted = async (assessment?: BaselineAssessment | null) => {
+    setBaselineAssessment(assessment || null);
+    setPlayerTab("overview");
+    sessionStorage.removeItem(BASELINE_REGISTER_MODAL_FLAG);
+    setShowBaselineRegistrationModal(false);
+    await refreshUser();
+  };
+
+  const handleSkipBaselineRegistrationModal = () => {
+    sessionStorage.removeItem(BASELINE_REGISTER_MODAL_FLAG);
+    setShowBaselineRegistrationModal(false);
+    setPlayerTab("quick-start");
+  };
 
   return (
     <div className="space-y-6" style={{ 
@@ -499,14 +571,89 @@ const Dashboard = () => {
         </p>
       </div>
 
-      <Tabs defaultValue="overview" className="space-y-4" style={{ color: COLORS.textColor }}>
-        <TabsList className="grid w-full grid-cols-4 p-1" style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor }}>
+      {!isStaff && (
+        <Dialog
+          open={showBaselineRegistrationModal}
+          onOpenChange={(open) => {
+            if (!open) {
+              handleSkipBaselineRegistrationModal();
+            }
+          }}
+        >
+          <DialogContent
+            className="max-h-[92vh] max-w-[1080px] overflow-y-auto border p-0"
+            style={{ backgroundColor: COLORS.backgroundColor, borderColor: COLORS.borderColor }}
+          >
+            <DialogHeader className="border-b px-6 pb-4 pt-6" style={{ borderColor: COLORS.borderColor }}>
+              <DialogTitle style={{ color: COLORS.textColor }}>
+                Добро пожаловать. Давайте сразу соберём ваш стартовый профиль.
+              </DialogTitle>
+              <DialogDescription style={{ color: COLORS.textColorSecondary }}>
+                Это базовое анкетирование показывается сразу после регистрации поверх интерфейса. Если сейчас не время, можно скипнуть и пройти его позже во вкладке «Быстрый старт».
+              </DialogDescription>
+            </DialogHeader>
+            <div className="px-6 py-6">
+              <BaselineAssessmentCard
+                initialAssessment={baselineAssessment}
+                onCompleted={handleBaselineCompleted}
+              />
+            </div>
+            <div className="flex justify-end border-t px-6 py-4" style={{ borderColor: COLORS.borderColor }}>
+              <Button
+                variant="outline"
+                className="rounded-2xl"
+                style={{ borderColor: COLORS.borderColor, color: COLORS.textColor }}
+                onClick={handleSkipBaselineRegistrationModal}
+              >
+                Скип, пройти позже
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      <Tabs
+        value={isStaff ? "overview" : playerTab}
+        onValueChange={(value) => {
+          if (!isStaff) {
+            setPlayerTab(value);
+          }
+        }}
+        className="space-y-4"
+        style={{ color: COLORS.textColor }}
+      >
+        <TabsList
+          className={`grid w-full p-1 ${isStaff ? "grid-cols-1 max-w-[220px]" : "grid-cols-4"}`}
+          style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor }}
+        >
           <TabsTrigger 
             value="overview" 
             className="text-sm px-4 py-2 rounded-md data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:font-medium hover:bg-gray-800"
           >
             Обзор
           </TabsTrigger>
+          {!isStaff && (
+            <>
+              <TabsTrigger
+                value="quick-start"
+                className="text-sm px-4 py-2 rounded-md data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:font-medium hover:bg-gray-800"
+              >
+                Быстрый старт
+              </TabsTrigger>
+              <TabsTrigger
+                value="sleep"
+                className="text-sm px-4 py-2 rounded-md data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:font-medium hover:bg-gray-800"
+              >
+                Сон
+              </TabsTrigger>
+              <TabsTrigger
+                value="tests"
+                className="text-sm px-4 py-2 rounded-md data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:font-medium hover:bg-gray-800"
+              >
+                Тесты
+              </TabsTrigger>
+            </>
+          )}
         </TabsList>
         
         <TabsContent value="overview" className="space-y-4">
@@ -924,6 +1071,63 @@ const Dashboard = () => {
             </Card>
           </div>
         </TabsContent>
+
+        {!isStaff && (
+          <TabsContent value="quick-start" className="space-y-4">
+            <SubscriptionFeatureGate
+              hasAccess={hasPerformanceCoachCrmAccess}
+              title="Быстрый старт входит в PerformanceCoach CRM"
+              description="Здесь собран onboarding игрока: базовая оценка, ежедневный recovery-check и переходы в тестовый контур. Раздел станет активным после покупки тарифа."
+              minHeightClassName="min-h-[440px]"
+            >
+              <PlayerQuickStartPanel
+                baselineAssessmentCompleted={Boolean(user?.baselineAssessmentCompleted)}
+                baselineAssessment={baselineAssessment}
+                sleepDoneToday={dailyCheckDone}
+                testsDone={testsDone}
+                onOpenSleepTab={() => setPlayerTab("sleep")}
+                onOpenTests={() => navigate(`${ROUTES.TEST_TRACKER}?tab=brain`)}
+                onBaselineCompleted={handleBaselineCompleted}
+              />
+            </SubscriptionFeatureGate>
+          </TabsContent>
+        )}
+
+        {!isStaff && (
+          <TabsContent value="sleep" className="space-y-4">
+            <SubscriptionFeatureGate
+              hasAccess={hasPerformanceCoachCrmAccess}
+              title="Recovery Check входит в PerformanceCoach CRM"
+              description="В этом разделе игрок каждый день фиксирует сон, экранное время и восстановление. После покупки тарифа блок станет доступен прямо внутри дашборда."
+              minHeightClassName="min-h-[420px]"
+            >
+              <DailyQuestionnairePanel
+                eyebrow="Recovery check"
+                title="Сон и восстановление на сегодня"
+                description="Сразу фиксируйте сон и экранное время: это самый быстрый ежедневный контур, который нужен игроку после захода."
+                onSaved={async () => {
+                  setDailyCheckDone(true);
+                }}
+              />
+            </SubscriptionFeatureGate>
+          </TabsContent>
+        )}
+
+        {!isStaff && (
+          <TabsContent value="tests" className="space-y-4">
+            <SubscriptionFeatureGate
+              hasAccess={hasPerformanceCoachCrmAccess}
+              title="Тестовый контур доступен после покупки"
+              description="Здесь открываются переходы в Brain Lab, weekly-тесты и ежедневный self-check. Вкладка видна сразу, а рабочее содержимое включается после покупки PerformanceCoach CRM."
+              minHeightClassName="min-h-[420px]"
+            >
+              <PlayerTestsPanel
+                onOpenBrainLab={() => navigate(`${ROUTES.TEST_TRACKER}?tab=brain`)}
+                onOpenWeeklyTests={() => navigate(`${ROUTES.TEST_TRACKER}?tab=weekly`)}
+              />
+            </SubscriptionFeatureGate>
+          </TabsContent>
+        )}
         
         <TabsContent value="analytics" className="space-y-4">
           <Card style={COMPONENT_STYLES.card}>

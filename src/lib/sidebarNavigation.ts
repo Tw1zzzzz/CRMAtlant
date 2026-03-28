@@ -9,11 +9,14 @@ export type SidebarIconKey =
   | 'correlation'
   | 'gameStats'
   | 'balanceWheel'
+  | 'playerState'
   | 'topPlayers'
   | 'players'
   | 'staff'
+  | 'teams'
   | 'playerCard'
-  | 'profile';
+  | 'profile'
+  | 'pricing';
 
 export interface SidebarNavItem {
   title: string;
@@ -30,11 +33,14 @@ const PATHS = {
   gameStats: '/game-stats',
   balanceWheel: '/balance-wheel',
   staffBalanceWheel: '/staff-balance-wheel',
+  playerState: '/state',
   topPlayers: '/top-players',
   playersManagement: '/players',
   staffRoster: '/staff-roster',
+  teamManagement: '/teams',
   playerCard: '/player-card',
   profile: '/profile',
+  pricing: '/pricing',
 } as const;
 
 export function getSidebarNavItems(
@@ -124,6 +130,12 @@ export function getSidebarNavItems(
   }
 
   if (role) {
+    baseItems.push({
+      title: 'Тарифы',
+      href: PATHS.pricing,
+      icon: 'pricing',
+    });
+
     baseItems.push({
       title: 'Профиль',
       href: PATHS.profile,

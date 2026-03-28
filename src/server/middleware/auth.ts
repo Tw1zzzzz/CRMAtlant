@@ -1,10 +1,12 @@
 import User from '../models/User';
+import Subscription from '../models/Subscription';
 import { verifyJwt } from '../utils/jwt';
+import { buildSubscriptionSummary, buildSubscriptionAccessFlags } from '../utils/subscriptionAccess';
 
 const PRIMARY_JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 const LEGACY_JWT_SECRET = 'your-secret-key';
 
-const verifyTokenWithFallback = (token: string): { id: string } => {
+const verifyTokenWithFallback = (token: string): { id: string; iat?: number } => {
   try {
     return verifyJwt<{ id: string }>(token, PRIMARY_JWT_SECRET);
   } catch (error) {
@@ -40,6 +42,19 @@ export const protect = async (req: any, res: any, next: any) => {
       if (!req.user) {
         console.log(`[AUTH] Пользователь с ID ${decoded.id} не найден в базе`);
         return res.status(401).json({ message: 'Пользователь не найден' });
+      }
+
+      if (decoded.iat && req.user.passwordChangedAt instanceof Date) {
+        const tokenIssuedAtMs = decoded.iat * 1000;
+        const passwordChangedAtMs = req.user.passwordChangedAt.getTime();
+
+        if (tokenIssuedAtMs < passwordChangedAtMs) {
+          console.log('[AUTH] Токен устарел после смены пароля');
+          return res.status(401).json({
+            message: 'Сессия устарела после смены пароля. Выполните вход повторно.',
+            code: 'TOKEN_STALE'
+          });
+        }
       }
       
       console.log(`[AUTH] Пользователь ${req.user.name} (${req.user.role}) авторизован`);
@@ -105,6 +120,99 @@ export const hasPrivilegeKey = (req: any, res: any, next: any) => {
   } catch (error) {
     console.error('[AUTH] Ошибка при проверке привилегий:', error);
     return res.status(500).json({ message: 'Ошибка сервера при проверке привилегий' });
+  }
+};
+
+export const hasPerformanceCoachCrmSubscription = async (req: any, res: any, next: any) => {
+  try {
+    if (!req.user?._id) {
+      return res.status(401).json({ message: 'Пользователь не авторизован' });
+    }
+
+    const activeSubscriptions = await Subscription.find({
+      userId: req.user._id,
+      status: 'active',
+      expiresAt: { $gt: new Date() },
+    }).populate('planId');
+
+    const accessFlags = buildSubscriptionAccessFlags(
+      activeSubscriptions.map((subscription) => buildSubscriptionSummary(subscription))
+    );
+
+    if (accessFlags.hasPerformanceCoachCrmAccess) {
+      return next();
+    }
+
+    return res.status(403).json({
+      message: 'Требуется активная подписка PerformanceCoach CRM',
+      requiresSubscription: true,
+      requiredPlan: 'PerformanceCoach CRM',
+    });
+  } catch (error) {
+    console.error('[AUTH] Ошибка при проверке подписки PerformanceCoach CRM:', error);
+    return res.status(500).json({ message: 'Ошибка сервера при проверке подписки' });
+  }
+};
+
+export const hasCorrelationAnalysisSubscription = async (req: any, res: any, next: any) => {
+  try {
+    if (!req.user?._id) {
+      return res.status(401).json({ message: 'Пользователь не авторизован' });
+    }
+
+    const activeSubscriptions = await Subscription.find({
+      userId: req.user._id,
+      status: 'active',
+      expiresAt: { $gt: new Date() },
+    }).populate('planId');
+
+    const accessFlags = buildSubscriptionAccessFlags(
+      activeSubscriptions.map((subscription) => buildSubscriptionSummary(subscription))
+    );
+
+    if (accessFlags.hasCorrelationAnalysisAccess) {
+      return next();
+    }
+
+    return res.status(403).json({
+      message: 'Требуется активная подписка "Корреляционный анализ"',
+      requiresSubscription: true,
+      requiredPlan: 'Корреляционный анализ',
+    });
+  } catch (error) {
+    console.error('[AUTH] Ошибка при проверке подписки Корреляционный анализ:', error);
+    return res.status(500).json({ message: 'Ошибка сервера при проверке подписки' });
+  }
+};
+
+export const hasGameStatsSubscription = async (req: any, res: any, next: any) => {
+  try {
+    if (!req.user?._id) {
+      return res.status(401).json({ message: 'Пользователь не авторизован' });
+    }
+
+    const activeSubscriptions = await Subscription.find({
+      userId: req.user._id,
+      status: 'active',
+      expiresAt: { $gt: new Date() },
+    }).populate('planId');
+
+    const accessFlags = buildSubscriptionAccessFlags(
+      activeSubscriptions.map((subscription) => buildSubscriptionSummary(subscription))
+    );
+
+    if (accessFlags.hasGameStatsAccess) {
+      return next();
+    }
+
+    return res.status(403).json({
+      message: 'Требуется активная подписка "Игровая статистика"',
+      requiresSubscription: true,
+      requiredPlan: 'Игровая статистика',
+    });
+  } catch (error) {
+    console.error('[AUTH] Ошибка при проверке подписки Игровая статистика:', error);
+    return res.status(500).json({ message: 'Ошибка сервера при проверке подписки' });
   }
 };
 

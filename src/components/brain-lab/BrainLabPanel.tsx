@@ -29,7 +29,8 @@ import {
   Monitor,
   ShieldCheck,
   TimerReset,
-  TrendingUp
+  TrendingUp,
+  X
 } from "lucide-react";
 import { getReadableInvalidReason } from "@/utils/testTypeMetadata";
 
@@ -106,6 +107,12 @@ type CountdownState = {
   batterySessionId: string;
   index: number;
   remaining: number;
+};
+
+type BriefingState = {
+  testKey: BrainTestKey;
+  batterySessionId: string;
+  index: number;
 };
 
 type RunnerProps = {
@@ -1043,11 +1050,13 @@ function BrainOverlayWindow({
   title,
   eyebrow,
   accent,
+  onClose,
   children
 }: {
   title: string;
   eyebrow: string;
   accent: string;
+  onClose?: () => void;
   children: React.ReactNode;
 }) {
   return (
@@ -1073,8 +1082,20 @@ function BrainOverlayWindow({
               <div className="mt-1 text-lg font-semibold text-slate-50">{title}</div>
             </div>
           </div>
-          <div className="rounded-full border border-white/8 bg-white/[0.04] px-3 py-1 text-xs uppercase tracking-[0.2em] text-slate-400">
-            Не закрывайте вкладку
+          <div className="flex items-center gap-3">
+            <div className="rounded-full border border-white/8 bg-white/[0.04] px-3 py-1 text-xs uppercase tracking-[0.2em] text-slate-400">
+              Не закрывайте вкладку
+            </div>
+            {onClose ? (
+              <button
+                type="button"
+                onClick={onClose}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/8 bg-white/[0.04] text-slate-300 transition hover:bg-white/[0.08] hover:text-slate-50"
+                aria-label="Закрыть тест"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            ) : null}
           </div>
         </div>
         <div className="max-h-[calc(92vh-80px)] overflow-y-auto p-6 md:p-7">{children}</div>
@@ -1093,10 +1114,12 @@ const BrainLabPanel = () => {
   const [starting, setStarting] = useState(false);
   const [finishing, setFinishing] = useState(false);
   const [runner, setRunner] = useState<AttemptRuntime | null>(null);
+  const [briefing, setBriefing] = useState<BriefingState | null>(null);
   const [countdown, setCountdown] = useState<CountdownState | null>(null);
   const [batteryIndex, setBatteryIndex] = useState(0);
   const [batterySessionId, setBatterySessionId] = useState<string | null>(null);
   const [batteryResults, setBatteryResults] = useState<BrainAttemptResult[]>([]);
+  const [transitionHint, setTransitionHint] = useState<{ previousTitle: string; nextTitle: string } | null>(null);
 
   const loadBrainData = async () => {
     try {
@@ -1149,6 +1172,11 @@ const BrainLabPanel = () => {
         console.error("Error booting countdown attempt:", error);
         if (!cancelled) {
           setCountdown(null);
+          setBriefing({
+            testKey: countdown.testKey,
+            batterySessionId: countdown.batterySessionId,
+            index: countdown.index
+          });
           toast({
             title: "Не удалось открыть тест",
             description: error?.message || "Система не смогла создать новое окно теста.",
@@ -1186,11 +1214,22 @@ const BrainLabPanel = () => {
 
   const queueTestStart = (testKey: BrainTestKey, currentSessionId: string, index: number) => {
     setRunner(null);
-    setBatteryIndex(index);
-    setCountdown({
+    setBriefing({
       testKey,
       batterySessionId: currentSessionId,
-      index,
+      index
+    });
+    setBatteryIndex(index);
+    setCountdown(null);
+  };
+
+  const launchCountdown = (state: BriefingState) => {
+    setTransitionHint(null);
+    setBriefing(null);
+    setCountdown({
+      testKey: state.testKey,
+      batterySessionId: state.batterySessionId,
+      index: state.index,
       remaining: 5
     });
   };
@@ -1200,6 +1239,7 @@ const BrainLabPanel = () => {
     try {
       setStarting(true);
       setBatteryResults([]);
+      setTransitionHint(null);
       setBatteryIndex(0);
       const nextSessionId = createSessionId();
       setBatterySessionId(nextSessionId);
@@ -1214,6 +1254,36 @@ const BrainLabPanel = () => {
     } finally {
       setStarting(false);
     }
+  };
+
+  const closeBatteryFlow = () => {
+    const hasActiveAttempt = Boolean(runner || countdown || briefing);
+    if (!hasActiveAttempt) {
+      return;
+    }
+
+    const message = runner
+      ? "Закрыть текущий тест? Текущая попытка не завершится и прогресс именно этого теста не сохранится."
+      : countdown
+        ? "Отменить запуск текущего теста и закрыть батарею?"
+        : "Закрыть экран текущего теста и выйти из батареи?";
+
+    if (typeof window !== "undefined" && !window.confirm(message)) {
+      return;
+    }
+
+    setRunner(null);
+    setBriefing(null);
+    setCountdown(null);
+    setBatteryIndex(0);
+    setBatterySessionId(null);
+    setBatteryResults([]);
+    setTransitionHint(null);
+
+    toast({
+      title: "Батарея закрыта",
+      description: "Можно вернуться к Brain Lab в любой момент и начать заново."
+    });
   };
 
   const handleRunnerFinish = async (rawMetrics: Record<string, unknown>) => {
@@ -1233,13 +1303,20 @@ const BrainLabPanel = () => {
 
       const nextIndex = batteryIndex + 1;
       if (nextIndex < catalog.order.length && batterySessionId) {
-        queueTestStart(catalog.order[nextIndex], batterySessionId, nextIndex);
+        const nextTestKey = catalog.order[nextIndex];
+        const nextEntry = catalog.tests.find((item) => item.testKey === nextTestKey);
+        setTransitionHint({
+          previousTitle: runner.entry.title,
+          nextTitle: nextEntry?.title || performanceFormulaMap[nextTestKey].title
+        });
+        queueTestStart(nextTestKey, batterySessionId, nextIndex);
         return;
       }
 
       setRunner(null);
       setCountdown(null);
       setBatteryIndex(0);
+      setTransitionHint(null);
       await loadBrainData();
       toast({
         title: "Батарея завершена",
@@ -1362,15 +1439,15 @@ const BrainLabPanel = () => {
                   <div className="flex flex-col gap-3">
                     <Button
                       onClick={startBattery}
-                      disabled={starting || !catalog || !!countdown || !!runner}
+                      disabled={starting || !catalog || !!countdown || !!runner || !!briefing}
                       className="h-14 rounded-[20px] border-0 px-6 text-base font-medium text-slate-950"
                       style={{ background: "linear-gradient(90deg, #6EE7FF, #86EFAC)" }}
                     >
                       {starting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowRight className="mr-2 h-4 w-4" />}
-                      Запустить батарею
+                      Открыть батарею
                     </Button>
                     <div className="rounded-[20px] border border-white/8 bg-white/[0.04] px-4 py-3 text-sm leading-6 text-slate-300">
-                      Каждый тест стартует не сразу: сначала показываем инструкцию и countdown на 5 секунд.
+                      Сначала открывается briefing по тесту, потом вы вручную запускаете 5-секундный countdown.
                     </div>
                   </div>
                 </div>
@@ -1688,11 +1765,80 @@ const BrainLabPanel = () => {
         </>
       )}
 
+      {briefing && catalog ? (
+        <BrainOverlayWindow
+          eyebrow={`Тест ${briefing.index + 1} из ${catalog.order.length}`}
+          title={performanceFormulaMap[briefing.testKey].title}
+          accent={testAccent[briefing.testKey].accent}
+          onClose={closeBatteryFlow}
+        >
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_380px]">
+            <div className="space-y-5">
+              {transitionHint ? (
+                <div className="rounded-[24px] border border-emerald-300/18 bg-emerald-300/10 px-5 py-4 text-sm leading-6 text-emerald-50">
+                  <span className="font-medium text-emerald-100">{transitionHint.previousTitle}</span> сохранён.
+                  Дальше спокойно переходим к <span className="font-medium text-emerald-100">{transitionHint.nextTitle}</span>.
+                </div>
+              ) : null}
+              <div className="rounded-[28px] border border-white/8 bg-[radial-gradient(circle_at_top_left,_rgba(110,231,255,0.14),_transparent_34%),linear-gradient(180deg,rgba(10,16,34,0.92),rgba(6,10,22,0.98))] p-6">
+                <div className="text-[11px] uppercase tracking-[0.24em]" style={{ color: testAccent[briefing.testKey].accent }}>
+                  Перед стартом теста
+                </div>
+                <h3 className="mt-3 text-3xl font-semibold text-slate-50">{performanceFormulaMap[briefing.testKey].title}</h3>
+                <p className="mt-4 text-base leading-8 text-slate-300">{performanceFormulaMap[briefing.testKey].summary}</p>
+                <div className="mt-5 rounded-[22px] border border-white/8 bg-slate-950/45 p-4">
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Что измеряет тест</div>
+                  <div className="mt-3 text-sm leading-7 text-slate-200">{performanceFormulaMap[briefing.testKey].detail}</div>
+                </div>
+              </div>
+
+              <div className="rounded-[28px] border border-white/8 bg-white/[0.03] p-5">
+                <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Что делать</div>
+                <div className="mt-3 text-base leading-7 text-slate-100">
+                  {catalog.tests.find((entry) => entry.testKey === briefing.testKey)?.instruction}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-5">
+              <div className="rounded-[30px] border border-white/8 bg-white/[0.04] p-6">
+                <div className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Формула raw performance</div>
+                <div className="mt-4 text-lg font-semibold leading-8 text-slate-50">
+                  {performanceFormulaMap[briefing.testKey].formula}
+                </div>
+                <div className="mt-4 text-sm leading-7 text-slate-400">
+                  После нажатия на кнопку старт пойдёт 5-секундный отсчёт, чтобы вы успели собраться и положить руки на клавиатуру.
+                </div>
+              </div>
+              <div className="rounded-[28px] border border-white/8 bg-white/[0.03] p-5">
+                <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-slate-400">
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  Валидность попытки
+                </div>
+                <div className="mt-4 space-y-3 text-sm leading-7 text-slate-300">
+                  <p>1. Не переключайте вкладку и не сворачивайте окно.</p>
+                  <p>2. Сначала дочитайте правило именно этого теста.</p>
+                  <p>3. Только после этого нажимайте старт и ждите countdown.</p>
+                </div>
+                <Button
+                  onClick={() => launchCountdown(briefing)}
+                  className="mt-5 h-12 w-full rounded-[18px] border-0 text-base font-medium text-slate-950"
+                  style={{ background: "linear-gradient(90deg, #6EE7FF, #86EFAC)" }}
+                >
+                  Старт теста
+                </Button>
+              </div>
+            </div>
+          </div>
+        </BrainOverlayWindow>
+      ) : null}
+
       {countdown && catalog ? (
         <BrainOverlayWindow
           eyebrow={`Тест ${countdown.index + 1} из ${catalog.order.length}`}
           title={`${performanceFormulaMap[countdown.testKey].title} стартует через ${countdown.remaining} сек`}
           accent={testAccent[countdown.testKey].accent}
+          onClose={closeBatteryFlow}
         >
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_380px]">
             <div className="space-y-5">
@@ -1744,6 +1890,7 @@ const BrainLabPanel = () => {
           eyebrow={`Тест ${batteryIndex + 1} из ${catalog.order.length}`}
           title={runner.entry.title}
           accent={testAccent[runner.entry.testKey].accent}
+          onClose={closeBatteryFlow}
         >
           <div className="mb-4 flex items-center gap-3 rounded-[22px] border border-white/8 bg-white/[0.03] px-4 py-3 text-sm text-slate-300">
             <ShieldCheck className="h-4 w-4 text-cyan-200" />

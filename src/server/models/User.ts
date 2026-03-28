@@ -1,5 +1,26 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
+import type {
+  BaselineAnswerInput,
+  BaselineRole,
+  BaselineRoundStrength,
+  BaselineSidePreference,
+  BaselinePersonalitySummary
+} from '../utils/baselineAssessment';
+
+interface BaselineAssessment {
+  completedAt?: Date;
+  personality?: {
+    answers: BaselineAnswerInput[];
+    summary: BaselinePersonalitySummary;
+  };
+  cs2Role?: {
+    primaryRole: BaselineRole;
+    secondaryRole?: BaselineRole;
+    sidePreference: BaselineSidePreference;
+    roundStrength: BaselineRoundStrength;
+  };
+}
 
 interface UserDocument extends mongoose.Document {
   name: string;
@@ -7,12 +28,19 @@ interface UserDocument extends mongoose.Document {
   password: string;
   role: string;
   playerType?: string;
+  teamId?: mongoose.Types.ObjectId | null;
+  teamName?: string;
   avatar?: string;
   faceitAccountId?: mongoose.Types.ObjectId;
   privilegeKey?: string;
+  subscription?: mongoose.Types.ObjectId | null;
+  passwordResetTokenHash?: string | null;
+  passwordResetExpiresAt?: Date | null;
+  passwordChangedAt?: Date | null;
   matchPassword(enteredPassword: string): Promise<boolean>;
   completedTests?: boolean;
   completedBalanceWheel?: boolean;
+  baselineAssessment?: BaselineAssessment;
   _updateTimestamp?: number;
   createdAt: Date;
   updatedAt: Date;
@@ -52,6 +80,16 @@ const userSchema = new mongoose.Schema(
       enum: ["solo", "team"],
       default: "team",
     },
+    teamId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Team',
+      default: null,
+    },
+    teamName: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     avatar: {
       type: String,
       default: "",
@@ -65,6 +103,25 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    subscription: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Subscription',
+      default: null,
+    },
+    passwordResetTokenHash: {
+      type: String,
+      default: null,
+      select: false,
+    },
+    passwordResetExpiresAt: {
+      type: Date,
+      default: null,
+      select: false,
+    },
+    passwordChangedAt: {
+      type: Date,
+      default: null,
+    },
     completedTests: {
       type: Boolean,
       default: false,
@@ -72,6 +129,41 @@ const userSchema = new mongoose.Schema(
     completedBalanceWheel: {
       type: Boolean,
       default: false,
+    },
+    baselineAssessment: {
+      completedAt: {
+        type: Date,
+        default: null,
+      },
+      personality: {
+        answers: {
+          type: [
+            {
+              questionId: { type: String, required: true },
+              optionId: { type: String, required: true }
+            }
+          ],
+          default: []
+        },
+        summary: {
+          archetype: { type: String, default: '' },
+          headline: { type: String, default: '' },
+          description: { type: String, default: '' },
+          styleTags: { type: [String], default: [] },
+          axes: {
+            tempo: { type: Number, default: 0 },
+            communication: { type: Number, default: 0 },
+            decisionStyle: { type: Number, default: 0 },
+            pressureResponse: { type: Number, default: 0 }
+          }
+        }
+      },
+      cs2Role: {
+        primaryRole: { type: String, default: '' },
+        secondaryRole: { type: String, default: '' },
+        sidePreference: { type: String, default: '' },
+        roundStrength: { type: String, default: '' }
+      }
     },
     _updateTimestamp: {
       type: Number,
@@ -103,6 +195,9 @@ userSchema.pre("save", async function (next) {
     // Хеширование пароля
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
+    if (!this.isNew) {
+      this.passwordChangedAt = new Date();
+    }
     console.log('[User Model] Пароль успешно хеширован');
     next();
   } catch (error) {

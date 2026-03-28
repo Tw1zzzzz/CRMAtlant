@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import GameStatsForm from '@/components/forms/GameStatsForm';
 import { Sparkles, LayoutGrid, Table2 } from 'lucide-react';
 import { COLORS } from '@/styles/theme';
+import SubscriptionFeatureGate from '@/components/SubscriptionFeatureGate';
 
 interface GameStatsFormData {
   date: string;
@@ -261,6 +262,7 @@ const GameStatsPage: React.FC = () => {
   const [gameStatsDateTo, setGameStatsDateTo] = useState(restoredSnapshot?.dateTo ?? '');
 
   const isStaff = user?.role === 'staff';
+  const hasGameStatsAccess = Boolean(user?.hasGameStatsAccess);
 
   useEffect(() => {
     if (restoredSnapshot?.dateFrom && restoredSnapshot?.dateTo) {
@@ -274,7 +276,11 @@ const GameStatsPage: React.FC = () => {
   }, [restoredSnapshot?.dateFrom, restoredSnapshot?.dateTo]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !hasGameStatsAccess) {
+      setPlayers([]);
+      return;
+    }
+
     if (!isStaff) {
       setGameStatsMode('individual');
       if (user.id) {
@@ -307,7 +313,7 @@ const GameStatsPage: React.FC = () => {
     };
 
     fetchPlayers();
-  }, [isStaff, user]);
+  }, [hasGameStatsAccess, isStaff, user]);
 
   const normalizeGameStatsEntries = (entries: GameStatsEntry[]) => {
     return entries.map((entry, index) => {
@@ -659,6 +665,12 @@ const GameStatsPage: React.FC = () => {
         </div>
       </section>
 
+      <SubscriptionFeatureGate
+        hasAccess={hasGameStatsAccess}
+        title="Игровая статистика доступна после покупки"
+        description="После покупки тарифа откроются сводная витрина матчевых метрик, фильтры по периоду и форма для занесения игровых показателей."
+        minHeightClassName="min-h-[980px]"
+      >
       <Card style={shellCardStyle}>
         <CardHeader className="pb-3">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -834,6 +846,7 @@ const GameStatsPage: React.FC = () => {
           showPlayerSelect={showPlayerSelect}
         />
       </div>
+      </SubscriptionFeatureGate>
     </div>
   );
 };

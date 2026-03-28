@@ -16,7 +16,7 @@ import { Loader2, Upload, Send, Image, Search, Plus, UserPlus, CreditCard, Messa
 import UserAvatar from "@/components/UserAvatar";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import { User } from "@/types";
+import { BaselineAssessment, User } from "@/types";
 import AddPlayerForm from "@/components/AddPlayerForm";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -246,6 +246,7 @@ interface PlayerCardData {
     communicationLine: string;
     updatedAt: string;
   };
+  baselineAssessment?: BaselineAssessment | null;
   user: {
     id: string;
     name: string;
@@ -2617,6 +2618,83 @@ const safeDeletePlayerCard = async (
                   </div>
                 ) : playerHasCard ? (
                   <>
+                    {playerCardsData[selectedPlayerId]?.baselineAssessment?.personality?.summary &&
+                      playerCardsData[selectedPlayerId]?.baselineAssessment?.cs2Role && (
+                        <>
+                          <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                              <h3 className="text-lg font-semibold">Базовый профиль игрока</h3>
+                              <span className="text-sm text-muted-foreground">Стартовый контур после регистрации</span>
+                            </div>
+
+                            <div className="grid gap-4 md:grid-cols-[1.1fr_0.9fr]">
+                              <Card className="border-cyan-400/15 bg-[linear-gradient(145deg,rgba(17,24,39,0.98),rgba(18,40,64,0.82))] text-white">
+                                <CardHeader className="pb-3">
+                                  <CardTitle className="text-2xl">
+                                    {playerCardsData[selectedPlayerId]?.baselineAssessment?.personality?.summary?.archetype}
+                                  </CardTitle>
+                                  <CardDescription className="text-slate-300">
+                                    {playerCardsData[selectedPlayerId]?.baselineAssessment?.personality?.summary?.headline}
+                                  </CardDescription>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                  <p className="text-sm leading-7 text-slate-300">
+                                    {playerCardsData[selectedPlayerId]?.baselineAssessment?.personality?.summary?.description}
+                                  </p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {playerCardsData[selectedPlayerId]?.baselineAssessment?.personality?.summary?.styleTags?.map((tag) => (
+                                      <span
+                                        key={tag}
+                                        className="rounded-full border border-white/10 px-3 py-1 text-xs uppercase tracking-[0.16em] text-slate-200"
+                                      >
+                                        {tag}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </CardContent>
+                              </Card>
+
+                              <Card className="bg-muted/20">
+                                <CardHeader className="pb-3">
+                                  <CardTitle className="text-lg">Роль в CS2</CardTitle>
+                                  <CardDescription>
+                                    Как игрок распределяет ответственность по ролям и фазам раунда.
+                                  </CardDescription>
+                                </CardHeader>
+                                <CardContent className="space-y-3 text-sm">
+                                  <div className="flex justify-between gap-3">
+                                    <span className="text-muted-foreground">Основная роль</span>
+                                    <span className="font-medium text-foreground">
+                                      {playerCardsData[selectedPlayerId]?.baselineAssessment?.cs2Role?.primaryRole}
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between gap-3">
+                                    <span className="text-muted-foreground">Вторичная роль</span>
+                                    <span className="font-medium text-foreground">
+                                      {playerCardsData[selectedPlayerId]?.baselineAssessment?.cs2Role?.secondaryRole || "Не указана"}
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between gap-3">
+                                    <span className="text-muted-foreground">Предпочтительная сторона</span>
+                                    <span className="font-medium text-foreground">
+                                      {playerCardsData[selectedPlayerId]?.baselineAssessment?.cs2Role?.sidePreference}
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between gap-3">
+                                    <span className="text-muted-foreground">Сильная фаза</span>
+                                    <span className="font-medium text-foreground">
+                                      {playerCardsData[selectedPlayerId]?.baselineAssessment?.cs2Role?.roundStrength}
+                                    </span>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            </div>
+                          </div>
+
+                          <Separator />
+                        </>
+                      )}
+
                     {/* Карточка игрока (v1): индексы и таймлайн */}
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">

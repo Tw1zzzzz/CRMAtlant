@@ -111,6 +111,31 @@ const main = async () => {
     assert.strictEqual(req.user.role, 'staff');
   });
 
+  await runTest('protect rejects token issued before password change', async () => {
+    jwtModule.verifyJwt = () => ({ id: 'u-stale', iat: 10 });
+    User.findById = () => ({
+      select: async () => ({
+        _id: 'u-stale',
+        name: 'Stale',
+        role: 'staff',
+        passwordChangedAt: new Date(20 * 1000),
+      })
+    });
+
+    const { protect } = loadAuthModule();
+    const req = createRequest({ headers: { authorization: 'Bearer old' } });
+    const res = createResponse();
+    let nextCalled = false;
+
+    await protect(req, res, () => {
+      nextCalled = true;
+    });
+
+    assert.strictEqual(nextCalled, false);
+    assert.strictEqual(res.statusCode, 401);
+    assert.strictEqual(res.payload.code, 'TOKEN_STALE');
+  });
+
   await runTest('protect denies token when user is missing in database', async () => {
     jwtModule.verifyJwt = () => ({ id: 'u-missing' });
     User.findById = () => ({

@@ -6,6 +6,14 @@ import {
   extractPlayerId,
   normalizeBalanceWheelResponse
 } from './apiHelpers';
+import type {
+  BaselineAssessment,
+  BaselineAnswerInput,
+  BaselineRole,
+  BaselineRoundStrength,
+  BaselineSidePreference,
+  Plan
+} from '@/types';
 
 // Создаем экземпляр axios с базовыми настройками
 const api = axios.create({
@@ -130,6 +138,32 @@ interface BrainAttemptCompletePayload {
 interface PlayerStatusUpdate {
   completedTests?: boolean;
   completedBalanceWheel?: boolean;
+}
+
+export interface DailyQuestionnairePayload {
+  date?: string;
+  mood?: number;
+  energy?: number;
+  sleepHours?: number;
+  sleepStartTime?: string;
+  sleepEndTime?: string;
+  screenTimeHours?: number;
+  screenBreakdown?: {
+    entertainment?: number;
+    communication?: number;
+    browser?: number;
+    study?: number;
+  };
+}
+
+export interface BaselineAssessmentPayload {
+  personalityAnswers: BaselineAnswerInput[];
+  cs2Role: {
+    primaryRole: BaselineRole;
+    secondaryRole?: BaselineRole | '';
+    sidePreference: BaselineSidePreference;
+    roundStrength: BaselineRoundStrength;
+  };
 }
 
 // Типы данных для API аналитики
@@ -292,6 +326,14 @@ export const getTestsStateImpact = (params?: {
 }) => retryRequest(() => api.get(buildTestsStateImpactPath(params)));
 
 export const getNotifications = () => retryRequest(() => api.get('/notifications'));
+export const submitDailyQuestionnaire = (data: DailyQuestionnairePayload) =>
+  retryRequest(() => api.post('/questionnaires/daily', data));
+export const getMyDailyQuestionnaire = (dateFrom: string, dateTo: string) =>
+  retryRequest(() => api.get(`/questionnaires/daily/my?dateFrom=${dateFrom}&dateTo=${dateTo}`));
+export const getMyBaselineAssessment = () =>
+  retryRequest(() => api.get<{ success: true; data: BaselineAssessment | null; baselineAssessmentCompleted: boolean }>('/questionnaires/baseline/me'));
+export const submitBaselineAssessment = (data: BaselineAssessmentPayload) =>
+  retryRequest(() => api.post<{ success: true; data: BaselineAssessment; baselineAssessmentCompleted: boolean }>('/questionnaires/baseline', data));
 
 export const getBrainTestsCatalog = () => retryRequest(() => api.get('/brain-tests/catalog'));
 export const startBrainTestAttempt = (data: BrainAttemptStartPayload) =>
@@ -318,6 +360,16 @@ export const updatePrivilegeKey = async (privilegeKey: string) => {
 };
 
 export const checkStaffPrivilege = () => retryRequest(() => api.get('/users/check-privilege'));
+
+export const getPlans = async (): Promise<Plan[]> => {
+  const response = await retryRequest(() => api.get<Plan[]>('/payments/plans'));
+  return response.data;
+};
+
+export const createInvoice = async (planId: string): Promise<{ paymentUrl: string }> => {
+  const response = await retryRequest(() => api.post<{ paymentUrl: string }>('/payments/create-invoice', { planId }));
+  return response.data;
+};
 
 // ====== TEAM REPORTS API ======
 
@@ -855,4 +907,41 @@ export const getAdvancedAnalyticsStats = async (): Promise<{ data: any; meta: an
   return response.data;
 };
 
-export default api; 
+// ============ СОСТОЯНИЕ ИГРОКА ============
+
+import type { PlayerStateReport } from '@/types/playerState.types';
+
+/**
+ * Получить AI-анализ состояния текущего пользователя
+ */
+const validatePlayerStateReport = (data: unknown): PlayerStateReport => {
+  if (
+    !data ||
+    typeof data !== 'object' ||
+    typeof (data as PlayerStateReport).report !== 'string' ||
+    typeof (data as PlayerStateReport).zones !== 'object' ||
+    !(data as PlayerStateReport).zones
+  ) {
+    throw new Error('Некорректный формат ответа от сервера');
+  }
+  return data as PlayerStateReport;
+};
+
+export const getPlayerStateAnalysis = async (): Promise<PlayerStateReport> => {
+  const response = await retryRequest(() => api.get('/player-state/analyze'));
+  return validatePlayerStateReport(response.data.data);
+};
+
+/**
+ * Получить AI-анализ состояния конкретного игрока (только для staff)
+ */
+export const getPlayerStateAnalysisForPlayer = async (
+  playerId: string,
+): Promise<PlayerStateReport> => {
+  const response = await retryRequest(() =>
+    api.get(`/player-state/analyze/${playerId}`),
+  );
+  return validatePlayerStateReport(response.data.data);
+};
+
+export default api;

@@ -36,11 +36,18 @@ const Header = () => {
     <header className="p-4 flex justify-between items-center border-b" style={headerStyles}>
       <div className="flex items-center space-x-4">
         <div className="flex items-center gap-4">
-          <img 
-            src={twizzLogoSvg} 
-            alt="ATLANT Technology Logo" 
-            style={twizzLogoStyle}
-          />
+          <div>
+            {user?.playerType === "team" && user.teamName ? (
+              <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em]" style={{ color: COLORS.primary }}>
+                {user.teamName}
+              </p>
+            ) : null}
+            <img 
+              src={twizzLogoSvg} 
+              alt="ATLANT Technology Logo" 
+              style={twizzLogoStyle}
+            />
+          </div>
         </div>
       </div>
       

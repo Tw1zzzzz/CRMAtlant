@@ -14,6 +14,7 @@ export * from './balance-wheel.types';
 // Реэкспорт типов статистики
 export * from './statistics.types';
 export * from './brain.types';
+export * from './payment.types';
 
 // Дополнительные общие типы
 export type Nullable<T> = T | null;
@@ -23,4 +24,3 @@ export type AsyncState<T> = {
   loading: boolean;
   error: string | null;
 };
-

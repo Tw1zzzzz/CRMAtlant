@@ -1,8 +1,8 @@
 import { Link, useLocation } from "react-router-dom";
-import { 
-  BarChart2, Calendar, Home, ListTodo, 
-  User, Users, LogOut, CircleDot, 
-  Trophy, LineChart, Clock, CreditCard, UserPlus, TrendingUp, Upload 
+import {
+  BarChart2, Calendar, Home, ListTodo,
+  User, Users, LogOut, CircleDot,
+  Trophy, LineChart, Clock, CreditCard, UserPlus, TrendingUp, Upload, Activity, IdCard
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
@@ -13,6 +13,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { COLORS } from "@/styles/theme";
 import {
   getSidebarNavItems,
+  type SidebarNavItem,
   type SidebarIconKey,
   type SidebarPlayerType,
   type SidebarRole
@@ -27,11 +28,14 @@ const navIcons: Record<SidebarIconKey, React.ReactNode> = {
   correlation: <TrendingUp className="h-5 w-5" />,
   gameStats: <LineChart className="h-5 w-5" />,
   balanceWheel: <CircleDot className="h-5 w-5" />,
+  playerState: <Activity className="h-5 w-5" />,
   topPlayers: <Trophy className="h-5 w-5" />,
   players: <Users className="h-5 w-5" />,
   staff: <UserPlus className="h-5 w-5" />,
-  playerCard: <CreditCard className="h-5 w-5" />,
+  teams: <Users className="h-5 w-5" />,
+  playerCard: <IdCard className="h-5 w-5" />,
   profile: <User className="h-5 w-5" />,
+  pricing: <CreditCard className="h-5 w-5" />,
 };
 
 /**
@@ -115,7 +119,7 @@ const Sidebar: React.FC = () => {
    * Рендерит элемент навигации с поддержкой подсказок
 
    */
-  const renderNavItem = (item: NavItem) => {
+  const renderNavItem = (item: SidebarNavItem) => {
     const isActive = location.pathname === item.href;
     const buttonStyle = {
       background: isActive

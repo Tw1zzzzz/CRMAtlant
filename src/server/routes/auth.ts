@@ -1,6 +1,7 @@
 import express from 'express';
-import { registerUser, loginUser, getCurrentUser } from '../controllers/authController';
+import { registerUser, loginUser, getCurrentUser, forgotPassword, resetPassword } from '../controllers/authController';
 import { protect } from '../middleware/authMiddleware';
+import { authForgotPasswordLimit, authLoginLimit, authResetPasswordLimit } from '../middleware/rateLimiting';
 import { avatarUpload } from '../controllers/avatarController';
 import User from '../models/User';
 import PlayerCard from '../models/PlayerCard';
@@ -17,7 +18,13 @@ const router = express.Router();
 router.post('/register', registerUser);
 
 // Аутентификация пользователя
-router.post('/login', loginUser);
+router.post('/login', authLoginLimit, loginUser);
+
+// Запрос на сброс пароля
+router.post('/forgot-password', authForgotPasswordLimit, forgotPassword);
+
+// Сброс пароля по токену
+router.post('/reset-password', authResetPasswordLimit, resetPassword);
 
 // Получение данных текущего пользователя
 router.get('/me', protect, getCurrentUser);
@@ -107,7 +114,7 @@ router.post('/avatar', protect, async (req, res) => {
             _updateTimestamp: Date.now() // Добавляем timestamp для решения проблем с кэшем
           },
           { new: true }
-        ).select('_id name email role avatar _updateTimestamp').lean();
+        ).select('_id name email role playerType privilegeKey subscription completedTests completedBalanceWheel baselineAssessment avatar _updateTimestamp createdAt').lean();
         
         if (!updatedUser) {
           console.error(`❌ Пользователь с ID ${userId} не найден`);

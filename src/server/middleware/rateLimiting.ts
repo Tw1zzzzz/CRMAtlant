@@ -81,6 +81,45 @@ export const searchLimit = rateLimit({
   }
 });
 
+export const authLoginLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `login-${req.ip}-${String(req.body?.email || '').trim().toLowerCase()}`,
+  message: {
+    status: 'error',
+    message: 'Слишком много попыток входа. Попробуйте позже.',
+    retryAfter: '15 минут',
+  },
+});
+
+export const authForgotPasswordLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `forgot-${req.ip}-${String(req.body?.email || '').trim().toLowerCase()}`,
+  message: {
+    status: 'error',
+    message: 'Слишком много запросов на восстановление пароля. Попробуйте позже.',
+    retryAfter: '15 минут',
+  },
+});
+
+export const authResetPasswordLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `reset-${req.ip}`,
+  message: {
+    status: 'error',
+    message: 'Слишком много попыток сброса пароля. Попробуйте позже.',
+    retryAfter: '15 минут',
+  },
+});
+
 /**
  * Комбинированный middleware для применения разных лимитов
  * в зависимости от типа операции

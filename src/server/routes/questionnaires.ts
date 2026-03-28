@@ -1,14 +1,23 @@
 import express from 'express';
-import { protect, isStaff } from '../middleware/auth';
+import { protect, isStaff, hasPerformanceCoachCrmSubscription } from '../middleware/auth';
 import MoodEntry from '../models/MoodEntry';
 import ScreenTime from '../models/ScreenTime';
 import SleepEntry from '../models/SleepEntry';
+import User from '../models/User';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { badRequest } from '../utils/apiError';
+import {
+  BASELINE_CS2_ROLES,
+  BASELINE_ROUND_STRENGTHS,
+  BASELINE_SIDE_PREFERENCES,
+  buildBaselinePersonalitySummary,
+  validateBaselineAnswers
+} from '../utils/baselineAssessment';
 
 const router = express.Router();
 
 router.use(protect);
+router.use(hasPerformanceCoachCrmSubscription);
 
 function parseDateOnly(dateStr?: string) {
   if (!dateStr) {
@@ -201,6 +210,95 @@ router.get(
     ]);
 
     return res.json({ success: true, mood, sleep, screen });
+  })
+);
+
+router.get(
+  '/baseline/me',
+  asyncHandler(async (req: any, res) => {
+    const user = await User.findById(req.user._id).select('baselineAssessment').lean();
+
+    return res.json({
+      success: true,
+      data: user?.baselineAssessment || null,
+      baselineAssessmentCompleted: Boolean(user?.baselineAssessment?.completedAt)
+    });
+  })
+);
+
+router.post(
+  '/baseline',
+  asyncHandler(async (req: any, res) => {
+    const {
+      personalityAnswers,
+      cs2Role
+    }: {
+      personalityAnswers?: Array<{ questionId: string; optionId: string }>;
+      cs2Role?: {
+        primaryRole?: string;
+        secondaryRole?: string;
+        sidePreference?: string;
+        roundStrength?: string;
+      };
+    } = req.body || {};
+
+    const answersValidation = validateBaselineAnswers(personalityAnswers || []);
+    if (!answersValidation.valid) {
+      throw badRequest(answersValidation.message || 'Некорректные ответы базового анкетирования');
+    }
+
+    if (!cs2Role?.primaryRole || !BASELINE_CS2_ROLES.includes(cs2Role.primaryRole as any)) {
+      throw badRequest('Укажите корректную основную роль в CS2');
+    }
+
+    if (
+      cs2Role.secondaryRole &&
+      (!BASELINE_CS2_ROLES.includes(cs2Role.secondaryRole as any) ||
+        cs2Role.secondaryRole === cs2Role.primaryRole)
+    ) {
+      throw badRequest('Вторичная роль должна отличаться от основной и быть корректной');
+    }
+
+    if (!cs2Role.sidePreference || !BASELINE_SIDE_PREFERENCES.includes(cs2Role.sidePreference as any)) {
+      throw badRequest('Укажите корректное предпочтение по стороне');
+    }
+
+    if (!cs2Role.roundStrength || !BASELINE_ROUND_STRENGTHS.includes(cs2Role.roundStrength as any)) {
+      throw badRequest('Укажите корректную сильную фазу раунда');
+    }
+
+    const personalitySummary = buildBaselinePersonalitySummary(personalityAnswers || []);
+    const completedAt = new Date();
+
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user._id,
+      {
+        $set: {
+          baselineAssessment: {
+            completedAt,
+            personality: {
+              answers: personalityAnswers,
+              summary: personalitySummary
+            },
+            cs2Role: {
+              primaryRole: cs2Role.primaryRole,
+              secondaryRole: cs2Role.secondaryRole || '',
+              sidePreference: cs2Role.sidePreference,
+              roundStrength: cs2Role.roundStrength
+            }
+          }
+        }
+      },
+      {
+        new: true
+      }
+    ).select('baselineAssessment');
+
+    return res.json({
+      success: true,
+      data: updatedUser?.baselineAssessment || null,
+      baselineAssessmentCompleted: true
+    });
   })
 );
 

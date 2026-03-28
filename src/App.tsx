@@ -15,14 +15,20 @@ import GameStatsPage from "./pages/GameStatsPage";
 import BalanceWheel from "./pages/BalanceWheel";
 import StaffBalanceWheel from "./pages/StaffBalanceWheel";
 import StaffRoster from "./pages/StaffRoster";
+import TeamManagement from "./pages/TeamManagement";
 import TopPlayers from "./pages/TopPlayers";
 import ActivityHistory from "./pages/ActivityHistory";
 import Index from "./pages/Index";
 import Profile from "./pages/Profile";
+import Pricing from "./pages/Pricing";
+import PaymentSuccess from "./pages/PaymentSuccess";
+import PaymentFail from "./pages/PaymentFail";
 import PlayersManagement from "./pages/PlayersManagement";
 import PlayerCard from "./pages/PlayerCard";
 import CorrelationAnalysisPage from "./pages/CorrelationAnalysisPage";
+import StatePage from "./pages/StatePage";
 import NotFound from "./pages/NotFound";
+import ResetPassword from "./pages/ResetPassword";
 import ROUTES from "./lib/routes";
 import StaffManagement from "./client/src/components/admin/StaffManagement";
 import { PlayerType } from "@/types";
@@ -63,6 +69,7 @@ const RouteGuard = ({ children, requiredRole, allowedPlayerTypes, blockedPlayerT
   if (user.role === "player" && allowedPlayerTypes && !allowedPlayerTypes.includes(effectivePlayerType || "team")) {
     return <Navigate to={ROUTES.DASHBOARD} replace />;
   }
+
   return <>{children}</>;
 };
 
@@ -72,15 +79,31 @@ const RouteGuard = ({ children, requiredRole, allowedPlayerTypes, blockedPlayerT
 const AppRoutes = () => (
   <Routes>
     <Route path={ROUTES.WELCOME} element={<Index />} />
+    <Route path={ROUTES.RESET_PASSWORD} element={<ResetPassword />} />
     
     <Route element={
       <RouteGuard>
         <Layout />
       </RouteGuard>
     }>
-      <Route path={ROUTES.DASHBOARD} element={<Dashboard />} />
+      <Route
+        path={ROUTES.DASHBOARD}
+        element={
+          <RouteGuard>
+            <Dashboard />
+          </RouteGuard>
+        }
+      />
       <Route path={ROUTES.MOOD_TRACKER} element={<MoodTracker />} />
-      <Route path={ROUTES.TEST_TRACKER} element={<TestTracker />} />
+      <Route path={ROUTES.PLAYER_STATE} element={<StatePage />} />
+      <Route
+        path={ROUTES.TEST_TRACKER}
+        element={
+          <RouteGuard>
+            <TestTracker />
+          </RouteGuard>
+        }
+      />
       <Route path={ROUTES.STATISTICS} element={<Statistics />} />
       <Route path={ROUTES.GAME_STATS} element={<GameStatsPage />} />
       
@@ -121,6 +144,21 @@ const AppRoutes = () => (
       />
       */}
       
+      <Route 
+        path={ROUTES.PRICING}
+        element={<Pricing />}
+      />
+
+      <Route
+        path={ROUTES.PAYMENT_SUCCESS}
+        element={<PaymentSuccess />}
+      />
+
+      <Route
+        path={ROUTES.PAYMENT_FAIL}
+        element={<PaymentFail />}
+      />
+
       <Route 
         path={ROUTES.PROFILE} 
         element={<Profile />} 
@@ -165,6 +203,15 @@ const AppRoutes = () => (
       />
       
       <Route 
+        path={ROUTES.TEAM_MANAGEMENT}
+        element={
+          <RouteGuard requiredRole="staff">
+            <TeamManagement />
+          </RouteGuard>
+        }
+      />
+
+      <Route 
         path={ROUTES.STAFF_ROSTER} 
         element={
           <RouteGuard requiredRole="staff">
@@ -207,8 +254,3 @@ const App = () => (
 );
 
 export default App;
-
-
-
-
-
