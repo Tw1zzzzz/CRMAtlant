@@ -11,7 +11,7 @@ export const getTopPlayers = async (req: Request, res: Response) => {
     
     console.log(`Fetching top players for period: ${period}, limit: ${limit}`);
 
-    // ????? ?????? ???????, ????????? ? ????????
+    // Ищем только игроков, относящихся к командам
     const teamPlayers = await User.find({ role: 'player', playerType: 'team' })
       .select('_id')
       .lean();
@@ -101,7 +101,7 @@ export const updatePlayerRating = async (req: Request, res: Response) => {
     
     // Находим или создаем запись рейтинга игрока
         if (user.role !== 'player' || user.playerType !== 'team') {
-      return res.status(400).json({ message: '??????? ???????? ?????? ??? ??????? ? ????????' });
+      return res.status(400).json({ message: 'Можно изменять рейтинг только для игроков в команде' });
     }
 
 let playerRating = await PlayerRating.findOne({ userId });

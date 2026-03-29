@@ -31,14 +31,14 @@ const avatarStorage = multer.diskStorage({
 
 const imageFileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
   if (!file.mimetype.startsWith('image/')) {
-    return cb(new Error('?????? ??????????? ????? ???? ????????? ??? ???????'));
+    return cb(new Error('Только изображения могут быть загружены как аватар'));
   }
 
   const allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
   const extension = file.originalname.split('.').pop()?.toLowerCase();
 
   if (!extension || !allowedExtensions.includes(extension)) {
-    return cb(new Error(`?????????????? ???????: ${allowedExtensions.join(', ')}`));
+    return cb(new Error(`Недопустимое расширение: ${allowedExtensions.join(', ')}`));
   }
 
   cb(null, true);

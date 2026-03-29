@@ -19,7 +19,7 @@ import { buildCorrelationAssistantPayload } from '@/utils/correlationAiSummary';
 
 
 /**
- * ?????????? ??? ??????
+ * Интерфейс для метрики
  */
 interface MetricData {
   date: string;

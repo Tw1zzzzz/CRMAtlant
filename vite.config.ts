@@ -2,6 +2,11 @@ import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 
+const muiEsmIndexPathPattern = /[\\/]@mui[\\/]icons-material[\\/]esm[\\/]index\.js$/;
+
+const remapDialerSipToDialpad = (id: string) =>
+  id.replace("DialerSip", "Dialpad");
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
@@ -36,11 +41,56 @@ export default defineConfig(({ mode }) => {
       },
     },
     plugins: [
+      {
+        name: "mui-dialersip-fix",
+        enforce: "pre",
+        async resolveId(source, importer) {
+          if (
+            importer &&
+            muiEsmIndexPathPattern.test(importer) &&
+            source.startsWith("./DialerSip")
+          ) {
+            return this.resolve(remapDialerSipToDialpad(source), importer, {
+              skipSelf: true,
+            });
+          }
+          return null;
+        },
+      },
       react(),
     ].filter(Boolean),
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),
+      },
+    },
+    optimizeDeps: {
+      esbuildOptions: {
+        plugins: [
+          {
+            name: "mui-dialersip-fix",
+            setup(build) {
+              build.onResolve(
+                {
+                  filter:
+                    /^\.\/DialerSip(?:Outlined|Rounded|Sharp|TwoTone)?\.js$/,
+                },
+                (args) => {
+                  if (!muiEsmIndexPathPattern.test(args.importer)) {
+                    return null;
+                  }
+
+                  return {
+                    path: path.resolve(
+                      path.dirname(args.importer),
+                      remapDialerSipToDialpad(args.path)
+                    ),
+                  };
+                }
+              );
+            },
+          },
+        ],
       },
     },
   };

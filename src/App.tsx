@@ -82,6 +82,10 @@ const AppRoutes = () => (
     <Route path={ROUTES.WELCOME} element={<Index />} />
     <Route path={ROUTES.RESET_PASSWORD} element={<ResetPassword />} />
     <Route path={ROUTES.VERIFY_EMAIL} element={<VerifyEmail />} />
+    <Route path={ROUTES.PAYMENT_SUCCESS} element={<PaymentSuccess />} />
+    <Route path={ROUTES.PAYMENT_FAIL} element={<PaymentFail />} />
+    <Route path={ROUTES.PAYMENT_SUCCESS_LEGACY} element={<Navigate to={ROUTES.PAYMENT_SUCCESS} replace />} />
+    <Route path={ROUTES.PAYMENT_FAIL_LEGACY} element={<Navigate to={ROUTES.PAYMENT_FAIL} replace />} />
     
     <Route element={
       <RouteGuard>
@@ -149,16 +153,6 @@ const AppRoutes = () => (
       <Route 
         path={ROUTES.PRICING}
         element={<Pricing />}
-      />
-
-      <Route
-        path={ROUTES.PAYMENT_SUCCESS}
-        element={<PaymentSuccess />}
-      />
-
-      <Route
-        path={ROUTES.PAYMENT_FAIL}
-        element={<PaymentFail />}
       />
 
       <Route 

@@ -1,5 +1,4 @@
 import express from 'express';
-import { v4 as uuidv4 } from 'uuid';
 import Plan from '../models/Plan';
 import Subscription from '../models/Subscription';
 import User from '../models/User';
@@ -15,6 +14,10 @@ import {
 const router = express.Router();
 
 const formatAmount = (amount: number): string => amount.toFixed(2);
+const generateRobokassaInvoiceId = (): string =>
+  `${Date.now()}${Math.floor(Math.random() * 1_000_000)
+    .toString()
+    .padStart(6, '0')}`;
 
 router.get('/plans', async (_req, res) => {
   try {
@@ -59,13 +62,31 @@ router.post('/create-invoice', protect, async (req: AuthRequest, res) => {
       return res.status(404).json({ message: 'Тариф не найден' });
     }
 
-    const invoiceId = uuidv4();
-    const subscription = await Subscription.create({
-      userId,
-      planId: plan._id,
-      status: 'pending',
-      robokassaInvoiceId: invoiceId,
-    });
+    let invoiceId = '';
+    let subscription = null;
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      invoiceId = generateRobokassaInvoiceId();
+
+      try {
+        subscription = await Subscription.create({
+          userId,
+          planId: plan._id,
+          status: 'pending',
+          robokassaInvoiceId: invoiceId,
+        });
+        break;
+      } catch (error) {
+        const duplicateKeyErrorCode = 11000;
+        if ((error as { code?: number }).code !== duplicateKeyErrorCode) {
+          throw error;
+        }
+      }
+    }
+
+    if (!subscription) {
+      throw new Error('Failed to allocate unique Robokassa invoice id');
+    }
 
     console.log(`[PAYMENTS] Invoice created: invoiceId=${invoiceId} status=${subscription.status}`);
 
@@ -160,15 +181,22 @@ router.get('/success', async (req, res) => {
     if (InvId) {
       const subscription = await Subscription.findOne({ robokassaInvoiceId: InvId }).populate('planId');
       const plan = subscription?.planId as { _id?: unknown; name?: string } | undefined;
+      const isActiveNow = Boolean(
+        subscription?.status === 'active' &&
+        subscription?.expiresAt &&
+        new Date(subscription.expiresAt).getTime() > Date.now()
+      );
 
       return res.json({
         success: true,
         planId: plan?._id ? String(plan._id) : undefined,
         planName: plan?.name,
+        status: subscription?.status || 'pending',
+        hasAccess: isActiveNow,
       });
     }
 
-    return res.json({ success: true });
+    return res.json({ success: true, status: 'pending', hasAccess: false });
   } catch (error) {
     console.error('[PAYMENTS] Failed to handle success callback:', error);
     return res.status(500).json({ success: false, message: 'Не удалось обработать успешную оплату' });

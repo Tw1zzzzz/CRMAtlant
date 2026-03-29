@@ -378,6 +378,39 @@ export const createInvoice = async (planId: string): Promise<{ paymentUrl: strin
   return response.data;
 };
 
+export interface PaymentSuccessInfo {
+  success: boolean;
+  planId?: string;
+  planName?: string;
+  status?: 'pending' | 'active' | 'expired' | 'cancelled';
+  hasAccess?: boolean;
+  message?: string;
+}
+
+export const getPaymentSuccessInfo = async (params: {
+  OutSum?: string | null;
+  InvId?: string | null;
+  SignatureValue?: string | null;
+}): Promise<PaymentSuccessInfo> => {
+  const query = new URLSearchParams();
+
+  if (params.OutSum) {
+    query.set('OutSum', params.OutSum);
+  }
+
+  if (params.InvId) {
+    query.set('InvId', params.InvId);
+  }
+
+  if (params.SignatureValue) {
+    query.set('SignatureValue', params.SignatureValue);
+  }
+
+  const endpoint = `/payments/success${query.toString() ? `?${query.toString()}` : ''}`;
+  const response = await retryRequest(() => api.get<PaymentSuccessInfo>(endpoint));
+  return response.data;
+};
+
 // ====== TEAM REPORTS API ======
 
 // Типы для отчетов команды
