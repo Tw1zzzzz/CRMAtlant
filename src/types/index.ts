@@ -15,6 +15,7 @@ export * from './balance-wheel.types';
 export * from './statistics.types';
 export * from './brain.types';
 export * from './payment.types';
+export * from './calendar.types';
 
 // Дополнительные общие типы
 export type Nullable<T> = T | null;

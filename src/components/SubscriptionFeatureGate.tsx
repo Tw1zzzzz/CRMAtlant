@@ -58,7 +58,7 @@ const SubscriptionFeatureGate = ({
         {children}
       </div>
 
-      <div className="absolute inset-0 flex items-center justify-center p-6 md:p-10">
+      <div className="absolute inset-0 flex items-start justify-center p-6 pt-10 md:p-10 md:pt-14">
         <div
           className="w-full max-w-2xl rounded-[28px] border px-6 py-8 text-center md:px-8"
           style={{

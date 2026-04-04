@@ -4,6 +4,7 @@ export type SidebarPlayerType = 'solo' | 'team' | null;
 export type SidebarIconKey =
   | 'home'
   | 'calendar'
+  | 'planner'
   | 'tests'
   | 'stats'
   | 'correlation'
@@ -26,6 +27,7 @@ export interface SidebarNavItem {
 
 const PATHS = {
   dashboard: '/',
+  calendar: '/calendar',
   mood: '/mood',
   tests: '/tests',
   stats: '/stats',
@@ -79,6 +81,14 @@ export function getSidebarNavItems(
       icon: 'gameStats',
     },
   ];
+
+  if (role) {
+    baseItems.splice(1, 0, {
+      title: 'Календарь',
+      href: PATHS.calendar,
+      icon: 'planner',
+    });
+  }
 
   if (role === 'player') {
     baseItems.push({

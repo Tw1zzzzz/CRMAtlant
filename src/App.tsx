@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { ThemeProvider } from "./providers/ThemeProvider";
 import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
+import CalendarPage from "./pages/CalendarPage";
 import MoodTracker from "./pages/MoodTracker";
 import TestTracker from "./pages/TestTracker";
 import Statistics from "./pages/Statistics";
@@ -97,6 +98,14 @@ const AppRoutes = () => (
         element={
           <RouteGuard>
             <Dashboard />
+          </RouteGuard>
+        }
+      />
+      <Route
+        path={ROUTES.CALENDAR}
+        element={
+          <RouteGuard>
+            <CalendarPage />
           </RouteGuard>
         }
       />

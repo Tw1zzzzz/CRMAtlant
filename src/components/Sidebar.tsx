@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import {
-  BarChart2, Calendar, Home, ListTodo,
+  BarChart2, Calendar, CalendarDays, Home, ListTodo,
   User, Users, LogOut, CircleDot,
   Trophy, LineChart, Clock, CreditCard, UserPlus, TrendingUp, Upload, Activity, IdCard
 } from "lucide-react";
@@ -23,6 +23,7 @@ import { CSSProperties } from "react";
 const navIcons: Record<SidebarIconKey, React.ReactNode> = {
   home: <Home className="h-5 w-5" />,
   calendar: <Calendar className="h-5 w-5" />,
+  planner: <CalendarDays className="h-5 w-5" />,
   tests: <ListTodo className="h-5 w-5" />,
   stats: <BarChart2 className="h-5 w-5" />,
   correlation: <TrendingUp className="h-5 w-5" />,
@@ -91,7 +92,7 @@ const Sidebar: React.FC = () => {
       fontSize: '9px',
       fontWeight: 'bold',
       letterSpacing: '0.4px',
-      textTransform: 'uppercase' as 'uppercase'
+      textTransform: 'uppercase' as const
     },
     tooltip: {
       backgroundColor: COLORS.cardBackground,

@@ -33,6 +33,7 @@ import notificationsRoutes from './routes/notifications';
 import brainTestsRoutes from './routes/brainTests';
 import playerStateRoutes from './routes/playerState.routes';
 import teamsRoutes from './routes/teams';
+import calendarRoutes from './routes/calendar';
 import paymentsRoutes from './routes/payments';
 import supportRoutes from './routes/support';
 import { errorHandler } from './middleware/errorHandler';
@@ -198,6 +199,7 @@ app.use('/api/notifications', notificationsRoutes);
 app.use('/api/brain-tests', brainTestsRoutes);
 app.use('/api/player-state', playerStateRoutes);
 app.use('/api/teams', teamsRoutes);
+app.use('/api/calendar', calendarRoutes);
 app.use('/api/payments', paymentsRoutes);
 app.use('/health', healthRoutes);
 

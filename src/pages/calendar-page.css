@@ -1,0 +1,109 @@
+.crm-calendar-shell {
+  --fc-border-color: rgba(74, 85, 104, 0.65);
+  --fc-page-bg-color: transparent;
+  --fc-neutral-bg-color: rgba(45, 55, 72, 0.36);
+  --fc-list-event-hover-bg-color: rgba(53, 144, 255, 0.12);
+  --fc-now-indicator-color: #feb019;
+  --fc-today-bg-color: rgba(53, 144, 255, 0.08);
+  --fc-button-bg-color: #1e293b;
+  --fc-button-border-color: rgba(74, 85, 104, 0.8);
+  --fc-button-hover-bg-color: #273244;
+  --fc-button-hover-border-color: rgba(53, 144, 255, 0.5);
+  --fc-button-active-bg-color: #3590ff;
+  --fc-button-active-border-color: #3590ff;
+  --fc-event-border-color: transparent;
+  --fc-event-bg-color: #3590ff;
+  --fc-event-text-color: #f8fbff;
+}
+
+.crm-calendar-shell .fc {
+  color: #f8fbff;
+}
+
+.crm-calendar-shell .fc .fc-toolbar {
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.crm-calendar-shell .fc .fc-toolbar-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.crm-calendar-shell .fc .fc-button {
+  border-radius: 12px;
+  box-shadow: none;
+  padding: 0.55rem 0.8rem;
+  text-transform: none;
+}
+
+.crm-calendar-shell .fc .fc-col-header-cell-cushion,
+.crm-calendar-shell .fc .fc-daygrid-day-number,
+.crm-calendar-shell .fc .fc-timegrid-slot-label-cushion,
+.crm-calendar-shell .fc .fc-timegrid-axis-cushion {
+  color: #c7d2e3;
+}
+
+.crm-calendar-shell .fc .fc-daygrid-day.fc-day-today,
+.crm-calendar-shell .fc .fc-timegrid-col.fc-day-today {
+  border-radius: 12px;
+}
+
+.crm-calendar-shell .fc .fc-event {
+  border-radius: 12px;
+  padding: 2px 4px;
+  box-shadow: 0 12px 24px -18px rgba(17, 24, 39, 0.85);
+}
+
+.crm-calendar-shell .fc .fc-event-main {
+  font-weight: 600;
+}
+
+.crm-calendar-shell .fc .fc-scrollgrid,
+.crm-calendar-shell .fc .fc-theme-standard td,
+.crm-calendar-shell .fc .fc-theme-standard th {
+  border-color: rgba(74, 85, 104, 0.65);
+}
+
+.crm-calendar-shell .fc .fc-view-harness {
+  min-height: 680px;
+}
+
+.crm-calendar-shell .fc .fc-timegrid-slot,
+.crm-calendar-shell .fc .fc-daygrid-day-frame {
+  background: linear-gradient(180deg, rgba(17, 24, 39, 0.38), rgba(17, 24, 39, 0.12));
+}
+
+.crm-calendar-shell .fc .fc-day-other .fc-daygrid-day-frame {
+  opacity: 0.6;
+}
+
+.crm-calendar-shell .fc .fc-highlight {
+  background: rgba(53, 144, 255, 0.2);
+}
+
+.crm-calendar-shell .fc .fc-popover {
+  background: #111827;
+  border-color: rgba(74, 85, 104, 0.9);
+}
+
+@media (max-width: 768px) {
+  .crm-calendar-shell .fc .fc-toolbar-title {
+    font-size: 1rem;
+  }
+
+  .crm-calendar-shell .fc .fc-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .crm-calendar-shell .fc .fc-toolbar-chunk {
+    display: flex;
+    justify-content: center;
+  }
+
+  .crm-calendar-shell .fc .fc-button {
+    padding-inline: 0.6rem;
+  }
+}

@@ -8,8 +8,10 @@ const read = (relativePath) => fs.readFileSync(path.join(serverRoot, relativePat
 
 const authController = read('controllers/authController.ts');
 const statsRoutes = read('routes/stats.ts');
+const calendarRoutes = read('routes/calendar.ts');
 const server = read('server.ts');
 const testsModel = read('models/TestEntry.ts');
+const calendarEventModel = read('models/CalendarEvent.ts');
 const supportRoute = read('routes/support.ts');
 
 assert(
@@ -38,13 +40,33 @@ assert(
 );
 
 assert(
+  server.includes("app.use('/api/calendar', calendarRoutes)"),
+  'Server should register calendar API routes'
+);
+
+assert(
   supportRoute.includes("router.post('/request'"),
   'Support routes should include request submission endpoint'
 );
 
 assert(
+  calendarRoutes.includes("router.get('/events'") &&
+    calendarRoutes.includes("router.post('/events'") &&
+    calendarRoutes.includes("router.put('/events/:id'") &&
+    calendarRoutes.includes("router.delete('/events/:id'"),
+  'Calendar routes should expose CRUD endpoints for events'
+);
+
+assert(
   testsModel.includes('stateSnapshot') && testsModel.includes('scoreNormalized'),
   'TestEntry model should include extended metrics'
+);
+
+assert(
+  calendarEventModel.includes('scope') &&
+    calendarEventModel.includes('ownerUserId') &&
+    calendarEventModel.includes('teamId'),
+  'CalendarEvent model should include scope and ownership fields'
 );
 
 console.log('Backend smoke tests passed');

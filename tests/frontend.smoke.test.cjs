@@ -51,6 +51,7 @@ const main = async () => {
     assert.strictEqual(isProtectedRoute(ROUTES.WELCOME), false);
     assert.strictEqual(isProtectedRoute(ROUTES.VERIFY_EMAIL), false);
     assert.strictEqual(isProtectedRoute(ROUTES.DASHBOARD), true);
+    assert.strictEqual(isProtectedRoute(ROUTES.CALENDAR), true);
     assert.strictEqual(isPlayerRoute(ROUTES.BALANCE_WHEEL), true);
     assert.strictEqual(isPlayerRoute(ROUTES.GAME_STATS), false);
     assert.strictEqual(isStaffRoute(ROUTES.STAFF_BALANCE_WHEEL), true);
@@ -76,6 +77,7 @@ const main = async () => {
     const hrefs = items.map((item) => item.href);
 
     assert(hrefs.includes('/balance-wheel'));
+    assert(hrefs.includes('/calendar'));
     assert(!hrefs.includes('/staff-balance-wheel'));
     assert(titles.includes('Моя карточка'));
     assert(!titles.includes('Топ игроков'));
@@ -90,6 +92,7 @@ const main = async () => {
     const hrefs = items.map((item) => item.href);
 
     assert(hrefs.includes('/staff-balance-wheel'));
+    assert(hrefs.includes('/calendar'));
     assert(!hrefs.includes('/balance-wheel'));
     assert(titles.includes('Топ игроков'));
     assert(titles.includes('Управление игроками'));

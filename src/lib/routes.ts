@@ -7,6 +7,7 @@ export const ROUTES = {
 
   // Защищенные маршруты
   DASHBOARD: '/',
+  CALENDAR: '/calendar',
   MOOD_TRACKER: '/mood',
   TEST_TRACKER: '/tests',
   STATISTICS: '/stats',

@@ -12,6 +12,36 @@ export type CrmUpdate = {
 
 const crmUpdates: CrmUpdate[] = [
   {
+    id: 'crm-update-2026-04-05-calendar-launch',
+    title: 'Запустили личный и командный календарь',
+    description:
+      'В CRM появился новый календарь в стиле planner: личные события доступны каждому, а командный календарь видит вся команда.',
+    createdAt: '2026-04-05T08:30:00.000Z',
+    type: 'release',
+    version: 'v2.8.0',
+    area: 'Календарь'
+  },
+  {
+    id: 'crm-update-2026-04-05-team-calendar-access',
+    title: 'Настроили права для командного календаря',
+    description:
+      'Участники команды теперь видят общий календарь в режиме просмотра, а staff может создавать и редактировать события внутри своей команды.',
+    createdAt: '2026-04-05T08:10:00.000Z',
+    type: 'improvement',
+    version: 'v2.8.0',
+    area: 'Календарь'
+  },
+  {
+    id: 'crm-update-2026-04-05-header-polish',
+    title: 'Обновили хедер и ближайшее событие',
+    description:
+      'Сделали верхнюю панель чище: переработали сервисную зону, добавили быстрый переход к ближайшему событию и аккуратный solo-статус.',
+    createdAt: '2026-04-05T07:45:00.000Z',
+    type: 'improvement',
+    version: 'v2.7.9',
+    area: 'Интерфейс'
+  },
+  {
     id: 'crm-update-2026-03-29-notification-feed',
     title: 'Лента обновлений теперь доступна в колокольчике',
     description:
