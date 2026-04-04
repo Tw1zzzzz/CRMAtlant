@@ -1,5 +1,4 @@
 ﻿import User from '../models/User';
-import Subscription from '../models/Subscription';
 import Team from '../models/Team';
 import PlayerCard from '../models/PlayerCard';
 import FaceitAccount from '../models/FaceitAccount';
@@ -7,7 +6,7 @@ import { sendPasswordResetEmail, sendVerificationEmail } from '../services/mailS
 import faceitService, { FaceitProfileInfo } from '../services/faceitService';
 import { createOpaqueToken, hashOpaqueToken } from '../utils/securityTokens';
 import { signJwt } from '../utils/jwt';
-import { buildSubscriptionSummary, buildSubscriptionAccessFlags, hasPerformanceCoachCrmAccess } from '../utils/subscriptionAccess';
+import { buildSubscriptionSummary, hasPerformanceCoachCrmAccess, resolveEffectiveSubscriptionAccess } from '../utils/subscriptionAccess';
 import mongoose from 'mongoose';
 
 // Генерация JWT токена
@@ -86,26 +85,24 @@ const buildUserResponse = (
 };
 
 const loadUserWithAccessData = async (userId: mongoose.Types.ObjectId | string) => {
-  const [user, activeSubscriptions] = await Promise.all([
-    User.findById(userId)
-      .select('-password')
-      .populate({
-        path: 'subscription',
-        populate: {
-          path: 'planId',
-          model: 'Plan',
-        },
-      }),
-    Subscription.find({
-      userId,
-      status: 'active',
-      expiresAt: { $gt: new Date() },
-    }).populate('planId'),
-  ]);
+  const user = await User.findById(userId)
+    .select('-password')
+    .populate({
+      path: 'subscription',
+      populate: {
+        path: 'planId',
+        model: 'Plan',
+      },
+    });
 
-  const accessFlags = buildSubscriptionAccessFlags(
-    activeSubscriptions.map((subscription) => buildSubscriptionSummary(subscription))
-  );
+  const accessFlags = user
+    ? await resolveEffectiveSubscriptionAccess(user)
+    : {
+        hasPerformanceCoachCrmAccess: false,
+        hasCorrelationAnalysisAccess: false,
+        hasGameStatsAccess: false,
+        inheritedFromTeamOwnerId: null,
+      };
 
   return { user, accessFlags };
 };

@@ -34,6 +34,7 @@ import brainTestsRoutes from './routes/brainTests';
 import playerStateRoutes from './routes/playerState.routes';
 import teamsRoutes from './routes/teams';
 import paymentsRoutes from './routes/payments';
+import supportRoutes from './routes/support';
 import { errorHandler } from './middleware/errorHandler';
 
 // Загрузка переменных окружения с явным указанием пути
@@ -125,6 +126,8 @@ app.use((req, res, next) => {
   
   next();
 });
+
+app.use('/api/support', supportRoutes);
 
 // Подключение к MongoDB (с dev-фоллбеком на in-memory)
 const connectMongo = async () => {

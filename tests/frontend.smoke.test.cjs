@@ -29,6 +29,10 @@ const main = async () => {
   const routesModule = await importModule('src/lib/routes.ts');
   const navigationModule = await importModule('src/lib/sidebarNavigation.ts');
   const apiHelpersModule = await importModule('src/lib/apiHelpers.ts');
+  const indexPageSource = fs.readFileSync(path.join(projectRoot, 'src/pages/Index.tsx'), 'utf8');
+  const apiSource = fs.readFileSync(path.join(projectRoot, 'src/lib/api.ts'), 'utf8');
+  const layoutSource = fs.readFileSync(path.join(projectRoot, 'src/components/Layout.tsx'), 'utf8');
+  const supportDialogSource = fs.readFileSync(path.join(projectRoot, 'src/components/SupportRequestDialog.tsx'), 'utf8');
   const {
     ROUTES,
     isProtectedRoute,
@@ -103,6 +107,14 @@ const main = async () => {
       authServiceSource.includes("rawUser.playerType === 'solo' || rawUser.playerType === 'team'"),
       'auth.service должен сохранять playerType из ответа сервера и для staff/team.'
     );
+  });
+
+  runTest('support request flow uses compact welcome link and floating CRM trigger', () => {
+    assert(indexPageSource.includes('<SupportRequestDialog variant="inline" />'));
+    assert(layoutSource.includes('<SupportRequestDialog variant="floating" />'));
+    assert(supportDialogSource.includes('Связаться с техподдержкой'));
+    assert(supportDialogSource.includes('variant === "floating"'));
+    assert(apiSource.includes("api.post('/support/request', payload)"));
   });
 
   runTest('extractPlayerId supports object, string and serialized ObjectId inputs', () => {

@@ -1,7 +1,6 @@
 import User from '../models/User';
-import Subscription from '../models/Subscription';
 import { verifyJwt } from '../utils/jwt';
-import { buildSubscriptionSummary, buildSubscriptionAccessFlags } from '../utils/subscriptionAccess';
+import { resolveEffectiveSubscriptionAccess } from '../utils/subscriptionAccess';
 import { isTeamStaffUser } from '../utils/teamAccess';
 
 const PRIMARY_JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
@@ -135,15 +134,7 @@ export const hasPerformanceCoachCrmSubscription = async (req: any, res: any, nex
       return res.status(401).json({ message: 'Пользователь не авторизован' });
     }
 
-    const activeSubscriptions = await Subscription.find({
-      userId: req.user._id,
-      status: 'active',
-      expiresAt: { $gt: new Date() },
-    }).populate('planId');
-
-    const accessFlags = buildSubscriptionAccessFlags(
-      activeSubscriptions.map((subscription) => buildSubscriptionSummary(subscription))
-    );
+    const accessFlags = await resolveEffectiveSubscriptionAccess(req.user);
 
     if (accessFlags.hasPerformanceCoachCrmAccess) {
       return next();
@@ -166,15 +157,7 @@ export const hasCorrelationAnalysisSubscription = async (req: any, res: any, nex
       return res.status(401).json({ message: 'Пользователь не авторизован' });
     }
 
-    const activeSubscriptions = await Subscription.find({
-      userId: req.user._id,
-      status: 'active',
-      expiresAt: { $gt: new Date() },
-    }).populate('planId');
-
-    const accessFlags = buildSubscriptionAccessFlags(
-      activeSubscriptions.map((subscription) => buildSubscriptionSummary(subscription))
-    );
+    const accessFlags = await resolveEffectiveSubscriptionAccess(req.user);
 
     if (accessFlags.hasCorrelationAnalysisAccess) {
       return next();
@@ -197,15 +180,7 @@ export const hasGameStatsSubscription = async (req: any, res: any, next: any) =>
       return res.status(401).json({ message: 'Пользователь не авторизован' });
     }
 
-    const activeSubscriptions = await Subscription.find({
-      userId: req.user._id,
-      status: 'active',
-      expiresAt: { $gt: new Date() },
-    }).populate('planId');
-
-    const accessFlags = buildSubscriptionAccessFlags(
-      activeSubscriptions.map((subscription) => buildSubscriptionSummary(subscription))
-    );
+    const accessFlags = await resolveEffectiveSubscriptionAccess(req.user);
 
     if (accessFlags.hasGameStatsAccess) {
       return next();

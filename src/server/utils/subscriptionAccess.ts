@@ -1,3 +1,6 @@
+import Subscription from '../models/Subscription';
+import Team from '../models/Team';
+
 export interface SubscriptionPlanLike {
   _id?: unknown;
   id?: unknown;
@@ -30,11 +33,37 @@ export interface SubscriptionAccessFlags {
   hasGameStatsAccess: boolean;
 }
 
+export interface EffectiveSubscriptionAccessFlags extends SubscriptionAccessFlags {
+  inheritedFromTeamOwnerId: string | null;
+}
+
 export const PERFORMANCE_COACH_CRM_PLAN_PREFIX = 'PerformanceCoach CRM';
 export const CORRELATION_ANALYSIS_PLAN_PREFIX = 'Корреляционный анализ';
 export const GAME_STATS_PLAN_PREFIX = 'Игровая статистика';
 
 type SubscriptionProduct = 'performanceCoachCrm' | 'correlationAnalysis' | 'gameStats';
+
+const EMPTY_SUBSCRIPTION_ACCESS_FLAGS: SubscriptionAccessFlags = {
+  hasPerformanceCoachCrmAccess: false,
+  hasCorrelationAnalysisAccess: false,
+  hasGameStatsAccess: false,
+};
+
+const toIdString = (value: unknown): string => {
+  if (!value) {
+    return '';
+  }
+
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (typeof value === 'object' && value && 'toString' in value) {
+    return String(value.toString());
+  }
+
+  return String(value);
+};
 
 const toIsoStringOrNull = (value: unknown): string | null => {
   if (!value) {
@@ -136,9 +165,7 @@ export const buildSubscriptionAccessFlags = (
   subscriptions: Array<SubscriptionSummary | null | undefined>
 ): SubscriptionAccessFlags => {
   const flags: SubscriptionAccessFlags = {
-    hasPerformanceCoachCrmAccess: false,
-    hasCorrelationAnalysisAccess: false,
-    hasGameStatsAccess: false,
+    ...EMPTY_SUBSCRIPTION_ACCESS_FLAGS,
   };
 
   subscriptions.forEach((subscription) => {
@@ -167,4 +194,64 @@ export const buildSubscriptionAccessFlags = (
   });
 
   return flags;
+};
+
+const loadActiveSubscriptionSummaries = async (userId: unknown): Promise<SubscriptionSummary[]> => {
+  const normalizedUserId = toIdString(userId);
+  if (!normalizedUserId) {
+    return [];
+  }
+
+  const activeSubscriptions = await Subscription.find({
+    userId: normalizedUserId,
+    status: 'active',
+    expiresAt: { $gt: new Date() },
+  }).populate('planId');
+
+  return activeSubscriptions
+    .map((subscription) => buildSubscriptionSummary(subscription))
+    .filter((subscription): subscription is SubscriptionSummary => Boolean(subscription));
+};
+
+export const resolveEffectiveSubscriptionAccess = async (
+  user: { _id?: unknown; teamId?: unknown } | null | undefined
+): Promise<EffectiveSubscriptionAccessFlags> => {
+  const personalSubscriptions = await loadActiveSubscriptionSummaries(user?._id);
+  const personalFlags = buildSubscriptionAccessFlags(personalSubscriptions);
+  const userId = toIdString(user?._id);
+  const teamId = toIdString(user?.teamId);
+
+  if (!userId || !teamId) {
+    return {
+      ...personalFlags,
+      inheritedFromTeamOwnerId: null,
+    };
+  }
+
+  const team = await Team.findById(teamId).select('createdBy');
+  const teamOwnerUserId = toIdString(team?.createdBy);
+
+  if (!teamOwnerUserId || teamOwnerUserId === userId) {
+    return {
+      ...personalFlags,
+      inheritedFromTeamOwnerId: null,
+    };
+  }
+
+  const teamOwnerSubscriptions = await loadActiveSubscriptionSummaries(teamOwnerUserId);
+  const teamOwnerFlags = buildSubscriptionAccessFlags(teamOwnerSubscriptions);
+
+  if (!teamOwnerFlags.hasPerformanceCoachCrmAccess) {
+    return {
+      ...personalFlags,
+      inheritedFromTeamOwnerId: null,
+    };
+  }
+
+  return {
+    hasPerformanceCoachCrmAccess: personalFlags.hasPerformanceCoachCrmAccess || teamOwnerFlags.hasPerformanceCoachCrmAccess,
+    hasCorrelationAnalysisAccess: personalFlags.hasCorrelationAnalysisAccess || teamOwnerFlags.hasCorrelationAnalysisAccess,
+    hasGameStatsAccess: personalFlags.hasGameStatsAccess || teamOwnerFlags.hasGameStatsAccess,
+    inheritedFromTeamOwnerId: teamOwnerUserId,
+  };
 };

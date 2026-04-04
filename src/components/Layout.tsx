@@ -2,6 +2,7 @@ import React from "react";
 import { Outlet } from "react-router-dom";
 import Header from "./Header";
 import Sidebar from "./Sidebar";
+import SupportRequestDialog from "./SupportRequestDialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { COLORS } from "@/styles/theme";
 import { LineChart } from "lucide-react";
@@ -37,6 +38,8 @@ const Layout: React.FC = () => {
             <Outlet />
           </main>
         </ScrollArea>
+
+        <SupportRequestDialog variant="floating" />
       </div>
     </div>
   );

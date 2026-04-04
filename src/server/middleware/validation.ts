@@ -211,6 +211,53 @@ export const validateDeleteReport = [
     .withMessage('ID отчета должен быть валидным MongoDB ObjectId')
 ];
 
+export const validateSupportRequest = [
+  body('name')
+    .optional()
+    .isLength({ max: 100 })
+    .withMessage('Имя не должно превышать 100 символов')
+    .trim(),
+
+  body('email')
+    .notEmpty()
+    .withMessage('Email обязателен')
+    .isEmail()
+    .withMessage('Укажите корректный email')
+    .normalizeEmail(),
+
+  body('category')
+    .notEmpty()
+    .withMessage('Категория обращения обязательна')
+    .isIn(['access', 'bug', 'billing', 'integration', 'other'])
+    .withMessage('Указана неизвестная категория обращения'),
+
+  body('subject')
+    .notEmpty()
+    .withMessage('Тема обращения обязательна')
+    .isLength({ min: 3, max: 200 })
+    .withMessage('Тема должна быть от 3 до 200 символов')
+    .trim(),
+
+  body('message')
+    .notEmpty()
+    .withMessage('Опишите проблему')
+    .isLength({ min: 10, max: 4000 })
+    .withMessage('Сообщение должно быть от 10 до 4000 символов')
+    .trim(),
+
+  body('pageUrl')
+    .optional()
+    .isLength({ max: 500 })
+    .withMessage('Ссылка на страницу не должна превышать 500 символов')
+    .trim(),
+
+  body('userAgent')
+    .optional()
+    .isLength({ max: 1000 })
+    .withMessage('User-Agent не должен превышать 1000 символов')
+    .trim(),
+];
+
 /**
  * Валидация для получения списка отчетов
  */

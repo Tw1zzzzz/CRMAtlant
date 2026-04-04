@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import ROUTES from "@/lib/routes";
+import SupportRequestDialog from "@/components/SupportRequestDialog";
 import atlantTechnologyLogo from "@/assets/atlant-technology-logo.jpg";
 import atlantTechnologyMark from "@/assets/atlant-technology-mark.png";
 
@@ -226,6 +227,26 @@ const Index: React.FC = () => {
                   Платформа для мониторинга состояния игроков, прогресса команды и ежедневной аналитики.
                   Для командного доступа используйте код, который выдал тренер, админ или другой участник staff.
                 </p>
+                <div className="max-w-xl rounded-[24px] border border-white/10 bg-white/[0.045] p-4 shadow-lg shadow-slate-950/20 backdrop-blur-md">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="space-y-1.5">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-sky-200/85">
+                        Тарифы и доступ
+                      </p>
+                      <p className="text-sm leading-6 text-slate-200">
+                        Сначала создайте аккаунт, а тариф можно выбрать и оплатить уже после входа в кабинет.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="shrink-0 border-white/15 bg-white/5 text-white hover:bg-white/10 hover:text-white"
+                      onClick={() => setAuthTab("register")}
+                    >
+                      Начать с регистрации
+                    </Button>
+                  </div>
+                </div>
               </div>
 
               <div className="grid gap-3 sm:grid-cols-3">
@@ -523,6 +544,9 @@ const Index: React.FC = () => {
                 </Tabs>
 
                 <div className="mt-4 space-y-4">
+                  <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-center text-sm text-slate-300">
+                    <SupportRequestDialog variant="inline" />
+                  </div>
                   {pendingVerificationEmail && (
                     <Card className="border-amber-300/25 bg-gradient-to-br from-amber-400/15 via-orange-400/10 to-white/5 text-amber-50 shadow-lg shadow-amber-950/10">
                       <CardHeader className="space-y-3 pb-4">

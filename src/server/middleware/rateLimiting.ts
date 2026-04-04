@@ -146,6 +146,19 @@ export const authChangePasswordLimit = rateLimit({
   },
 });
 
+export const supportRequestLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `support-${req.ip}-${String(req.body?.email || '').trim().toLowerCase()}`,
+  message: {
+    status: 'error',
+    message: 'Слишком много обращений в поддержку. Попробуйте позже.',
+    retryAfter: '15 минут',
+  },
+});
+
 /**
  * Комбинированный middleware для применения разных лимитов
  * в зависимости от типа операции

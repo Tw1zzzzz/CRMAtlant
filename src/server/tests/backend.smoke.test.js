@@ -10,6 +10,7 @@ const authController = read('controllers/authController.ts');
 const statsRoutes = read('routes/stats.ts');
 const server = read('server.ts');
 const testsModel = read('models/TestEntry.ts');
+const supportRoute = read('routes/support.ts');
 
 assert(
   authController.includes('signJwt('),
@@ -29,6 +30,16 @@ assert(
 assert(
   server.includes("app.use('/api/notifications', notificationsRoutes)"),
   'Server should register notifications API routes'
+);
+
+assert(
+  server.includes("app.use('/api/support', supportRoutes)"),
+  'Server should register support API routes'
+);
+
+assert(
+  supportRoute.includes("router.post('/request'"),
+  'Support routes should include request submission endpoint'
 );
 
 assert(

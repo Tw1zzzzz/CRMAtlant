@@ -166,6 +166,16 @@ export interface BaselineAssessmentPayload {
   };
 }
 
+export interface SupportRequestPayload {
+  name?: string;
+  email: string;
+  category: 'access' | 'bug' | 'billing' | 'integration' | 'other';
+  subject: string;
+  message: string;
+  pageUrl?: string;
+  userAgent?: string;
+}
+
 // Типы данных для API аналитики
 interface AnalyticsMetricsData {
   mood: number;
@@ -180,6 +190,9 @@ interface AnalyticsMetricsData {
 
 // Вспомогательная функция для извлечения ID из объекта или строки
 // API для работы с игроками (для staff)
+export const submitSupportRequest = (payload: SupportRequestPayload) =>
+  retryRequest(() => api.post('/support/request', payload));
+
 export const getPlayers = () => retryRequest(() => api.get('/users/players'));
 export const getPlayerStats = (playerId: string | any) => 
   retryRequest(() => api.get(`/users/players/${extractPlayerId(playerId)}/stats`));
