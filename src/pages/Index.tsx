@@ -39,6 +39,8 @@ const platformMetrics = [
   { value: "Team", label: "Подключение состава и staff" },
 ];
 
+const leftColumnFontFamily = "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+
 const Index: React.FC = () => {
   const navigate = useNavigate();
   const { login, register, requestPasswordReset, resendVerificationEmail, user } = useAuth();
@@ -189,7 +191,7 @@ const Index: React.FC = () => {
 
       <div className="relative mx-auto flex min-h-screen w-full max-w-7xl items-center px-4 py-10 sm:px-6 lg:px-8">
         <div className="grid w-full items-center gap-8 lg:grid-cols-[1.1fr_0.9fr] xl:gap-14">
-          <div className="space-y-8">
+          <div className="space-y-8" style={{ fontFamily: leftColumnFontFamily }}>
             <div className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.3em] text-sky-200 backdrop-blur-sm">
               Atlant Technology
             </div>
@@ -214,9 +216,9 @@ const Index: React.FC = () => {
               </div>
 
               <div className="space-y-4">
-                <h1 className="max-w-2xl font-heading text-4xl leading-tight text-white sm:text-5xl lg:text-6xl">
+                <h1 className="max-w-2xl text-4xl leading-tight text-white sm:text-5xl lg:text-6xl">
                   Регистрация и вход в экосистему{" "}
-                  <span className="bg-gradient-to-r from-sky-300 via-blue-400 to-cyan-300 bg-clip-text text-transparent">
+                  <span className="font-heading bg-gradient-to-r from-sky-300 via-blue-400 to-cyan-300 bg-clip-text text-transparent">
                     Atlant Technology
                   </span>
                 </h1>
@@ -232,7 +234,7 @@ const Index: React.FC = () => {
                     key={metric.label}
                     className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 shadow-lg shadow-slate-950/20 backdrop-blur-md"
                   >
-                    <div className="text-2xl font-bold text-white">{metric.value}</div>
+                    <div className="text-2xl font-semibold text-white">{metric.value}</div>
                     <div className="mt-1 text-sm leading-5 text-slate-300">{metric.label}</div>
                   </div>
                 ))}
