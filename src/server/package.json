@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node dist/index.js",
-    "build": "tsc --noEmitOnError false || true",
+    "build": "node scripts/build-server.js",
     "dev": "ts-node-dev --respawn --transpile-only index.ts",
     "seed-ratings": "ts-node seedPlayerRatings.ts",
     "unlock-subscription": "ts-node scripts/unlockDevSubscription.ts",
