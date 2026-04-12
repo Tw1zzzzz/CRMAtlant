@@ -139,7 +139,7 @@ const NotificationsPanel: React.FC = () => {
           <div>
             <h3 className="font-medium">Обновления CRM</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              Что нового в системе и какие улучшения уже доступны.
+              Свежие релизы, улучшения и важные изменения по продукту в одном месте.
             </p>
           </div>
           {unreadCount > 0 && (

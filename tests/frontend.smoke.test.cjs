@@ -32,6 +32,7 @@ const main = async () => {
   const indexPageSource = fs.readFileSync(path.join(projectRoot, 'src/pages/Index.tsx'), 'utf8');
   const apiSource = fs.readFileSync(path.join(projectRoot, 'src/lib/api.ts'), 'utf8');
   const layoutSource = fs.readFileSync(path.join(projectRoot, 'src/components/Layout.tsx'), 'utf8');
+  const profileSource = fs.readFileSync(path.join(projectRoot, 'src/pages/Profile.tsx'), 'utf8');
   const supportDialogSource = fs.readFileSync(path.join(projectRoot, 'src/components/SupportRequestDialog.tsx'), 'utf8');
   const {
     ROUTES,
@@ -52,6 +53,9 @@ const main = async () => {
     assert.strictEqual(isProtectedRoute(ROUTES.VERIFY_EMAIL), false);
     assert.strictEqual(isProtectedRoute(ROUTES.DASHBOARD), true);
     assert.strictEqual(isProtectedRoute(ROUTES.CALENDAR), true);
+    assert.strictEqual(ROUTES.CRM_GUIDE, '/guide');
+    assert.strictEqual(isProtectedRoute(ROUTES.CRM_GUIDE), true);
+    assert.strictEqual(ROUTES.SUPERADMIN, '/superadmin');
     assert.strictEqual(isPlayerRoute(ROUTES.BALANCE_WHEEL), true);
     assert.strictEqual(isPlayerRoute(ROUTES.GAME_STATS), false);
     assert.strictEqual(isStaffRoute(ROUTES.STAFF_BALANCE_WHEEL), true);
@@ -59,45 +63,54 @@ const main = async () => {
   });
 
   runTest('guest navigation keeps only common sections', () => {
-    const hrefs = getSidebarNavItems(null, null).map((item) => item.href);
-
-    assert.deepStrictEqual(hrefs, [
-      '/',
-      '/mood',
-      '/tests',
-      '/stats',
-      '/correlation-analysis',
-      '/game-stats',
-    ]);
+    assert.deepStrictEqual(getSidebarNavItems(null, null), []);
   });
 
   runTest('solo player navigation hides team management and keeps personal card', () => {
-    const items = getSidebarNavItems('player', 'solo');
-    const titles = items.map((item) => item.title);
-    const hrefs = items.map((item) => item.href);
+    const sections = getSidebarNavItems('player', 'solo');
+    const titles = sections.flatMap((section) => section.items.map((item) => item.title));
+    const hrefs = sections.flatMap((section) => section.items.map((item) => item.href));
+    const sectionTitles = sections.map((section) => section.title);
 
     assert(hrefs.includes('/balance-wheel'));
     assert(hrefs.includes('/calendar'));
     assert(!hrefs.includes('/staff-balance-wheel'));
     assert(titles.includes('Моя карточка'));
+    assert(titles.includes('Гайд по CRM'));
     assert(!titles.includes('Топ игроков'));
-    assert(!titles.includes('Управление игроками'));
-    assert(!titles.includes('Управление персоналом'));
+    assert(!titles.includes('Состав игроков'));
+    assert(!titles.includes('Состав staff'));
     assert(titles.includes('Профиль'));
+    assert(sectionTitles.includes('Моё состояние'));
+    assert(sectionTitles.includes('Моя форма'));
+    assert(sectionTitles.includes('Аккаунт и доступ'));
   });
 
   runTest('staff navigation exposes staff balance wheel and team sections', () => {
-    const items = getSidebarNavItems('staff', null);
-    const titles = items.map((item) => item.title);
-    const hrefs = items.map((item) => item.href);
+    const sections = getSidebarNavItems('staff', null);
+    const titles = sections.flatMap((section) => section.items.map((item) => item.title));
+    const hrefs = sections.flatMap((section) => section.items.map((item) => item.href));
+    const sectionTitles = sections.map((section) => section.title);
 
     assert(hrefs.includes('/staff-balance-wheel'));
-    assert(hrefs.includes('/calendar'));
     assert(!hrefs.includes('/balance-wheel'));
+    assert(hrefs.includes('/players'));
     assert(titles.includes('Топ игроков'));
-    assert(titles.includes('Управление игроками'));
-    assert(titles.includes('Управление персоналом'));
-    assert(titles.includes('Моя карточка'));
+    assert(titles.includes('Состав игроков'));
+    assert(titles.includes('Состав staff'));
+    assert(titles.includes('Карточки игроков'));
+    assert(titles.includes('Гайд по CRM'));
+    assert(sectionTitles[0] === 'Команда');
+  });
+
+  runTest('superadmin navigation exposes dedicated CRM admin item for both player and staff profiles', () => {
+    const staffSections = getSidebarNavItems('staff', null, true);
+    const playerSections = getSidebarNavItems('player', 'team', true);
+    const staffTitles = staffSections.flatMap((section) => section.items.map((item) => item.title));
+    const playerTitles = playerSections.flatMap((section) => section.items.map((item) => item.title));
+
+    assert(staffTitles.includes('Админка CRM'));
+    assert(playerTitles.includes('Админка CRM'));
   });
 
   runTest('auth normalization keeps playerType available for staff/team accounts', () => {
@@ -110,6 +123,14 @@ const main = async () => {
       authServiceSource.includes("rawUser.playerType === 'solo' || rawUser.playerType === 'team'"),
       'auth.service должен сохранять playerType из ответа сервера и для staff/team.'
     );
+    assert(
+      authServiceSource.includes('availableProfiles'),
+      'auth.service должен нормализовать список доступных профилей.'
+    );
+    assert(
+      authServiceSource.includes('isSuperAdmin'),
+      'auth.service должен сохранять флаг супер-администратора из ответа сервера.'
+    );
   });
 
   runTest('support request flow uses compact welcome link and floating CRM trigger', () => {
@@ -118,6 +139,18 @@ const main = async () => {
     assert(supportDialogSource.includes('Связаться с техподдержкой'));
     assert(supportDialogSource.includes('variant === "floating"'));
     assert(apiSource.includes("api.post('/support/request', payload)"));
+  });
+
+  runTest('profile page keeps team-link flow for existing accounts', () => {
+    const authServiceSource = fs.readFileSync(
+      path.join(projectRoot, 'src/services/auth.service.ts'),
+      'utf8'
+    );
+
+    assert(profileSource.includes('Привязка Staff / Team'));
+    assert(profileSource.includes('Привязка Игрок / Team'));
+    assert(profileSource.includes('Подтвердите перепривязку Team-профиля'));
+    assert(authServiceSource.includes("'/auth/team-link'"));
   });
 
   runTest('extractPlayerId supports object, string and serialized ObjectId inputs', () => {

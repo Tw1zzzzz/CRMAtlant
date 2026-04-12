@@ -8,7 +8,9 @@ export const ROUTES = {
   // Защищенные маршруты
   DASHBOARD: '/',
   CALENDAR: '/calendar',
+  CRM_GUIDE: '/guide',
   MOOD_TRACKER: '/mood',
+  DAILY_QUESTIONNAIRE: '/daily-questionnaire',
   TEST_TRACKER: '/tests',
   STATISTICS: '/stats',
   GAME_STATS: '/game-stats',
@@ -37,6 +39,7 @@ export const ROUTES = {
   STAFF_ROSTER: '/staff-roster',
   STAFF_MANAGEMENT: '/staff-management',
   TEAM_MANAGEMENT: '/teams',
+  SUPERADMIN: '/superadmin',
   
   // Служебные маршруты
   NOT_FOUND: '*',

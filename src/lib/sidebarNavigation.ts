@@ -5,6 +5,7 @@ export type SidebarIconKey =
   | 'home'
   | 'calendar'
   | 'planner'
+  | 'guide'
   | 'tests'
   | 'stats'
   | 'correlation'
@@ -15,6 +16,7 @@ export type SidebarIconKey =
   | 'players'
   | 'staff'
   | 'teams'
+  | 'superadmin'
   | 'playerCard'
   | 'profile'
   | 'pricing';
@@ -25,9 +27,16 @@ export interface SidebarNavItem {
   icon: SidebarIconKey;
 }
 
+export interface SidebarNavSection {
+  title: string;
+  items: SidebarNavItem[];
+}
+
 const PATHS = {
   dashboard: '/',
   calendar: '/calendar',
+  guide: '/guide',
+  dailyQuestionnaire: '/daily-questionnaire',
   mood: '/mood',
   tests: '/tests',
   stats: '/stats',
@@ -40,6 +49,7 @@ const PATHS = {
   playersManagement: '/players',
   staffRoster: '/staff-roster',
   teamManagement: '/teams',
+  superadmin: '/superadmin',
   playerCard: '/player-card',
   profile: '/profile',
   pricing: '/pricing',
@@ -47,111 +57,162 @@ const PATHS = {
 
 export function getSidebarNavItems(
   role: SidebarRole,
-  playerType: SidebarPlayerType
-): SidebarNavItem[] {
-  const baseItems: SidebarNavItem[] = [
-    {
-      title: 'Обзор',
-      href: PATHS.dashboard,
-      icon: 'home',
-    },
-    {
-      title: 'Настроение и Энергия',
-      href: PATHS.mood,
-      icon: 'calendar',
-    },
-    {
-      title: 'Тесты',
-      href: PATHS.tests,
-      icon: 'tests',
-    },
-    {
-      title: 'Статистика',
-      href: PATHS.stats,
-      icon: 'stats',
-    },
-    {
-      title: 'Корреляционный анализ',
-      href: PATHS.correlationAnalysis,
-      icon: 'correlation',
-    },
-    {
-      title: 'Игровая статистика',
-      href: PATHS.gameStats,
-      icon: 'gameStats',
-    },
-  ];
+  playerType: SidebarPlayerType,
+  isSuperAdmin = false
+): SidebarNavSection[] {
+  const isSoloPlayer = role === 'player' && playerType === 'solo';
+  const isTeamStaff = role === 'staff' && playerType === 'team';
 
-  if (role) {
-    baseItems.splice(1, 0, {
-      title: 'Календарь',
-      href: PATHS.calendar,
-      icon: 'planner',
-    });
+  if (role === 'staff') {
+    if (isTeamStaff) {
+      const sections: SidebarNavSection[] = [
+        {
+          title: 'Команда',
+          items: [
+            { title: 'Обзор команды', href: PATHS.dashboard, icon: 'home' },
+            { title: 'Топ игроков', href: PATHS.topPlayers, icon: 'topPlayers' },
+            { title: 'Состав игроков', href: PATHS.playersManagement, icon: 'players' },
+            { title: 'Состав staff', href: PATHS.staffRoster, icon: 'staff' },
+            { title: 'Карточки игроков', href: PATHS.playerCard, icon: 'playerCard' },
+          ],
+        },
+        {
+          title: 'Игровое',
+          items: [
+            { title: 'Статистика', href: PATHS.stats, icon: 'stats' },
+            { title: 'Корреляционный анализ', href: PATHS.correlationAnalysis, icon: 'correlation' },
+            { title: 'Игровая статистика', href: PATHS.gameStats, icon: 'gameStats' },
+            { title: 'Колесо баланса', href: PATHS.staffBalanceWheel, icon: 'balanceWheel' },
+          ],
+        },
+        {
+          title: 'Настройки и доступ',
+          items: [
+            { title: 'Тарифы', href: PATHS.pricing, icon: 'pricing' },
+            { title: 'Профиль', href: PATHS.profile, icon: 'profile' },
+            { title: 'Гайд по CRM', href: PATHS.guide, icon: 'guide' },
+          ],
+        },
+      ];
+
+      if (isSuperAdmin) {
+        sections.push({
+          title: 'Системное управление',
+          items: [{ title: 'Админка CRM', href: PATHS.superadmin, icon: 'superadmin' }],
+        });
+      }
+
+      return sections;
+    }
+
+    const sections: SidebarNavSection[] = [
+      {
+        title: 'Команда',
+        items: [
+          { title: 'Обзор команды', href: PATHS.dashboard, icon: 'home' },
+          { title: 'Календарь', href: PATHS.calendar, icon: 'planner' },
+          { title: 'Топ игроков', href: PATHS.topPlayers, icon: 'topPlayers' },
+          { title: 'Состав игроков', href: PATHS.playersManagement, icon: 'players' },
+          { title: 'Состав staff', href: PATHS.staffRoster, icon: 'staff' },
+          { title: 'Карточки игроков', href: PATHS.playerCard, icon: 'playerCard' },
+        ],
+      },
+      {
+        title: 'Моя форма',
+        items: [
+          { title: 'Статистика', href: PATHS.stats, icon: 'stats' },
+          { title: 'Корреляционный анализ', href: PATHS.correlationAnalysis, icon: 'correlation' },
+          { title: 'Игровая статистика', href: PATHS.gameStats, icon: 'gameStats' },
+          { title: 'Колесо баланса', href: PATHS.staffBalanceWheel, icon: 'balanceWheel' },
+        ],
+      },
+      {
+        title: 'Аккаунт и доступ',
+        items: [
+          { title: 'Тарифы', href: PATHS.pricing, icon: 'pricing' },
+          { title: 'Профиль', href: PATHS.profile, icon: 'profile' },
+        ],
+      },
+      {
+        title: 'Помощь',
+        items: [{ title: 'Гайд по CRM', href: PATHS.guide, icon: 'guide' }],
+      },
+    ];
+
+    if (isSuperAdmin) {
+      sections.push({
+        title: 'Системное управление',
+        items: [{ title: 'Админка CRM', href: PATHS.superadmin, icon: 'superadmin' }],
+      });
+    }
+
+    return sections;
   }
 
   if (role === 'player') {
-    baseItems.push({
-      title: 'Колесо баланса',
-      href: PATHS.balanceWheel,
-      icon: 'balanceWheel',
-    });
-  } else if (role === 'staff') {
-    baseItems.push({
-      title: 'Колесо баланса',
-      href: PATHS.staffBalanceWheel,
-      icon: 'balanceWheel',
-    });
-  }
+    const teamItems: SidebarNavItem[] = [];
 
-  const isSoloPlayer = role === 'player' && playerType === 'solo';
-  if (role && !isSoloPlayer) {
-    baseItems.push(
-      {
-        title: 'Топ игроков',
-        href: PATHS.topPlayers,
-        icon: 'topPlayers',
-      },
-      {
-        title: 'Управление игроками',
-        href: PATHS.playersManagement,
-        icon: 'players',
-      },
-      {
-        title: 'Управление персоналом',
-        href: PATHS.staffRoster,
-        icon: 'staff',
-      }
-    );
-  }
+    if (!isSoloPlayer) {
+      teamItems.push({ title: 'Топ игроков', href: PATHS.topPlayers, icon: 'topPlayers' });
+    }
 
-  if (role === 'staff' || isSoloPlayer) {
-    baseItems.push({
-      title: 'Моя карточка',
+    teamItems.push({
+      title: isSoloPlayer ? 'Моя карточка' : 'Карточка игрока',
       href: PATHS.playerCard,
       icon: 'playerCard',
     });
-  } else if (role && !isSoloPlayer) {
-    baseItems.push({
-      title: 'Карточки игроков',
-      href: PATHS.playerCard,
-      icon: 'playerCard',
-    });
+
+    const sections: SidebarNavSection[] = [
+      {
+        title: 'Моё состояние',
+        items: [
+          { title: 'Обзор', href: PATHS.dashboard, icon: 'home' },
+          { title: 'Календарь', href: PATHS.calendar, icon: 'planner' },
+          { title: 'Ежедневный опросник', href: PATHS.dailyQuestionnaire, icon: 'calendar' },
+          { title: 'Настроение и энергия', href: PATHS.mood, icon: 'calendar' },
+          // Временно скрыто из прод-навигации до доработки экрана.
+        ],
+      },
+      {
+        title: 'Моя форма',
+        items: [
+          { title: 'Тесты и ритм', href: PATHS.tests, icon: 'tests' },
+          { title: 'Статистика', href: PATHS.stats, icon: 'stats' },
+          { title: 'Корреляционный анализ', href: PATHS.correlationAnalysis, icon: 'correlation' },
+          { title: 'Игровая статистика', href: PATHS.gameStats, icon: 'gameStats' },
+          { title: 'Колесо баланса', href: PATHS.balanceWheel, icon: 'balanceWheel' },
+        ],
+      },
+      ...(teamItems.length
+        ? [
+            {
+              title: 'Команда',
+              items: teamItems,
+            },
+          ]
+        : []),
+      {
+        title: 'Аккаунт и доступ',
+        items: [
+          { title: 'Тарифы', href: PATHS.pricing, icon: 'pricing' },
+          { title: 'Профиль', href: PATHS.profile, icon: 'profile' },
+        ],
+      },
+      {
+        title: 'Помощь',
+        items: [{ title: 'Гайд по CRM', href: PATHS.guide, icon: 'guide' }],
+      },
+    ];
+
+    if (isSuperAdmin) {
+      sections.push({
+        title: 'Системное управление',
+        items: [{ title: 'Админка CRM', href: PATHS.superadmin, icon: 'superadmin' }],
+      });
+    }
+
+    return sections;
   }
 
-  if (role) {
-    baseItems.push({
-      title: 'Тарифы',
-      href: PATHS.pricing,
-      icon: 'pricing',
-    });
-
-    baseItems.push({
-      title: 'Профиль',
-      href: PATHS.profile,
-      icon: 'profile',
-    });
-  }
-
-  return baseItems;
+  return [];
 }

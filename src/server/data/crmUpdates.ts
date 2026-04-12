@@ -12,6 +12,36 @@ export type CrmUpdate = {
 
 const crmUpdates: CrmUpdate[] = [
   {
+    id: 'crm-update-2026-04-12-guide-launch',
+    title: 'Добавили встроенный гайд по CRM',
+    description:
+      'Внутри CRM появилась отдельная вкладка с быстрым стартом, картой разделов, role-specific блоками для player и staff и понятным FAQ по рабочим сценариям.',
+    createdAt: '2026-04-12T15:45:00.000Z',
+    type: 'release',
+    version: 'v2.9.0',
+    area: 'Онбординг'
+  },
+  {
+    id: 'crm-update-2026-04-12-guide-navigation',
+    title: 'Вынесли гайд в отдельный раздел «Помощь»',
+    description:
+      'Новая вкладка в sidebar больше не теряется среди рабочих модулей: гайд открывается как самостоятельный раздел и помогает быстрее провести нового пользователя по CRM.',
+    createdAt: '2026-04-12T15:30:00.000Z',
+    type: 'improvement',
+    version: 'v2.9.0',
+    area: 'Навигация'
+  },
+  {
+    id: 'crm-update-2026-04-12-guide-visuals',
+    title: 'Собрали визуальный walkthrough по ключевым модулям',
+    description:
+      'В гайде появились визуальные блоки по обзору, календарю, опроснику, тестам, аналитике и карточке игрока, чтобы структура CRM считывалась быстрее без длинного онбординга.',
+    createdAt: '2026-04-12T15:15:00.000Z',
+    type: 'improvement',
+    version: 'v2.9.0',
+    area: 'Интерфейс'
+  },
+  {
     id: 'crm-update-2026-04-05-calendar-launch',
     title: 'Запустили личный и командный календарь',
     description:

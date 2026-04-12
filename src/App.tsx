@@ -9,7 +9,9 @@ import { ThemeProvider } from "./providers/ThemeProvider";
 import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
 import CalendarPage from "./pages/CalendarPage";
+import CrmGuidePage from "./pages/CrmGuidePage";
 import MoodTracker from "./pages/MoodTracker";
+import DailyQuestionnairePage from "./pages/DailyQuestionnairePage";
 import TestTracker from "./pages/TestTracker";
 import Statistics from "./pages/Statistics";
 import GameStatsPage from "./pages/GameStatsPage";
@@ -31,6 +33,7 @@ import StatePage from "./pages/StatePage";
 import NotFound from "./pages/NotFound";
 import ResetPassword from "./pages/ResetPassword";
 import VerifyEmail from "./pages/VerifyEmail";
+import SuperAdminPage from "./pages/SuperAdminPage";
 import ROUTES from "./lib/routes";
 import StaffManagement from "./client/src/components/admin/StaffManagement";
 import { PlayerType } from "@/types";
@@ -42,11 +45,12 @@ const queryClient = new QueryClient();
 interface RouteGuardProps {
   children: React.ReactNode;
   requiredRole?: string;
+  requireSuperAdmin?: boolean;
   allowedPlayerTypes?: PlayerType[];
   blockedPlayerTypes?: PlayerType[];
 }
 
-const RouteGuard = ({ children, requiredRole, allowedPlayerTypes, blockedPlayerTypes }: RouteGuardProps) => {
+const RouteGuard = ({ children, requiredRole, requireSuperAdmin, allowedPlayerTypes, blockedPlayerTypes }: RouteGuardProps) => {
   const { user, loading } = useAuth();
   
   if (loading) {
@@ -58,6 +62,10 @@ const RouteGuard = ({ children, requiredRole, allowedPlayerTypes, blockedPlayerT
   
   // Р•СЃР»Рё СѓРєР°Р·Р°РЅР° РѕР±СЏР·Р°С‚РµР»СЊРЅР°СЏ СЂРѕР»СЊ Рё РѕРЅР° РЅРµ СЃРѕРІРїР°РґР°РµС‚ - РїРµСЂРµРЅР°РїСЂР°РІР»СЏРµРј
   if (requiredRole && user.role !== requiredRole) {
+    return <Navigate to={ROUTES.DASHBOARD} replace />;
+  }
+
+  if (requireSuperAdmin && !user.isSuperAdmin) {
     return <Navigate to={ROUTES.DASHBOARD} replace />;
   }
   
@@ -106,6 +114,22 @@ const AppRoutes = () => (
         element={
           <RouteGuard>
             <CalendarPage />
+          </RouteGuard>
+        }
+      />
+      <Route
+        path={ROUTES.CRM_GUIDE}
+        element={
+          <RouteGuard>
+            <CrmGuidePage />
+          </RouteGuard>
+        }
+      />
+      <Route
+        path={ROUTES.DAILY_QUESTIONNAIRE}
+        element={
+          <RouteGuard requiredRole="player">
+            <DailyQuestionnairePage />
           </RouteGuard>
         }
       />
@@ -214,6 +238,15 @@ const AppRoutes = () => (
             <StaffManagement />
           </RouteGuard>
         } 
+      />
+
+      <Route
+        path={ROUTES.SUPERADMIN}
+        element={
+          <RouteGuard requireSuperAdmin>
+            <SuperAdminPage />
+          </RouteGuard>
+        }
       />
 
       {/* Solo-player card routes are kept at the end of the protected block so

@@ -2,7 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import {
   BarChart2, Calendar, CalendarDays, Home, ListTodo,
   User, Users, LogOut, CircleDot,
-  Trophy, LineChart, Clock, CreditCard, UserPlus, TrendingUp, Upload, Activity, IdCard
+  Trophy, LineChart, Clock, CreditCard, UserPlus, TrendingUp, Upload, Activity, IdCard, ShieldCheck, BookOpen
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
@@ -15,15 +15,18 @@ import {
   getSidebarNavItems,
   type SidebarNavItem,
   type SidebarIconKey,
+  type SidebarNavSection,
   type SidebarPlayerType,
   type SidebarRole
 } from "@/lib/sidebarNavigation";
 import { CSSProperties } from "react";
+import atlantMiniLogoWhite from "@/assets/atlant-mini-logo-white.svg";
 
 const navIcons: Record<SidebarIconKey, React.ReactNode> = {
   home: <Home className="h-5 w-5" />,
   calendar: <Calendar className="h-5 w-5" />,
   planner: <CalendarDays className="h-5 w-5" />,
+  guide: <BookOpen className="h-5 w-5" />,
   tests: <ListTodo className="h-5 w-5" />,
   stats: <BarChart2 className="h-5 w-5" />,
   correlation: <TrendingUp className="h-5 w-5" />,
@@ -34,6 +37,7 @@ const navIcons: Record<SidebarIconKey, React.ReactNode> = {
   players: <Users className="h-5 w-5" />,
   staff: <UserPlus className="h-5 w-5" />,
   teams: <Users className="h-5 w-5" />,
+  superadmin: <ShieldCheck className="h-5 w-5" />,
   playerCard: <IdCard className="h-5 w-5" />,
   profile: <User className="h-5 w-5" />,
   pricing: <CreditCard className="h-5 w-5" />,
@@ -46,9 +50,10 @@ const navIcons: Record<SidebarIconKey, React.ReactNode> = {
 const Sidebar: React.FC = () => {
   const location = useLocation();
   const { user, logout } = useAuth();
-  const navItems = getSidebarNavItems(
+  const navSections = getSidebarNavItems(
     (user?.role as SidebarRole) || null,
-    (user?.playerType as SidebarPlayerType) || null
+    (user?.playerType as SidebarPlayerType) || null,
+    Boolean(user?.isSuperAdmin)
   );
 
   // Стили для компонентов
@@ -59,14 +64,25 @@ const Sidebar: React.FC = () => {
       borderRight: `1px solid ${COLORS.borderColor}`
     },
     brandPanel: {
-      background: "linear-gradient(180deg, rgba(11, 27, 47, 0.9) 0%, rgba(17, 24, 39, 0.82) 100%)",
+      background: "linear-gradient(180deg, rgba(12, 21, 36, 0.96) 0%, rgba(17, 24, 39, 0.88) 100%)",
       border: `1px solid ${COLORS.borderColor}`,
-      borderRadius: "16px",
-      padding: "10px 12px",
-      boxShadow: "0 16px 24px -24px rgba(7, 17, 31, 0.9)"
+      borderRadius: "18px",
+      padding: "12px",
+      boxShadow: "0 14px 24px -24px rgba(7, 17, 31, 0.95)"
+    },
+    brandLogoWrap: {
+      width: "38px",
+      height: "38px",
+      borderRadius: "12px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      border: `1px solid rgba(148, 163, 184, 0.14)`,
+      background: "linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.04))",
+      boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)"
     },
     brandEyebrow: {
-      color: COLORS.primary,
+      color: "rgba(191, 219, 254, 0.88)",
       fontSize: "9px",
       fontWeight: 700,
       letterSpacing: "0.18em",
@@ -74,24 +90,24 @@ const Sidebar: React.FC = () => {
     },
     brandTitle: {
       color: COLORS.textColor,
-      fontSize: "20px",
-      fontWeight: 800,
-      letterSpacing: "0.02em",
+      fontSize: "16px",
+      fontWeight: 700,
+      letterSpacing: "0.01em",
       lineHeight: 1.05
     },
     brandSubtitle: {
       color: COLORS.textColorSecondary,
-      fontSize: "10px",
-      letterSpacing: "0.12em",
+      fontSize: "9px",
+      letterSpacing: "0.14em",
       textTransform: "uppercase" as const
     },
     badge: { 
-      color: COLORS.textColorSecondary, 
-      borderColor: COLORS.borderColor,
-      backgroundColor: "rgba(255, 255, 255, 0.04)",
+      color: "#bfdbfe",
+      borderColor: "rgba(96, 165, 250, 0.16)",
+      backgroundColor: "rgba(59, 130, 246, 0.08)",
       fontSize: '9px',
       fontWeight: 'bold',
-      letterSpacing: '0.4px',
+      letterSpacing: '0.18em',
       textTransform: 'uppercase' as const
     },
     tooltip: {
@@ -173,15 +189,28 @@ const Sidebar: React.FC = () => {
       {/* Бренд-блок */}
       <div className="p-4 pt-4 mt-0.5">
         <div style={styles.brandPanel}>
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p style={styles.brandEyebrow}>ATLANT</p>
-              <p style={styles.brandTitle}>Technology</p>
-              <p className="mt-0.5" style={styles.brandSubtitle}>Performance Coach CRM</p>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <div style={styles.brandLogoWrap}>
+                <img
+                  src={atlantMiniLogoWhite}
+                  alt="Мини логотип Atlant"
+                  className="h-5 w-5 object-contain"
+                />
+              </div>
+              <div className="min-w-0">
+                <p style={styles.brandEyebrow}>Atlant Technology</p>
+                <p style={styles.brandTitle}>Performance CRM</p>
+              </div>
             </div>
-            <span className="text-xs px-1.5 py-0.5 rounded-md border" style={styles.badge}>
-              beta v_1.02
-            </span>
+            <div className="flex flex-col items-end justify-center leading-none">
+              <span className="rounded-full border px-1.5 py-0.5" style={styles.badge}>
+                beta
+              </span>
+              <span className="mt-1 text-[9px] font-semibold uppercase tracking-[0.14em]" style={{ color: COLORS.textColorSecondary }}>
+                v1.02
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -189,9 +218,20 @@ const Sidebar: React.FC = () => {
       {/* Навигация */}
       <ScrollArea className="flex-1">
         <nav className="px-4 py-2">
-          <ul className="space-y-1">
-            {navItems.map(renderNavItem)}
-          </ul>
+          <div className="space-y-5">
+            {navSections.map((section: SidebarNavSection, index) => (
+              <section key={`${section.title || "section"}-${index}`}>
+                {section.title ? (
+                  <p className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: COLORS.textColorSecondary }}>
+                    {section.title}
+                  </p>
+                ) : null}
+                <ul className="space-y-1">
+                  {section.items.map(renderNavItem)}
+                </ul>
+              </section>
+            ))}
+          </div>
         </nav>
       </ScrollArea>
       
