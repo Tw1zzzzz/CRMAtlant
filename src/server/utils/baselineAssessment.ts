@@ -37,6 +37,23 @@ export interface BaselinePersonalitySummary {
   axes: Record<BaselineAxis, number>;
 }
 
+type BaselineAssessmentLike = {
+  completedAt?: string | Date;
+  personality?: {
+    answers?: Array<{
+      questionId: string;
+      optionId: string;
+    }>;
+    summary?: BaselinePersonalitySummary;
+  };
+  cs2Role?: {
+    primaryRole?: BaselineRole | string;
+    secondaryRole?: BaselineRole | '' | string;
+    sidePreference?: BaselineSidePreference | string;
+    roundStrength?: BaselineRoundStrength | string;
+  };
+} | null | undefined;
+
 export const BASELINE_CS2_ROLES: BaselineRole[] = [
   'IGL',
   'AWPer',
@@ -213,6 +230,23 @@ export const BASELINE_QUESTIONS: BaselineQuestion[] = [
     ]
   }
 ];
+
+export const maskBaselineAssessmentSummary = <T extends BaselineAssessmentLike>(
+  assessment: T,
+  hasFullAccess: boolean
+): T => {
+  if (!assessment || hasFullAccess || !assessment.personality) {
+    return assessment;
+  }
+
+  return {
+    ...assessment,
+    personality: {
+      ...assessment.personality,
+      summary: undefined
+    }
+  };
+};
 
 const ARCHETYPE_META: Record<
   string,

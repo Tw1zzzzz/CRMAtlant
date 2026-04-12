@@ -1,18 +1,17 @@
 import { CheckCheck, ClipboardList, MoonStar, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import BaselineAssessmentCard from "@/components/onboarding/BaselineAssessmentCard";
 import { COLORS } from "@/styles/theme";
-import type { BaselineAssessment } from "@/types";
+import { PRODUCT_NAME } from "@/lib/productCopy";
 
 type PlayerQuickStartPanelProps = {
   baselineAssessmentCompleted: boolean;
-  baselineAssessment?: BaselineAssessment | null;
   sleepDoneToday: boolean;
   testsDone: boolean;
+  hasResultsAccess: boolean;
+  onOpenBaselineAssessment: () => void;
   onOpenSleepTab: () => void;
   onOpenTests: () => void;
-  onBaselineCompleted?: (assessment?: BaselineAssessment | null) => void | Promise<void>;
 };
 
 const checklistCard = {
@@ -23,25 +22,31 @@ const checklistCard = {
 
 export default function PlayerQuickStartPanel({
   baselineAssessmentCompleted,
-  baselineAssessment,
   sleepDoneToday,
   testsDone,
+  hasResultsAccess,
+  onOpenBaselineAssessment,
   onOpenSleepTab,
-  onOpenTests,
-  onBaselineCompleted
+  onOpenTests
 }: PlayerQuickStartPanelProps) {
   const items = [
     {
       title: "Пройти базовую анкету",
       description: baselineAssessmentCompleted
-        ? "Профиль игрока уже собран и доступен в вашей карточке."
+        ? hasResultsAccess
+          ? "Профиль игрока уже собран и доступен в вашей карточке."
+          : "Анкета уже пройдена. Итоговая расшифровка сохранена и откроется после покупки тарифа."
         : "Зафиксируйте личностный контур и игровую роль, чтобы система собрала красивую стартовую карточку.",
-      done: baselineAssessmentCompleted
+      done: baselineAssessmentCompleted,
+      action: onOpenBaselineAssessment,
+      actionLabel: baselineAssessmentCompleted ? "Открыть анкету" : "Начать тест"
     },
     {
       title: "Заполнить сон и экранное время за сегодня",
       description: sleepDoneToday
-        ? "Сегодняшний daily self-check уже сохранён."
+        ? hasResultsAccess
+          ? "Сегодняшняя ежедневная проверка восстановления уже сохранена."
+          : "Сегодняшняя проверка восстановления уже сохранена. Полная история откроется после покупки тарифа."
         : "Лучше фиксировать восстановление сразу после первого захода в систему.",
       done: sleepDoneToday,
       action: onOpenSleepTab,
@@ -50,7 +55,9 @@ export default function PlayerQuickStartPanel({
     {
       title: "Перейти к тестам",
       description: testsDone
-        ? "История тестов уже есть, можно продолжать рабочий ритм."
+        ? hasResultsAccess
+          ? "История тестов уже есть, можно продолжать рабочий ритм."
+          : "Тесты уже пройдены. История и аналитика сохранены, но откроются после покупки."
         : "Запустите Brain Lab или добавьте первый тест, чтобы у системы появился базовый контур формы.",
       done: testsDone,
       action: onOpenTests,
@@ -77,8 +84,13 @@ export default function PlayerQuickStartPanel({
               Быстрый старт без лишнего трения
             </h3>
             <p className="mt-2 max-w-2xl text-sm leading-7" style={{ color: COLORS.textColorSecondary }}>
-              Здесь собраны первые обязательные действия: стартовая анкета, self-check восстановления и быстрый вход в тестовый контур.
+              Здесь собраны первые обязательные действия: стартовая анкета, ежедневная проверка восстановления и быстрый вход в тестовый контур.
             </p>
+            {!hasResultsAccess && (
+              <p className="mt-2 max-w-2xl text-sm leading-7" style={{ color: "#B6F0FF" }}>
+                Прохождение доступно бесплатно. Расширенная расшифровка и полная история откроются после покупки тарифа {PRODUCT_NAME}.
+              </p>
+            )}
           </div>
           <div className="rounded-[20px] border px-4 py-3" style={{ borderColor: "rgba(255,255,255,0.08)", backgroundColor: "rgba(255,255,255,0.04)" }}>
             <div className="text-[11px] uppercase tracking-[0.2em]" style={{ color: COLORS.textColorSecondary }}>
@@ -129,11 +141,6 @@ export default function PlayerQuickStartPanel({
           </Card>
         ))}
       </div>
-
-      <BaselineAssessmentCard
-        initialAssessment={baselineAssessment}
-        onCompleted={onBaselineCompleted}
-      />
     </div>
   );
 }

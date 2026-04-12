@@ -142,7 +142,7 @@ const StaffManagement: React.FC = () => {
       console.error('Error loading staff:', err);
       
       if (err.message?.includes('привилегий')) {
-        setError('Для просмотра и управления сотрудниками требуется ключ привилегий');
+        setError('Для просмотра и управления сотрудниками требуется ключ доступа для staff');
       } else {
         setError(`Ошибка при загрузке списка сотрудников: ${err.message}`);
       }

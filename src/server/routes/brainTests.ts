@@ -15,11 +15,11 @@ import {
   getCatalogEntry,
   isBrainTestKey
 } from '../services/brainTestsService';
+import { resolveEffectiveSubscriptionAccess } from '../utils/subscriptionAccess';
 
 const router = express.Router();
 
 router.use(protect);
-router.use(hasPerformanceCoachCrmSubscription);
 
 router.get('/catalog', (_req, res) => {
   return res.json(getCatalog());
@@ -69,6 +69,7 @@ router.post('/attempts/start', async (req: any, res) => {
 router.post('/attempts/:id/complete', async (req: any, res) => {
   try {
     const attempt = await BrainTestAttempt.findById(req.params.id);
+    const accessFlags = await resolveEffectiveSubscriptionAccess(req.user);
 
     if (!attempt) {
       return res.status(404).json({ message: 'Попытка не найдена' });
@@ -79,7 +80,32 @@ router.post('/attempts/:id/complete', async (req: any, res) => {
     }
 
     if (attempt.status === 'completed') {
-      return res.json(attempt);
+      return res.json({
+        success: true,
+        data: accessFlags.hasPerformanceCoachCrmAccess
+          ? {
+              id: attempt._id,
+              testKey: attempt.testKey,
+              domain: attempt.domain,
+              validityStatus: attempt.validityStatus,
+              invalidReasons: attempt.invalidReasons,
+              rawCompositeScore: attempt.rawCompositeScore,
+              formScore: attempt.formScore,
+              durationMs: attempt.durationMs,
+              derivedMetrics: attempt.derivedMetrics
+            }
+          : {
+              id: attempt._id,
+              testKey: attempt.testKey,
+              domain: attempt.domain,
+              validityStatus: attempt.validityStatus,
+              invalidReasons: attempt.invalidReasons,
+              rawCompositeScore: null,
+              formScore: null,
+              durationMs: attempt.durationMs,
+              derivedMetrics: {}
+            }
+      });
     }
 
     const { rawMetrics = {}, clientMeta, stateSnapshot, context } = req.body || {};
@@ -151,19 +177,33 @@ router.post('/attempts/:id/complete', async (req: any, res) => {
     await attempt.save();
     await User.findByIdAndUpdate(req.user._id, { completedTests: true });
 
+    const responseData = accessFlags.hasPerformanceCoachCrmAccess
+      ? {
+          id: attempt._id,
+          testKey: attempt.testKey,
+          domain: attempt.domain,
+          validityStatus: attempt.validityStatus,
+          invalidReasons: attempt.invalidReasons,
+          rawCompositeScore: attempt.rawCompositeScore,
+          formScore: attempt.formScore,
+          durationMs: attempt.durationMs,
+          derivedMetrics: attempt.derivedMetrics
+        }
+      : {
+          id: attempt._id,
+          testKey: attempt.testKey,
+          domain: attempt.domain,
+          validityStatus: attempt.validityStatus,
+          invalidReasons: attempt.invalidReasons,
+          rawCompositeScore: null,
+          formScore: null,
+          durationMs: attempt.durationMs,
+          derivedMetrics: {}
+        };
+
     return res.json({
       success: true,
-      data: {
-        id: attempt._id,
-        testKey: attempt.testKey,
-        domain: attempt.domain,
-        validityStatus: attempt.validityStatus,
-        invalidReasons: attempt.invalidReasons,
-        rawCompositeScore: attempt.rawCompositeScore,
-        formScore: attempt.formScore,
-        durationMs: attempt.durationMs,
-        derivedMetrics: attempt.derivedMetrics
-      }
+      data: responseData
     });
   } catch (error) {
     console.error('Error completing brain test attempt:', error);
@@ -171,7 +211,7 @@ router.post('/attempts/:id/complete', async (req: any, res) => {
   }
 });
 
-router.get('/me/summary', async (req: any, res) => {
+router.get('/me/summary', hasPerformanceCoachCrmSubscription, async (req: any, res) => {
   try {
     const requestedWindow = Number(req.query.window || 30);
     const windowDays = Number.isFinite(requestedWindow) && requestedWindow > 0 ? requestedWindow : 30;
@@ -183,7 +223,7 @@ router.get('/me/summary', async (req: any, res) => {
   }
 });
 
-router.get('/me/history', async (req: any, res) => {
+router.get('/me/history', hasPerformanceCoachCrmSubscription, async (req: any, res) => {
   try {
     const { testKey } = req.query || {};
     const normalizedTestKey =

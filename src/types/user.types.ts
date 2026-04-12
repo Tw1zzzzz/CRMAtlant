@@ -1,14 +1,14 @@
-﻿/**
- * РўРёРїС‹, СЃРІСЏР·Р°РЅРЅС‹Рµ СЃ РїРѕР»СЊР·РѕРІР°С‚РµР»РµРј
+/**
+ * Типы, связанные с пользователем
  */
 
-/** Р РѕР»Рё РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№ РІ СЃРёСЃС‚РµРјРµ */
+/** Роли пользователей в системе */
 export type UserRole = "player" | "staff";
 
-/** РўРёРї РёРіСЂРѕРєР° */
+/** Тип игрока */
 export type PlayerType = "solo" | "team";
 
-/** РћСЃРЅРѕРІРЅР°СЏ РјРѕРґРµР»СЊ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ */
+/** Основная модель пользователя */
 export type BaselineAxis = "tempo" | "communication" | "decisionStyle" | "pressureResponse";
 export type BaselineRole = "IGL" | "AWPer" | "Entry" | "Support" | "Lurker" | "Anchor" | "Flex";
 export type BaselineSidePreference = "T-side" | "CT-side" | "Balanced";
@@ -47,18 +47,36 @@ export interface UserSubscription {
   periodDays: number | null;
 }
 
+export interface AccountProfile {
+  key: string;
+  label: string;
+  role: UserRole;
+  playerType: PlayerType;
+  teamId: string | null;
+  teamName: string;
+  teamLogo?: string;
+  privilegeKey?: string;
+}
+
 export interface User {
   readonly id: string;
   email: string;
   emailVerified?: boolean;
   emailVerifiedAt?: string | null;
+  isSuperAdmin?: boolean;
+  isActive?: boolean;
+  deactivatedAt?: string | null;
+  deactivatedReason?: string | null;
   name: string;
   role: UserRole;
   playerType?: PlayerType;
   teamId?: string | null;
   teamName?: string;
+  teamLogo?: string;
   privilegeKey?: string;
   staffHasPrivilegeKey?: boolean;
+  availableProfiles?: AccountProfile[];
+  activeProfileKey?: string | null;
   subscription?: UserSubscription | null;
   hasPerformanceCoachCrmAccess?: boolean;
   hasCorrelationAnalysisAccess?: boolean;
@@ -72,7 +90,7 @@ export interface User {
   _updateTimestamp?: number;
 }
 
-/** Р”Р°РЅРЅС‹Рµ РґР»СЏ СЃРѕР·РґР°РЅРёСЏ РЅРѕРІРѕРіРѕ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ */
+/** Данные для создания нового пользователя */
 export interface CreateUserDto {
   name: string;
   email: string;
@@ -85,13 +103,40 @@ export interface CreateUserDto {
   teamName?: string;
 }
 
-/** Р”Р°РЅРЅС‹Рµ РґР»СЏ РІС…РѕРґР° РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ */
+export interface CreatePlayerProfileDto {
+  playerType: PlayerType;
+  faceitUrl: string;
+  nickname?: string;
+}
+
+export interface LinkTeamProfileDto {
+  teamCode: string;
+  confirmRelink?: boolean;
+}
+
+export interface TeamLinkSummary {
+  id: string;
+  name: string;
+  logo?: string;
+}
+
+export interface LinkTeamProfileResponse {
+  status: "linked" | "confirmation_required";
+  message?: string;
+  user?: User | null;
+  targetProfileKey?: string;
+  team?: TeamLinkSummary;
+  currentTeam?: TeamLinkSummary;
+  nextTeam?: TeamLinkSummary;
+}
+
+/** Данные для входа пользователя */
 export interface LoginDto {
   email: string;
   password: string;
 }
 
-/** РћС‚РІРµС‚ РѕС‚ СЃРµСЂРІРµСЂР° РїСЂРё Р°СѓС‚РµРЅС‚РёС„РёРєР°С†РёРё */
+/** Ответ от сервера при аутентификации */
 export interface AuthResponse {
   token?: string;
   user?: User | null;
@@ -125,6 +170,7 @@ export interface ChangePasswordDto {
 export interface TeamSummary {
   id: string;
   name: string;
+  logo?: string;
   playerLimit: number;
   playerCount: number;
   staffCount: number;
@@ -133,7 +179,7 @@ export interface TeamSummary {
   isCreator?: boolean;
 }
 
-/** Р”Р°РЅРЅС‹Рµ РґР»СЏ РѕР±РЅРѕРІР»РµРЅРёСЏ РїСЂРѕС„РёР»СЏ */
+/** Данные для обновления профиля */
 export interface UpdateUserDto {
   name?: string;
   email?: string;

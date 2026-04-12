@@ -9,6 +9,7 @@ import ZoneDetailCard from '@/components/body/ZoneDetailCard';
 import LifestyleRadar from '@/components/body/LifestyleRadar';
 import { getPlayerStateAnalysis } from '@/lib/api';
 import type { BodyZone, PlayerStateReport } from '@/types/playerState.types';
+import PageIntro from '@/components/PageIntro';
 
 const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -297,14 +298,20 @@ const StatePage = () => {
 
   return (
     <div className="container mx-auto px-4 py-6 max-w-6xl">
-      {/* Page header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold">Профиль состояния</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            AI-анализ когнитивного, психологического и игрового состояния
-          </p>
-        </div>
+      <div className="mb-6">
+        <PageIntro
+          eyebrow="Индекс текущей формы"
+          title="Профиль состояния: одна картина вместо нескольких разрозненных сигналов"
+          description="Этот экран собирает когнитивные, психологические, жизненные и игровые сигналы в один обзор. Он нужен, чтобы понимать не только итоговый балл, но и то, какой именно фактор сейчас сильнее всего влияет на форму."
+          bullets={[
+            "Сначала общая картина по зонам",
+            "Потом детализация по каждому фактору",
+            "Экран нужен для решения, а не как отдельный продукт",
+          ]}
+        />
+      </div>
+
+      <div className="mb-6 flex items-center justify-end">
         <Button
           variant="outline"
           size="sm"

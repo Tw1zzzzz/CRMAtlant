@@ -1,66 +1,75 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Separator } from "@/components/ui/separator";
 import NotificationsPanel from "./NotificationsPanel";
 import { useAuth } from "@/hooks/useAuth";
 import { COLORS } from "@/styles/theme";
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { LogOut, ChevronDown, CalendarDays, Clock3, ArrowUpRight, Settings, Sparkles } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Check, LogOut, ChevronDown, CalendarDays, Clock3, ArrowUpRight, Settings, Sparkles } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import ROUTES from "@/lib/routes";
-import twizzLogoSvg from "@/assets/twizz-logo.svg";
 // Импортируем UserAvatar
 import UserAvatar from "./UserAvatar";
-import { getCalendarEvents } from "@/lib/calendarApi";
+import { CALENDAR_EVENTS_UPDATED_EVENT, getCalendarEvents } from "@/lib/calendarApi";
+import { getImageUrl } from "@/utils/imageUtils";
 import type { CalendarEvent } from "@/types";
 
 const Header = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, switchProfile } = useAuth();
   const navigate = useNavigate();
   const teamName = user?.teamName?.trim() || "";
+  const teamLogo = user?.teamLogo?.trim() || "";
+  const teamLogoUrl = getImageUrl(teamLogo) || teamLogo;
   const showTeamBanner = user?.playerType === "team" && Boolean(teamName);
   const showSoloBanner = user?.playerType === "solo";
+  const teamRoleLabel = user?.role === "staff" ? "Staff / Team" : "Player / Team";
+  const teamInitial = teamName.charAt(0).toUpperCase() || "T";
   const [upcomingEvent, setUpcomingEvent] = useState<CalendarEvent | null>(null);
   const [upcomingEventLoading, setUpcomingEventLoading] = useState(true);
 
+  const loadUpcomingEvent = useCallback(async () => {
+    if (!user) {
+      setUpcomingEvent(null);
+      setUpcomingEventLoading(false);
+      return;
+    }
+
+    setUpcomingEventLoading(true);
+    try {
+      const now = new Date();
+      const from = now.toISOString();
+      const to = new Date(now.getTime() + 1000 * 60 * 60 * 24 * 90).toISOString();
+
+      const requests: Array<Promise<CalendarEvent[]>> = [
+        getCalendarEvents({ scope: "personal", from, to }),
+      ];
+
+      if (user.playerType === "team" && user.teamId) {
+        requests.push(getCalendarEvents({ scope: "team", from, to }));
+      }
+
+      const nextEvent = (await Promise.all(requests))
+        .flat()
+        .filter((event) => new Date(event.endAt).getTime() >= now.getTime())
+        .sort((left, right) => new Date(left.startAt).getTime() - new Date(right.startAt).getTime())[0] || null;
+
+      setUpcomingEvent(nextEvent);
+    } catch (error) {
+      console.error("Не удалось загрузить ближайшее событие для хедера:", error);
+      setUpcomingEvent(null);
+    } finally {
+      setUpcomingEventLoading(false);
+    }
+  }, [user]);
+
   useEffect(() => {
-    const loadUpcomingEvent = async () => {
-      if (!user) {
-        setUpcomingEvent(null);
-        setUpcomingEventLoading(false);
-        return;
-      }
-
-      setUpcomingEventLoading(true);
-      try {
-        const now = new Date();
-        const from = now.toISOString();
-        const to = new Date(now.getTime() + 1000 * 60 * 60 * 24 * 90).toISOString();
-
-        const requests: Array<Promise<CalendarEvent[]>> = [
-          getCalendarEvents({ scope: "personal", from, to }),
-        ];
-
-        if (user.playerType === "team" && user.teamId) {
-          requests.push(getCalendarEvents({ scope: "team", from, to }));
-        }
-
-        const nextEvent = (await Promise.all(requests))
-          .flat()
-          .filter((event) => new Date(event.endAt).getTime() >= now.getTime())
-          .sort((left, right) => new Date(left.startAt).getTime() - new Date(right.startAt).getTime())[0] || null;
-
-        setUpcomingEvent(nextEvent);
-      } catch (error) {
-        console.error("Не удалось загрузить ближайшее событие для хедера:", error);
-        setUpcomingEvent(null);
-      } finally {
-        setUpcomingEventLoading(false);
-      }
-    };
-
     void loadUpcomingEvent();
-  }, [user?.id, user?.playerType, user?.teamId]);
+
+    window.addEventListener(CALENDAR_EVENTS_UPDATED_EVENT, loadUpcomingEvent);
+    return () => {
+      window.removeEventListener(CALENDAR_EVENTS_UPDATED_EVENT, loadUpcomingEvent);
+    };
+  }, [loadUpcomingEvent]);
 
   const formatUpcomingEventDate = (event: CalendarEvent | null): string => {
     if (!event) {
@@ -93,97 +102,117 @@ const Header = () => {
     color: COLORS.textColor
   };
 
-  // Подрезанный SVG можно показывать крупнее без потери читаемости
-  const twizzLogoStyle = {
-    height: '5.25rem',
-    maxWidth: '440px',
-    objectFit: 'contain' as const,
-    marginLeft: '10px',
-    display: 'block' as const
-  };
-
   return (
-    <header className="p-4 flex justify-between items-center border-b" style={headerStyles}>
-      <div className="flex items-center space-x-4">
-        <div className="flex items-center gap-4">
-          <img 
-            src={twizzLogoSvg} 
-            alt="ATLANT Technology Logo" 
-            style={twizzLogoStyle}
-          />
-          {showTeamBanner && (
+    <header className="flex items-center justify-between gap-6 border-b px-5 py-3.5" style={headerStyles}>
+      <div className="min-w-0 flex flex-1 items-center">
+        {showTeamBanner && (
+          <>
             <div
-              className="hidden min-w-[220px] rounded-xl border px-4 py-2.5 lg:block"
+              className="hidden max-w-[308px] items-center gap-3.5 rounded-full border px-4 py-2.5 md:flex"
               style={{
                 borderColor: "rgba(148, 163, 184, 0.12)",
                 background: "rgba(255, 255, 255, 0.03)",
-                boxShadow: "none"
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)"
               }}
             >
-              <p
-                className="text-[10px] font-semibold uppercase tracking-[0.22em]"
-                style={{ color: COLORS.textColorSecondary }}
-              >
-                Текущая команда
-              </p>
-              <p className="mt-1 text-base font-semibold leading-tight text-white">
-                {teamName}
-              </p>
-              <p className="mt-1 text-[11px]" style={{ color: COLORS.textColorSecondary }}>
-                {user?.role === "staff" ? "Staff / Team" : "Player / Team"}
-              </p>
-            </div>
-          )}
-          {showTeamBanner && (
-            <div
-              className="max-w-[170px] rounded-lg border px-3 py-2 lg:hidden"
-              style={{
-                borderColor: "rgba(148, 163, 184, 0.12)",
-                backgroundColor: "rgba(255, 255, 255, 0.03)"
-              }}
-            >
-              <p className="truncate text-sm font-medium text-white">{teamName}</p>
-            </div>
-          )}
-          {showSoloBanner && (
-            <>
-              <div
-                className="hidden items-center gap-2 rounded-full border px-3.5 py-2 lg:inline-flex"
-                style={{
-                  borderColor: "rgba(96, 165, 250, 0.18)",
-                  background: "linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(255, 255, 255, 0.03) 72%)",
-                  boxShadow: "0 8px 18px rgba(2, 6, 23, 0.12)"
-                }}
-              >
-                <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-cyan-300/12 text-cyan-100">
-                  <Sparkles className="h-3.5 w-3.5" />
-                </span>
-                <div className="leading-tight">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em]" style={{ color: "#bfdbfe" }}>
-                    Solo аккаунт
-                  </p>
-                  <p className="text-xs" style={{ color: COLORS.textColorSecondary }}>
-                    Личный режим
-                  </p>
+              {teamLogo ? (
+                <img
+                  src={teamLogoUrl}
+                  alt={teamName}
+                  className="h-10 w-10 rounded-full border object-cover"
+                  style={{ borderColor: "rgba(148, 163, 184, 0.12)" }}
+                />
+              ) : (
+                <div
+                  className="flex h-10 w-10 items-center justify-center rounded-full border text-sm font-semibold text-white"
+                  style={{
+                    borderColor: "rgba(148, 163, 184, 0.12)",
+                    background: "rgba(255, 255, 255, 0.05)"
+                  }}
+                >
+                  {teamInitial}
                 </div>
-              </div>
-              <div
-                className="rounded-full border px-3 py-1.5 lg:hidden"
-                style={{
-                  borderColor: "rgba(96, 165, 250, 0.18)",
-                  background: "rgba(59, 130, 246, 0.1)"
-                }}
-              >
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "#bfdbfe" }}>
-                  Solo
+              )}
+              <div className="min-w-0 leading-tight">
+                <p className="truncate text-[15px] font-semibold text-white">{teamName}</p>
+                <p className="mt-1 truncate text-xs" style={{ color: COLORS.textColorSecondary }}>
+                  {teamRoleLabel}
                 </p>
               </div>
-            </>
-          )}
-        </div>
+            </div>
+            <div
+              className="max-w-[190px] rounded-full border px-3.5 py-2 md:hidden"
+              style={{
+                borderColor: "rgba(148, 163, 184, 0.12)",
+                backgroundColor: "rgba(255, 255, 255, 0.04)"
+              }}
+            >
+              <div className="flex items-center gap-2">
+                {teamLogo ? (
+                  <img
+                    src={teamLogoUrl}
+                    alt={teamName}
+                    className="h-7 w-7 rounded-full object-cover"
+                  />
+                ) : (
+                  <div
+                    className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold text-white"
+                    style={{ background: "rgba(255, 255, 255, 0.08)" }}
+                  >
+                    {teamInitial}
+                  </div>
+                )}
+                <p className="truncate text-[15px] font-medium text-white">{teamName}</p>
+              </div>
+            </div>
+          </>
+        )}
+        {showSoloBanner && (
+          <>
+            <div
+              className="hidden items-center gap-2.5 rounded-full border px-3.5 py-2 md:inline-flex"
+              style={{
+                borderColor: "rgba(96, 165, 250, 0.16)",
+                background: "rgba(59, 130, 246, 0.08)",
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)"
+              }}
+            >
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-cyan-300/12 text-cyan-100">
+                <Sparkles className="h-3.5 w-3.5" />
+              </span>
+              <div className="leading-tight">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "#bfdbfe" }}>
+                  Solo аккаунт
+                </p>
+                <p className="text-[11px]" style={{ color: COLORS.textColorSecondary }}>
+                  Личный режим
+                </p>
+              </div>
+            </div>
+            <div
+              className="rounded-full border px-3 py-1.5 md:hidden"
+              style={{
+                borderColor: "rgba(96, 165, 250, 0.18)",
+                background: "rgba(59, 130, 246, 0.1)"
+              }}
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "#bfdbfe" }}>
+                Solo
+              </p>
+            </div>
+          </>
+        )}
+        {!showTeamBanner && !showSoloBanner && (
+          <p
+            className="hidden text-[11px] font-medium uppercase tracking-[0.22em] md:block"
+            style={{ color: COLORS.textColorSecondary }}
+          >
+            Рабочее пространство
+          </p>
+        )}
       </div>
       
-      <div className="flex items-center space-x-3">
+      <div className="flex flex-shrink-0 items-center space-x-3">
         {user && (
           <div
             className="hidden xl:flex items-center gap-3.5 rounded-xl border px-4 py-2.5"
@@ -229,6 +258,27 @@ const Header = () => {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            {(user?.availableProfiles?.length || 0) > 1 && (
+              <>
+                {user?.availableProfiles?.map((profile) => {
+                  const isActive = profile.key === user.activeProfileKey;
+                  return (
+                    <DropdownMenuItem
+                      key={profile.key}
+                      onClick={() => {
+                        if (!isActive) {
+                          void switchProfile(profile.key);
+                        }
+                      }}
+                    >
+                      {isActive ? <Check className="mr-2 h-4 w-4" /> : <span className="mr-2 h-4 w-4" />}
+                      {profile.label}
+                    </DropdownMenuItem>
+                  );
+                })}
+                <DropdownMenuSeparator />
+              </>
+            )}
             <DropdownMenuItem onClick={() => navigate(ROUTES.PROFILE)}>
               <Settings className="mr-2 h-4 w-4" />
               Настройки

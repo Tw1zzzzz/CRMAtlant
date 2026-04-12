@@ -3,7 +3,7 @@ import TestEntry from '../models/TestEntry';
 import User from '../models/User';
 import SleepEntry from '../models/SleepEntry';
 import ScreenTime from '../models/ScreenTime';
-import { protect, isStaff } from '../middleware/auth';
+import { protect, isStaff, hasPerformanceCoachCrmSubscription } from '../middleware/auth';
 import {
   buildVisiblePlayersFilter,
   canAccessTargetUser,
@@ -130,7 +130,7 @@ router.get('/my/latest', protect, async (req: any, res) => {
   }
 });
 
-router.get('/team-summary', protect, isStaff, async (req: any, res) => {
+router.get('/team-summary', protect, isStaff, hasPerformanceCoachCrmSubscription, async (req: any, res) => {
   try {
     const from = req.query.from ? new Date(req.query.from) : null;
     const to = req.query.to ? new Date(req.query.to) : null;

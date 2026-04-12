@@ -10,6 +10,7 @@ import GameStatsForm from '@/components/forms/GameStatsForm';
 import { Sparkles, LayoutGrid, Table2 } from 'lucide-react';
 import { COLORS } from '@/styles/theme';
 import SubscriptionFeatureGate from '@/components/SubscriptionFeatureGate';
+import { PRODUCT_NAME } from '@/lib/productCopy';
 
 interface GameStatsFormData {
   date: string;
@@ -573,14 +574,14 @@ const GameStatsPage: React.FC = () => {
               }}
             >
               <Sparkles className="h-3.5 w-3.5" />
-              Performance Metrics
+              Игровая форма
             </div>
             <div className="space-y-2">
               <h1 className="text-3xl font-semibold md:text-4xl" style={{ color: COLORS.textColor }}>
-                Игровая статистика в более удобной аналитической витрине
+                Игровая статистика, связанная с общей формой игрока
               </h1>
               <p className="max-w-2xl text-sm leading-7 md:text-base" style={{ color: 'rgba(226, 232, 240, 0.82)' }}>
-                Тот же функционал ввода и та же логика расчётов, но с более понятной структурой: сверху фильтр и таблица для обзора, ниже форма для занесения матчевых показателей.
+                Раздел нужен не как отдельный продукт, а как часть CRM: здесь вы видите матчевые метрики по периоду и связываете игровой профиль с состоянием, ритмом и качеством формы.
               </p>
             </div>
           </div>
@@ -613,7 +614,7 @@ const GameStatsPage: React.FC = () => {
       <SubscriptionFeatureGate
         hasAccess={hasGameStatsAccess}
         title="Игровая статистика доступна после покупки"
-        description="После покупки тарифа откроются сводная витрина матчевых метрик, фильтры по периоду и форма для занесения игровых показателей."
+        description={`После покупки тарифа ${PRODUCT_NAME} откроются сводная витрина матчевых метрик, фильтры по периоду и форма для занесения игровых показателей.`}
         minHeightClassName="min-h-[980px]"
       >
       <Card style={shellCardStyle}>

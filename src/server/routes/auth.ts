@@ -4,6 +4,9 @@ import {
   loginUser,
   getCurrentUser,
   updateCurrentUserProfile,
+  createPlayerProfile,
+  linkTeamProfile,
+  switchActiveProfile,
   forgotPassword,
   resetPassword,
   resendVerificationEmail,
@@ -50,6 +53,15 @@ router.get('/me', protect, getCurrentUser);
 
 // Обновление базового профиля текущего пользователя
 router.patch('/me', protect, updateCurrentUserProfile);
+
+// Добавление второго player-профиля к текущему аккаунту
+router.post('/profiles/player', protect, createPlayerProfile);
+
+// Привязка активного профиля к команде по team-коду
+router.post('/team-link', protect, linkTeamProfile);
+
+// Переключение активного профиля аккаунта
+router.post('/switch-profile', protect, switchActiveProfile);
 
 // Смена пароля в профиле
 router.post('/change-password', protect, authChangePasswordLimit, changePassword);
@@ -139,7 +151,7 @@ router.post('/avatar', protect, async (req, res) => {
             _updateTimestamp: Date.now() // Добавляем timestamp для решения проблем с кэшем
           },
           { new: true }
-        ).select('_id name email role playerType privilegeKey subscription completedTests completedBalanceWheel baselineAssessment avatar _updateTimestamp createdAt').lean();
+        ).select('_id name email isSuperAdmin isActive deactivatedAt deactivatedReason role playerType teamId teamName teamLogo privilegeKey profiles activeProfileKey subscription completedTests completedBalanceWheel baselineAssessment avatar _updateTimestamp createdAt').lean();
         
         if (!updatedUser) {
           console.error(`❌ Пользователь с ID ${userId} не найден`);

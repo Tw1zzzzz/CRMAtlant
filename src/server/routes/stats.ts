@@ -5,6 +5,7 @@ import SleepEntry from '../models/SleepEntry';
 import TestEntry from '../models/TestEntry';
 import User from '../models/User';
 import { protect, isStaff } from '../middleware/authMiddleware';
+import { hasPerformanceCoachCrmSubscription } from '../middleware/auth';
 import {
   buildVisiblePlayersFilter,
   canAccessTargetUser,
@@ -870,7 +871,7 @@ const getStateIndex = (entry: any): number | null => {
 };
 
 // Сводка влияния состояния игрока на результаты тестов
-router.get('/tests/state-impact', protect, async (req: any, res) => {
+router.get('/tests/state-impact', protect, hasPerformanceCoachCrmSubscription, async (req: any, res) => {
   try {
     const {
       from,

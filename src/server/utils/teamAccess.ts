@@ -37,6 +37,13 @@ export const buildVisiblePlayersFilter = (
   user: MinimalUser | null | undefined,
   extraFilter: Record<string, unknown> = {}
 ) => {
+  if (isTeamStaffUser(user) && !getScopedTeamId(user)) {
+    return {
+      ...extraFilter,
+      _id: { $in: [] },
+    };
+  }
+
   if (hasTeamScope(user)) {
     return {
       ...extraFilter,
@@ -56,6 +63,13 @@ export const buildVisibleStaffFilter = (
   user: MinimalUser | null | undefined,
   extraFilter: Record<string, unknown> = {}
 ) => {
+  if (isTeamStaffUser(user) && !getScopedTeamId(user)) {
+    return {
+      ...extraFilter,
+      _id: { $in: [] },
+    };
+  }
+
   if (hasTeamScope(user)) {
     return {
       ...extraFilter,
@@ -80,6 +94,10 @@ export const canAccessTargetUser = (
   }
 
   if (!hasTeamScope(requestUser)) {
+    if (isTeamStaffUser(requestUser) && !getScopedTeamId(requestUser)) {
+      return false;
+    }
+
     return true;
   }
 

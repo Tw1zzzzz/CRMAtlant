@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import ROUTES from "@/lib/routes";
 import { COLORS } from "@/styles/theme";
 import { cn } from "@/lib/utils";
+import { PRODUCT_NAME } from "@/lib/productCopy";
 
 type SubscriptionFeatureGateProps = {
   hasAccess: boolean;
@@ -76,9 +77,9 @@ const SubscriptionFeatureGate = ({
               backgroundColor: "rgba(6, 11, 23, 0.42)",
               borderColor: "rgba(191, 219, 254, 0.2)",
             }}
-          >
-            <Sparkles className="h-3.5 w-3.5" />
-            PerformanceCoach CRM
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+            {PRODUCT_NAME}
           </div>
 
           <div className="mx-auto mt-5 flex h-14 w-14 items-center justify-center rounded-2xl border" style={{ borderColor: "rgba(255,255,255,0.16)", backgroundColor: "rgba(255,255,255,0.08)" }}>
@@ -102,7 +103,7 @@ const SubscriptionFeatureGate = ({
                   boxShadow: "0 18px 50px -26px rgba(56, 189, 248, 0.95)",
                 }}
               >
-                {buttonText}
+                {buttonText === "Купить" ? "Открыть тарифы" : buttonText}
               </Button>
             </Link>
           </div>

@@ -21,6 +21,7 @@ import AddPlayerForm from "@/components/AddPlayerForm";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import axios from "axios";
+import PageIntro from "@/components/PageIntro";
 
 /**
  * SafeImage - компонент для безопасного отображения изображений с обработкой ошибок
@@ -2175,15 +2176,22 @@ const safeDeletePlayerCard = async (
       {/* Добавляем стили анимаций */}
       <style>{animationStyles}</style>
 
-      <span className="performance-eyebrow">Player Intelligence</span>
-      <h1 className="text-3xl font-bold mb-2 performance-title">
-        {isSoloPlayer ? "Моя карточка" : "Карточки игроков"}
-      </h1>
-      <p className="text-muted-foreground performance-subtitle mb-4">
-        {isSoloPlayer
-          ? "Ваша персональная карточка — контакты, карта развития и коммуникативная линия."
-          : "Создавайте и управляйте карточками игроков - добавляйте контакты и карты развития."}
-      </p>
+      <div className="mb-4">
+        <PageIntro
+          eyebrow={isSoloPlayer ? "Карточка игрока" : "Карточки команды"}
+          title={isSoloPlayer ? "Моя карточка: быстрый контекст по игроку" : "Карточки игроков: контекст для работы с командой"}
+          description={
+            isSoloPlayer
+              ? "Здесь собран ваш рабочий профиль: контакты, карта развития и контекст, который помогает быстрее понять себя без переходов по нескольким разделам."
+              : "Раздел нужен, чтобы staff не терял контекст по игрокам. Здесь собраны контакты, карта развития и материалы, связанные с общей CRM-логикой."
+          }
+          bullets={[
+            "Карточка дополняет аналитику контекстом",
+            "Используйте раздел перед решением или коммуникацией",
+            "Контакты, roadmap и mindmap лежат в одном месте",
+          ]}
+        />
+      </div>
 
       {/* Панель инструментов — только для стаффа */}
       {user?.role === "staff" && <div className="flex justify-between items-center mb-6">

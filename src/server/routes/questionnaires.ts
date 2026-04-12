@@ -7,18 +7,19 @@ import User from '../models/User';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { badRequest } from '../utils/apiError';
 import { findAccessiblePlayerById, isTeamStaffUser } from '../utils/teamAccess';
+import { resolveEffectiveSubscriptionAccess } from '../utils/subscriptionAccess';
 import {
   BASELINE_CS2_ROLES,
   BASELINE_ROUND_STRENGTHS,
   BASELINE_SIDE_PREFERENCES,
   buildBaselinePersonalitySummary,
+  maskBaselineAssessmentSummary,
   validateBaselineAnswers
 } from '../utils/baselineAssessment';
 
 const router = express.Router();
 
 router.use(protect);
-router.use(hasPerformanceCoachCrmSubscription);
 
 function parseDateOnly(dateStr?: string) {
   if (!dateStr) {
@@ -45,6 +46,11 @@ function calculateSleepHours(startTime?: string, endTime?: string) {
   if (start === null || end === null) return undefined;
   const diff = end >= start ? end - start : (24 * 60 - start) + end;
   return Number((diff / 60).toFixed(2));
+}
+
+async function hasPerformanceCoachCrmAccessForUser(user: any): Promise<boolean> {
+  const accessFlags = await resolveEffectiveSubscriptionAccess(user);
+  return Boolean(accessFlags.hasPerformanceCoachCrmAccess);
 }
 
 /**
@@ -190,9 +196,34 @@ router.post(
   })
 );
 
+router.get(
+  '/daily/status',
+  asyncHandler(async (req: any, res) => {
+    const day = parseDateOnly(req.query.date as string | undefined);
+    if (!day) throw badRequest('Некорректная date');
+
+    const nextDay = new Date(day);
+    nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+
+    const [sleepEntry, screenEntry] = await Promise.all([
+      SleepEntry.findOne({ userId: req.user._id, date: { $gte: day, $lt: nextDay } }).select('_id').lean(),
+      ScreenTime.findOne({ userId: req.user._id, date: { $gte: day, $lt: nextDay } }).select('_id').lean()
+    ]);
+
+    return res.json({
+      success: true,
+      date: day.toISOString().slice(0, 10),
+      sleepDone: Boolean(sleepEntry),
+      screenDone: Boolean(screenEntry),
+      completed: Boolean(sleepEntry && screenEntry)
+    });
+  })
+);
+
 // My daily questionnaire history (combined)
 router.get(
   '/daily/my',
+  hasPerformanceCoachCrmSubscription,
   asyncHandler(async (req: any, res) => {
     const dateFrom = parseDateOnly(req.query.dateFrom as string | undefined);
     const dateTo = parseDateOnly(req.query.dateTo as string | undefined) || new Date();
@@ -213,6 +244,7 @@ router.get(
 router.get(
   '/daily/player/:playerId',
   isStaff,
+  hasPerformanceCoachCrmSubscription,
   asyncHandler(async (req: any, res) => {
     const playerId = req.params.playerId;
     const dateFrom = parseDateOnly(req.query.dateFrom as string | undefined);
@@ -236,10 +268,11 @@ router.get(
   '/baseline/me',
   asyncHandler(async (req: any, res) => {
     const user = await User.findById(req.user._id).select('baselineAssessment').lean();
+    const accessFlags = await hasPerformanceCoachCrmAccessForUser(req.user);
 
     return res.json({
       success: true,
-      data: user?.baselineAssessment || null,
+      data: maskBaselineAssessmentSummary(user?.baselineAssessment || null, accessFlags),
       baselineAssessmentCompleted: Boolean(user?.baselineAssessment?.completedAt)
     });
   })
@@ -313,9 +346,11 @@ router.post(
       }
     ).select('baselineAssessment');
 
+    const accessFlags = await hasPerformanceCoachCrmAccessForUser(req.user);
+
     return res.json({
       success: true,
-      data: updatedUser?.baselineAssessment || null,
+      data: maskBaselineAssessmentSummary(updatedUser?.baselineAssessment || null, accessFlags),
       baselineAssessmentCompleted: true
     });
   })

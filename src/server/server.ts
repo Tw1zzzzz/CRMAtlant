@@ -36,6 +36,7 @@ import teamsRoutes from './routes/teams';
 import calendarRoutes from './routes/calendar';
 import paymentsRoutes from './routes/payments';
 import supportRoutes from './routes/support';
+import adminRoutes from './routes/admin';
 import { errorHandler } from './middleware/errorHandler';
 
 // Загрузка переменных окружения с явным указанием пути
@@ -201,6 +202,7 @@ app.use('/api/player-state', playerStateRoutes);
 app.use('/api/teams', teamsRoutes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/payments', paymentsRoutes);
+app.use('/api/admin', adminRoutes);
 app.use('/health', healthRoutes);
 
 // Специальный middleware для обработки статических изображений с заголовками против кэширования

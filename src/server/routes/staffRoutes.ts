@@ -7,6 +7,7 @@ import {
   getScopedTeamId,
   isTeamStaffUser,
 } from '../utils/teamAccess';
+import { applyActiveProfileProjection, getUserProfiles, upsertUserProfile } from '../utils/userProfiles';
 
 const router = express.Router();
 
@@ -89,13 +90,22 @@ router.patch('/:id/privileges', hasPrivilegeKey, async (req, res) => {
     const validPrivilegeKey = process.env.STAFF_PRIVILEGE_KEY || 'ADMIN_ACCESS_2024_SECURE_KEY_xyz789';
     if (!validPrivilegeKey) {
       return res.status(500).json({ 
-        message: 'Ошибка конфигурации сервера: не задан ключ привилегий' 
+        message: 'Ошибка конфигурации сервера: не задан ключ доступа для staff' 
       });
     }
 
     // В зависимости от действия, устанавливаем или удаляем ключ привилегий
     if (grantPrivileges) {
       targetStaff.privilegeKey = validPrivilegeKey;
+      targetStaff.profiles = getUserProfiles(targetStaff).map((profile) =>
+        profile.role === 'staff'
+          ? {
+              ...profile,
+              privilegeKey: validPrivilegeKey,
+            }
+          : profile
+      ) as any;
+      applyActiveProfileProjection(targetStaff);
       await targetStaff.save();
       return res.json({ 
         message: 'Привилегии сотруднику успешно предоставлены', 
@@ -103,6 +113,15 @@ router.patch('/:id/privileges', hasPrivilegeKey, async (req, res) => {
       });
     } else {
       targetStaff.privilegeKey = '';
+      targetStaff.profiles = getUserProfiles(targetStaff).map((profile) =>
+        profile.role === 'staff'
+          ? {
+              ...profile,
+              privilegeKey: '',
+            }
+          : profile
+      ) as any;
+      applyActiveProfileProjection(targetStaff);
       await targetStaff.save();
       return res.json({ 
         message: 'Привилегии сотрудника успешно отозваны', 
@@ -149,15 +168,38 @@ router.post('/', hasPrivilegeKey, async (req, res) => {
       email,
       password,
       role: 'staff',
+      profiles: [
+        {
+          key: 'staff_team',
+          label: isTeamStaff ? 'Стафф / Team' : 'Стафф / Team',
+          role: 'staff',
+          playerType: 'team',
+          teamId: isTeamStaff ? teamId : null,
+          teamName: isTeamStaff ? (req.user.teamName || '') : '',
+          teamLogo: isTeamStaff ? (req.user.teamLogo || '') : '',
+          privilegeKey: '',
+        }
+      ],
+      activeProfileKey: 'staff_team',
       ...(isTeamStaff
         ? {
             playerType: 'team',
             teamId,
             teamName: req.user.teamName || '',
+            teamLogo: req.user.teamLogo || '',
           }
         : {})
     });
 
+    newStaff.profiles = upsertUserProfile(newStaff, {
+      role: 'staff',
+      playerType: 'team',
+      teamId: isTeamStaff ? teamId : null,
+      teamName: isTeamStaff ? (req.user.teamName || '') : '',
+      teamLogo: isTeamStaff ? (req.user.teamLogo || '') : '',
+      privilegeKey: ''
+    }) as any;
+    applyActiveProfileProjection(newStaff);
     await newStaff.save();
 
     // Возвращаем созданного сотрудника (без пароля)

@@ -237,7 +237,7 @@ const PlayersManagement = () => {
             <CardDescription style={{ color: COLORS.textColorSecondary }}>
               {isTeamStaff
                 ? "Для этого профиля уже должен быть открыт доступ к управлению своей командой"
-                : "Для управления составом участников требуется ключ привилегий"}
+                : "Для управления составом участников требуется ключ доступа для staff"}
             </CardDescription>
           </CardHeader>
           <CardContent className="py-4">
@@ -246,7 +246,7 @@ const PlayersManagement = () => {
               <p className="text-center" style={{ color: COLORS.textColor }}>
                 {isTeamStaff
                   ? "Если экран открылся без доступа, значит профиль еще не привязан к команде."
-                  : "Для получения доступа к управлению игроками необходимо добавить ключ привилегий в вашем профиле."}
+                  : "Для получения доступа к управлению игроками необходимо добавить ключ доступа для staff в вашем профиле."}
               </p>
               <Button 
                 onClick={() => navigate("/profile")}

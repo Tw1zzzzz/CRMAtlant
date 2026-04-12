@@ -118,7 +118,7 @@ export const sendPasswordResetEmail = async ({
   const greetingName = name || 'пользователь';
 
   const { error } = await resend.emails.send({
-    from: process.env.MAIL_FROM || 'PerformanceCoach <onboarding@resend.dev>',
+    from: process.env.MAIL_FROM || 'Performance CRM <onboarding@resend.dev>',
     to: email,
     subject: 'Сброс пароля в Performance CRM',
     text: [
@@ -159,7 +159,7 @@ export const sendVerificationEmail = async ({
   const greetingName = name || 'пользователь';
 
   const { error } = await resend.emails.send({
-    from: process.env.MAIL_FROM || 'PerformanceCoach <onboarding@resend.dev>',
+    from: process.env.MAIL_FROM || 'Performance CRM <onboarding@resend.dev>',
     to: email,
     subject: 'Подтверждение регистрации в Performance CRM',
     text: [

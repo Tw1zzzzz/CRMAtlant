@@ -9,6 +9,8 @@ export interface AuthRequest extends Request {
     role: string;
     name: string;
     email: string;
+    isSuperAdmin?: boolean;
+    isActive?: boolean;
     playerType?: string;
     teamId?: mongoose.Types.ObjectId | string | null;
     teamName?: string;

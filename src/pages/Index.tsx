@@ -11,6 +11,13 @@ import ROUTES from "@/lib/routes";
 import SupportRequestDialog from "@/components/SupportRequestDialog";
 import atlantTechnologyLogo from "@/assets/atlant-technology-logo.jpg";
 import atlantTechnologyMark from "@/assets/atlant-technology-mark.png";
+import {
+  PRODUCT_BRAND_NAME,
+  PRODUCT_DESCRIPTOR,
+  PRODUCT_NAME,
+  PRODUCT_PLAYER_JOURNEY,
+  PRODUCT_STAFF_JOURNEY,
+} from "@/lib/productCopy";
 
 interface LoginFormState {
   email: string;
@@ -29,15 +36,15 @@ interface RegisterFormState {
 type RegisterMode = "solo" | "team";
 
 const heroHighlights = [
-  "Персональный трекинг состояния игроков",
-  "Быстрая регистрация для solo и team",
-  "Удобный onboarding через Faceit и код команды",
+  "Сначала видно, что происходит с формой, а не где какой модуль находится.",
+  "Игрок быстро понимает своё состояние, staff — ситуацию по команде и зонам риска.",
+  "Оплата расширяет разбор и историю, но не скрывает весь смысл продукта.",
 ];
 
 const platformMetrics = [
-  { value: "24/7", label: "Доступ к данным и прогрессу" },
-  { value: "Solo", label: "Режим для индивидуальных игроков" },
-  { value: "Team", label: "Подключение состава и staff" },
+  { value: "1", label: "понятное обещание продукта" },
+  { value: "2", label: "сценария входа: игрок и staff" },
+  { value: "3", label: "первых шага до полезного сигнала" },
 ];
 
 const leftColumnFontFamily = "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
@@ -194,7 +201,7 @@ const Index: React.FC = () => {
         <div className="grid w-full items-center gap-8 lg:grid-cols-[1.1fr_0.9fr] xl:gap-14">
           <div className="space-y-8" style={{ fontFamily: leftColumnFontFamily }}>
             <div className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.3em] text-sky-200 backdrop-blur-sm">
-              Atlant Technology
+              {PRODUCT_BRAND_NAME}
             </div>
 
             <div className="max-w-2xl space-y-6">
@@ -202,39 +209,38 @@ const Index: React.FC = () => {
                 <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-lg shadow-sky-900/20">
                   <img
                     src={atlantTechnologyLogo}
-                    alt="Atlant Technology"
+                    alt={PRODUCT_BRAND_NAME}
                     className="h-full w-full object-cover"
                   />
                 </div>
                 <div>
                   <p className="text-sm font-medium uppercase tracking-[0.28em] text-sky-200/90">
-                    Esports Platform
+                    {PRODUCT_BRAND_NAME}
                   </p>
                   <p className="mt-2 text-2xl font-semibold text-white">
-                    Performance Hub
+                    {PRODUCT_NAME}
                   </p>
                 </div>
               </div>
 
               <div className="space-y-4">
                 <h1 className="max-w-2xl text-4xl leading-tight text-white sm:text-5xl lg:text-6xl">
-                  Регистрация и вход в экосистему{" "}
+                  Понимайте состояние игроков и команды в{" "}
                   <span className="font-heading bg-gradient-to-r from-sky-300 via-blue-400 to-cyan-300 bg-clip-text text-transparent">
-                    Atlant Technology
+                    {PRODUCT_NAME}
                   </span>
                 </h1>
                 <p className="max-w-xl text-base leading-7 text-slate-300 sm:text-lg">
-                  Платформа для мониторинга состояния игроков, прогресса команды и ежедневной аналитики.
-                  Для командного доступа используйте код, который выдал тренер, админ или другой участник staff.
+                  {PRODUCT_DESCRIPTOR}. Сначала система помогает увидеть форму и риск-сигналы, а уже потом уводит в доступы, модули и оплату.
                 </p>
                 <div className="max-w-xl rounded-[24px] border border-white/10 bg-white/[0.045] p-4 shadow-lg shadow-slate-950/20 backdrop-blur-md">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="space-y-1.5">
                       <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-sky-200/85">
-                        Тарифы и доступ
+                        Что вы получите
                       </p>
                       <p className="text-sm leading-6 text-slate-200">
-                        Сначала создайте аккаунт, а тариф можно выбрать и оплатить уже после входа в кабинет.
+                        Игрок получает понятный личный контур формы. Staff — обзор команды и игроков, которым нужно внимание. Тарифы расширяют инсайт, а не скрывают базовую пользу.
                       </p>
                     </div>
                     <Button
@@ -243,7 +249,7 @@ const Index: React.FC = () => {
                       className="shrink-0 border-white/15 bg-white/5 text-white hover:bg-white/10 hover:text-white"
                       onClick={() => setAuthTab("register")}
                     >
-                      Начать с регистрации
+                      Перейти к входу
                     </Button>
                   </div>
                 </div>
@@ -265,7 +271,7 @@ const Index: React.FC = () => {
             <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
               <div className="rounded-[28px] border border-sky-400/20 bg-gradient-to-br from-sky-500/14 via-slate-900/70 to-slate-900/90 p-6 shadow-2xl shadow-sky-950/20 backdrop-blur-md">
                 <p className="text-sm font-semibold uppercase tracking-[0.28em] text-sky-200">
-                  Что внутри
+                  Что делает продукт понятным
                 </p>
                 <div className="mt-4 space-y-3">
                   {heroHighlights.map((item) => (
@@ -282,20 +288,20 @@ const Index: React.FC = () => {
 
               <div className="rounded-[28px] border border-white/10 bg-black/20 p-6 shadow-2xl shadow-black/25 backdrop-blur-md">
                 <p className="text-sm font-semibold uppercase tracking-[0.28em] text-slate-300">
-                  Быстрый старт
+                  Что произойдёт после входа
                 </p>
                 <div className="mt-5 space-y-5">
                   <div>
-                    <p className="text-sm text-slate-400">1. Выберите режим</p>
-                    <p className="mt-1 text-base font-medium text-white">Solo для игрока или Team для состава и staff</p>
+                    <p className="text-sm text-slate-400">1. Откроется понятный старт</p>
+                    <p className="mt-1 text-base font-medium text-white">Игрок увидит быстрый старт по форме, staff — обзор команды и ближайшие сигналы риска</p>
                   </div>
                   <div>
-                    <p className="text-sm text-slate-400">2. Заполните форму</p>
-                    <p className="mt-1 text-base font-medium text-white">Email, пароль, имя и при необходимости ссылка Faceit</p>
+                    <p className="text-sm text-slate-400">2. CRM соберёт первые сигналы</p>
+                    <p className="mt-1 text-base font-medium text-white">{PRODUCT_PLAYER_JOURNEY[1]}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-slate-400">3. Подтвердите почту</p>
-                    <p className="mt-1 text-base font-medium text-white">После этого можно сразу перейти к дашборду</p>
+                    <p className="text-sm text-slate-400">3. Дальше — расширение инсайта</p>
+                    <p className="mt-1 text-base font-medium text-white">{PRODUCT_STAFF_JOURNEY[2]}</p>
                   </div>
                 </div>
               </div>
@@ -310,19 +316,19 @@ const Index: React.FC = () => {
                     <div className="h-12 w-12 overflow-hidden rounded-2xl bg-white p-1 shadow-md shadow-sky-950/30">
                       <img
                         src={atlantTechnologyMark}
-                        alt="Логотип Atlant Technology"
+                        alt={`Логотип ${PRODUCT_BRAND_NAME}`}
                         className="h-full w-full rounded-xl object-contain"
                       />
                     </div>
                     <div>
                       <p className="text-sm font-semibold uppercase tracking-[0.24em] text-sky-200">
-                        Atlant Technology
+                        {PRODUCT_BRAND_NAME}
                       </p>
-                      <p className="text-sm text-slate-300">Вход и регистрация в системе</p>
+                      <p className="text-sm text-slate-300">{PRODUCT_NAME}: вход и регистрация</p>
                     </div>
                   </div>
                   <div className="hidden rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-xs font-medium text-emerald-200 sm:block">
-                    Secure access
+                    Безопасный вход
                   </div>
                 </div>
 
@@ -403,7 +409,7 @@ const Index: React.FC = () => {
                       <CardHeader className="space-y-2">
                         <CardTitle className="text-2xl text-white">Создание аккаунта</CardTitle>
                         <CardDescription className="text-slate-300">
-                          Выберите solo или командный доступ и заполните форму ниже.
+                          Сначала выберите сценарий: личный путь игрока или командный доступ для staff и состава.
                         </CardDescription>
                       </CardHeader>
                       <form onSubmit={handleRegister}>
@@ -418,7 +424,7 @@ const Index: React.FC = () => {
                               onClick={() => setRegisterMode("solo")}
                               disabled={loading}
                             >
-                              Solo
+                              Я игрок
                             </Button>
                             <Button
                               type="button"
@@ -429,7 +435,7 @@ const Index: React.FC = () => {
                               onClick={() => setRegisterMode("team")}
                               disabled={loading}
                             >
-                              Team
+                              Командный доступ
                             </Button>
                           </div>
 

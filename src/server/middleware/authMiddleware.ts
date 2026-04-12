@@ -1,6 +1,6 @@
-import { protect, isStaff } from './auth';
+import { protect, isStaff, requireSuperAdmin } from './auth';
 
-export { protect, isStaff };
+export { protect, isStaff, requireSuperAdmin };
 
 export const authorize = (roles: string[]) => {
   return (req: any, res: any, next: any) => {

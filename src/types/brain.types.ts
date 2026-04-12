@@ -42,7 +42,7 @@ export interface BrainAttemptResult {
   domain: string;
   validityStatus: 'valid' | 'invalid';
   invalidReasons: string[];
-  rawCompositeScore: number;
+  rawCompositeScore: number | null;
   formScore: number | null;
   durationMs: number | null;
   derivedMetrics: Record<string, number | string | null>;

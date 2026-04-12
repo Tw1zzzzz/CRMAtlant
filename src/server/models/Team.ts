@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 
 export interface TeamDocument extends mongoose.Document {
   name: string;
+  logo: string;
   createdBy: mongoose.Types.ObjectId;
   playerLimit: number;
   playerInviteCodeHash: string;
@@ -20,6 +21,11 @@ const teamSchema = new mongoose.Schema<TeamDocument>(
       required: [true, 'Название команды обязательно'],
       trim: true,
       maxlength: [80, 'Название команды должно быть не длиннее 80 символов'],
+    },
+    logo: {
+      type: String,
+      default: '',
+      trim: true,
     },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,

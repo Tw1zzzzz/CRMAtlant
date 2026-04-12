@@ -10,9 +10,11 @@ const authController = read('controllers/authController.ts');
 const statsRoutes = read('routes/stats.ts');
 const calendarRoutes = read('routes/calendar.ts');
 const server = read('server.ts');
+const serverPackageJson = read('package.json');
 const testsModel = read('models/TestEntry.ts');
 const calendarEventModel = read('models/CalendarEvent.ts');
 const supportRoute = read('routes/support.ts');
+const adminRoute = read('routes/admin.ts');
 
 assert(
   authController.includes('signJwt('),
@@ -40,6 +42,11 @@ assert(
 );
 
 assert(
+  server.includes("app.use('/api/admin', adminRoutes)"),
+  'Server should register admin API routes'
+);
+
+assert(
   server.includes("app.use('/api/calendar', calendarRoutes)"),
   'Server should register calendar API routes'
 );
@@ -47,6 +54,23 @@ assert(
 assert(
   supportRoute.includes("router.post('/request'"),
   'Support routes should include request submission endpoint'
+);
+
+assert(
+  adminRoute.includes("router.get('/dashboard'") &&
+    adminRoute.includes("router.get('/users'") &&
+    adminRoute.includes("router.get('/teams'") &&
+    adminRoute.includes("router.post('/subscriptions/grant-user'") &&
+    adminRoute.includes("router.post('/subscriptions/grant-team'") &&
+    adminRoute.includes("router.post('/users/:id/send-password-reset'") &&
+    adminRoute.includes("router.patch('/users/:id/status'") &&
+    adminRoute.includes("router.get('/audit-log'"),
+  'Admin routes should expose dashboard, users, teams, subscriptions, password reset, status and audit log endpoints'
+);
+
+assert(
+  serverPackageJson.includes('"grant-superadmin"'),
+  'Server package scripts should expose grant-superadmin command'
 );
 
 assert(

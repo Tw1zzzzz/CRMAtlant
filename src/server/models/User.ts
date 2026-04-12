@@ -22,6 +22,17 @@ interface BaselineAssessment {
   };
 }
 
+interface UserProfile {
+  key: string;
+  label?: string;
+  role: string;
+  playerType: string;
+  teamId?: mongoose.Types.ObjectId | null;
+  teamName?: string;
+  teamLogo?: string;
+  privilegeKey?: string;
+}
+
 interface UserDocument extends mongoose.Document {
   name: string;
   email: string;
@@ -30,13 +41,20 @@ interface UserDocument extends mongoose.Document {
   emailVerifiedAt?: Date | null;
   emailVerificationTokenHash?: string | null;
   emailVerificationExpiresAt?: Date | null;
+  isSuperAdmin: boolean;
+  isActive: boolean;
+  deactivatedAt?: Date | null;
+  deactivatedReason?: string | null;
   role: string;
   playerType?: string;
   teamId?: mongoose.Types.ObjectId | null;
   teamName?: string;
+  teamLogo?: string;
   avatar?: string;
   faceitAccountId?: mongoose.Types.ObjectId;
   privilegeKey?: string;
+  profiles?: UserProfile[];
+  activeProfileKey?: string | null;
   subscription?: mongoose.Types.ObjectId | null;
   passwordResetTokenHash?: string | null;
   passwordResetExpiresAt?: Date | null;
@@ -92,6 +110,25 @@ const userSchema = new mongoose.Schema(
       default: null,
       select: false,
     },
+    isSuperAdmin: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
+      index: true,
+    },
+    deactivatedAt: {
+      type: Date,
+      default: null,
+    },
+    deactivatedReason: {
+      type: String,
+      default: null,
+      trim: true,
+    },
     role: {
       type: String,
       enum: ["player", "staff"],
@@ -112,6 +149,11 @@ const userSchema = new mongoose.Schema(
       default: '',
       trim: true,
     },
+    teamLogo: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     avatar: {
       type: String,
       default: "",
@@ -124,6 +166,57 @@ const userSchema = new mongoose.Schema(
     privilegeKey: {
       type: String,
       default: "",
+    },
+    profiles: {
+      type: [
+        {
+          key: {
+            type: String,
+            required: true,
+            trim: true,
+          },
+          label: {
+            type: String,
+            default: '',
+            trim: true,
+          },
+          role: {
+            type: String,
+            enum: ["player", "staff"],
+            required: true,
+          },
+          playerType: {
+            type: String,
+            enum: ["solo", "team"],
+            required: true,
+          },
+          teamId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Team',
+            default: null,
+          },
+          teamName: {
+            type: String,
+            default: '',
+            trim: true,
+          },
+          teamLogo: {
+            type: String,
+            default: '',
+            trim: true,
+          },
+          privilegeKey: {
+            type: String,
+            default: '',
+          },
+        }
+      ],
+      default: [],
+    },
+    activeProfileKey: {
+      type: String,
+      default: null,
+      trim: true,
     },
     subscription: {
       type: mongoose.Schema.Types.ObjectId,

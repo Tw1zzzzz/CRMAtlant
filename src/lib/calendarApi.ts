@@ -7,6 +7,16 @@ import type {
   CalendarEventUpsertPayload,
 } from "@/types";
 
+export const CALENDAR_EVENTS_UPDATED_EVENT = "crm:calendar-events-updated";
+
+export const notifyCalendarEventsUpdated = (): void => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.dispatchEvent(new Event(CALENDAR_EVENTS_UPDATED_EVENT));
+};
+
 export const getCalendarEvents = async (params: {
   scope: CalendarEventScope;
   from: string;

@@ -1,7 +1,8 @@
 import User from '../models/User';
 import { verifyJwt } from '../utils/jwt';
 import { resolveEffectiveSubscriptionAccess } from '../utils/subscriptionAccess';
-import { isTeamStaffUser } from '../utils/teamAccess';
+import { getScopedTeamId, isTeamStaffUser } from '../utils/teamAccess';
+import { applyActiveProfileProjection } from '../utils/userProfiles';
 
 const PRIMARY_JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 const LEGACY_JWT_SECRET = 'your-secret-key';
@@ -44,6 +45,16 @@ export const protect = async (req: any, res: any, next: any) => {
         return res.status(401).json({ message: 'Пользователь не найден' });
       }
 
+      if (req.user.isActive === false) {
+        console.log(`[AUTH] Доступ запрещен: аккаунт ${req.user.email} деактивирован`);
+        return res.status(401).json({
+          message: 'Аккаунт заблокирован. Обратитесь к администратору.',
+          code: 'ACCOUNT_BLOCKED'
+        });
+      }
+
+      applyActiveProfileProjection(req.user);
+
       if (decoded.iat && req.user.passwordChangedAt instanceof Date) {
         const tokenIssuedAtMs = decoded.iat * 1000;
         const passwordChangedAtMs = req.user.passwordChangedAt.getTime();
@@ -72,6 +83,18 @@ export const protect = async (req: any, res: any, next: any) => {
   }
 };
 
+export const requireSuperAdmin = (req: any, res: any, next: any) => {
+  if (!req.user) {
+    return res.status(401).json({ message: 'Пользователь не авторизован' });
+  }
+
+  if (req.user.isSuperAdmin !== true) {
+    return res.status(403).json({ message: 'Доступ разрешен только супер-администратору' });
+  }
+
+  return next();
+};
+
 // Middleware для проверки роли Staff
 export const isStaff = (req: any, res: any, next: any) => {
   if (req.user && req.user.role === 'staff') {
@@ -87,9 +110,16 @@ export const isStaff = (req: any, res: any, next: any) => {
 export const hasPrivilegeKey = (req: any, res: any, next: any) => {
   try {
     if (req.user && req.user.role === 'staff') {
-      if (isTeamStaffUser(req.user)) {
+      if (isTeamStaffUser(req.user) && getScopedTeamId(req.user)) {
         console.log(`[AUTH] Team-staff доступ к управлению своей командой разрешен без ключа привилегий`);
         return next();
+      }
+
+      if (isTeamStaffUser(req.user) && !getScopedTeamId(req.user)) {
+        return res.status(403).json({
+          message: 'Сначала создайте команду или присоединитесь к существующей по staff-коду',
+          requiresTeamSetup: true
+        });
       }
 
       // Получаем корректный ключ привилегий из переменных окружения или используем fallback значение
@@ -112,7 +142,7 @@ export const hasPrivilegeKey = (req: any, res: any, next: any) => {
       } else {
         console.log(`[AUTH] Доступ запрещен: неверный ключ привилегий или его отсутствие`);
         return res.status(403).json({ 
-          message: 'Нет доступа для редактирования состава участников. Требуется действительный ключ привилегий.',
+          message: 'Нет доступа для редактирования состава участников. Требуется действительный ключ доступа для staff.',
           requiresPrivilegeKey: true
         });
       }
@@ -141,9 +171,9 @@ export const hasPerformanceCoachCrmSubscription = async (req: any, res: any, nex
     }
 
     return res.status(403).json({
-      message: 'Требуется активная подписка PerformanceCoach CRM',
+      message: 'Требуется активная подписка Performance CRM',
       requiresSubscription: true,
-      requiredPlan: 'PerformanceCoach CRM',
+      requiredPlan: 'Performance CRM',
     });
   } catch (error) {
     console.error('[AUTH] Ошибка при проверке подписки PerformanceCoach CRM:', error);

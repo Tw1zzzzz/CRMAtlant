@@ -8,8 +8,10 @@ import { protect, isStaff, hasPrivilegeKey } from '../middleware/auth';
 import {
   buildVisiblePlayersFilter,
   findAccessiblePlayerById,
+  getScopedTeamId,
   isTeamStaffUser,
 } from '../utils/teamAccess';
+import { applyActiveProfileProjection, getUserProfiles } from '../utils/userProfiles';
 
 const router = express.Router();
 
@@ -226,11 +228,7 @@ router.post('/update-privilege-key', protect, isStaff, async (req: any, res) => 
     
     // РћР±РЅРѕРІР»СЏРµРј РєР»СЋС‡ РїСЂРёРІРёР»РµРіРёР№ С‚РѕР»СЊРєРѕ РµСЃР»Рё РѕРЅ РІР°Р»РёРґРЅС‹Р№
     if (isKeyValid) {
-      const updatedUser = await User.findByIdAndUpdate(
-        userId,
-        { privilegeKey },
-        { new: true }
-      ).select('-password');
+      const updatedUser = await User.findById(userId).select('-password');
 
       if (!updatedUser) {
         return res.status(404).json({ 
@@ -238,6 +236,18 @@ router.post('/update-privilege-key', protect, isStaff, async (req: any, res) => 
           success: false 
         });
       }
+
+      updatedUser.privilegeKey = privilegeKey;
+      updatedUser.profiles = getUserProfiles(updatedUser).map((profile) =>
+        profile.role === 'staff'
+          ? {
+              ...profile,
+              privilegeKey,
+            }
+          : profile
+      ) as any;
+      applyActiveProfileProjection(updatedUser);
+      await updatedUser.save();
 
       console.log('Privilege key updated successfully');
       return res.json({
@@ -272,7 +282,7 @@ router.post('/update-privilege-key', protect, isStaff, async (req: any, res) => 
 // Check if staff has privilege key
 router.get('/check-privilege', protect, isStaff, async (req: any, res) => {
   try {
-    const hasPrivilege = isTeamStaffUser(req.user) ||
+    const hasPrivilege = (isTeamStaffUser(req.user) && Boolean(getScopedTeamId(req.user))) ||
       Boolean(req.user && req.user.privilegeKey && req.user.privilegeKey.trim() !== '');
     
     return res.json({

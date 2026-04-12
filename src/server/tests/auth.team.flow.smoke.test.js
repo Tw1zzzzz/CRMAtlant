@@ -41,7 +41,10 @@ assert(
 assert(
   authRoutes.includes("router.post('/resend-verification'") &&
     authRoutes.includes("router.post('/verify-email'") &&
-    authRoutes.includes("router.post('/change-password'"),
+    authRoutes.includes("router.post('/change-password'") &&
+    authRoutes.includes("router.post('/profiles/player'") &&
+    authRoutes.includes("router.post('/team-link'") &&
+    authRoutes.includes("router.post('/switch-profile'"),
   'Auth routes should register email verification and password change endpoints'
 );
 
@@ -53,22 +56,27 @@ assert(
     userModel.includes('emailVerificationExpiresAt') &&
     userModel.includes('passwordChangedAt') &&
     userModel.includes('teamId') &&
-    userModel.includes('teamName'),
-  'User model should include password reset, email verification and team fields'
+    userModel.includes('teamName') &&
+    userModel.includes('teamLogo') &&
+    userModel.includes('profiles') &&
+    userModel.includes('activeProfileKey'),
+  'User model should include password reset, email verification, team and multi-profile fields'
 );
 
 assert(
   teamModel.includes('playerInviteCodeHash') &&
     teamModel.includes('staffInviteCodeHash') &&
-    teamModel.includes('playerLimit'),
-  'Team model should define invite code hashes and player limit'
+    teamModel.includes('playerLimit') &&
+    teamModel.includes('logo'),
+  'Team model should define invite code hashes, player limit and team logo'
 );
 
 assert(
   teamsRoutes.includes("router.post('/:id/regenerate-player-code'") &&
     teamsRoutes.includes("router.post('/:id/regenerate-staff-code'") &&
-    teamsRoutes.includes("router.get('/:id/members'"),
-  'Teams routes should expose code rotation and members endpoints'
+    teamsRoutes.includes("router.get('/:id/members'") &&
+    teamsRoutes.includes("router.patch('/:id/branding'"),
+  'Teams routes should expose code rotation, members and branding endpoints'
 );
 
 console.log('Auth/team flow smoke tests passed');

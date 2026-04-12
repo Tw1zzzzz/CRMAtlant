@@ -13,11 +13,10 @@ import {
 } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { User, LoginDto, CreateUserDto, AsyncState } from "@/types";
-import { authService, AuthResult } from "@/services/auth.service";
+import { User, LoginDto, CreatePlayerProfileDto, CreateUserDto, AsyncState, LinkTeamProfileDto } from "@/types";
+import { authService, AuthResult, TeamLinkResult } from "@/services/auth.service";
 import ROUTES from "@/lib/routes";
-
-const BASELINE_REGISTER_MODAL_FLAG = "baselineAssessmentAfterRegister";
+import { BASELINE_REGISTER_MODAL_FLAG, POST_REGISTER_WELCOME_FLAG } from "@/lib/onboarding";
 
 /**
  * Тип контекста аутентификации
@@ -33,6 +32,9 @@ interface AuthContextType {
   resendVerificationEmail: (email: string) => Promise<{ success: boolean; error?: string }>;
   verifyEmail: (token: string) => Promise<{ success: boolean; error?: string }>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
+  createPlayerProfile: (payload: CreatePlayerProfileDto) => Promise<AuthResult>;
+  linkTeamProfile: (payload: LinkTeamProfileDto) => Promise<TeamLinkResult>;
+  switchProfile: (profileKey: string) => Promise<AuthResult>;
   logout: () => void;
   deleteAccount: () => Promise<void>;
   updateAvatar: (file: File) => Promise<AuthResult>;
@@ -53,6 +55,9 @@ const defaultContextValue: AuthContextType = {
   resendVerificationEmail: async () => ({ success: false, error: 'Context not initialized' }),
   verifyEmail: async () => ({ success: false, error: 'Context not initialized' }),
   changePassword: async () => ({ success: false, error: 'Context not initialized' }),
+  createPlayerProfile: async () => ({ success: false, error: 'Context not initialized' }),
+  linkTeamProfile: async () => ({ success: false, error: 'Context not initialized' }),
+  switchProfile: async () => ({ success: false, error: 'Context not initialized' }),
   logout: () => {},
   deleteAccount: async () => {},
   updateAvatar: async () => ({ success: false, error: 'Context not initialized' }),
@@ -123,6 +128,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       if (result.success && result.user) {
         sessionStorage.removeItem(BASELINE_REGISTER_MODAL_FLAG);
+        sessionStorage.removeItem(POST_REGISTER_WELCOME_FLAG);
         setAuthState({
           data: result.user,
           loading: false,
@@ -167,7 +173,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const result = await authService.register(userData);
       
       if (result.success && result.user) {
-        sessionStorage.setItem(BASELINE_REGISTER_MODAL_FLAG, "1");
+        sessionStorage.setItem(POST_REGISTER_WELCOME_FLAG, "1");
+        if (result.user.role === "player") {
+          sessionStorage.setItem(BASELINE_REGISTER_MODAL_FLAG, "1");
+        } else {
+          sessionStorage.removeItem(BASELINE_REGISTER_MODAL_FLAG);
+        }
         setAuthState({
           data: result.user,
           loading: false,
@@ -180,6 +191,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         navigate(ROUTES.DASHBOARD);
       } else if (result.success) {
         sessionStorage.removeItem(BASELINE_REGISTER_MODAL_FLAG);
+        sessionStorage.removeItem(POST_REGISTER_WELCOME_FLAG);
         setAuthState(prev => ({
           ...prev,
           loading: false,
@@ -264,6 +276,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     if (result.success) {
       sessionStorage.removeItem(BASELINE_REGISTER_MODAL_FLAG);
+      sessionStorage.removeItem(POST_REGISTER_WELCOME_FLAG);
       authService.logout();
       setAuthState({
         data: null,
@@ -282,11 +295,120 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [navigate]);
 
+  const createPlayerProfile = useCallback(async (payload: CreatePlayerProfileDto): Promise<AuthResult> => {
+    setAuthState(prev => ({ ...prev, loading: true, error: null }));
+
+    try {
+      const result = await authService.createPlayerProfile(payload);
+
+      if (result.success && result.user) {
+        setAuthState({
+          data: result.user,
+          loading: false,
+          error: null
+        });
+        toast.success(result.message || 'Профиль игрока добавлен');
+      } else {
+        setAuthState(prev => ({
+          ...prev,
+          loading: false,
+          error: result.error || 'Не удалось добавить профиль игрока'
+        }));
+        toast.error(result.error || 'Не удалось добавить профиль игрока');
+      }
+
+      return result;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Неизвестная ошибка';
+      setAuthState(prev => ({
+        ...prev,
+        loading: false,
+        error: errorMessage
+      }));
+      toast.error(errorMessage);
+      return { success: false, error: errorMessage };
+    }
+  }, []);
+
+  const linkTeamProfile = useCallback(async (payload: LinkTeamProfileDto): Promise<TeamLinkResult> => {
+    setAuthState(prev => ({ ...prev, loading: true, error: null }));
+
+    try {
+      const result = await authService.linkTeamProfile(payload);
+
+      if (result.success && result.status === 'linked' && result.user) {
+        setAuthState({
+          data: result.user,
+          loading: false,
+          error: null
+        });
+      } else if (result.success && result.status === 'confirmation_required') {
+        setAuthState(prev => ({
+          ...prev,
+          loading: false,
+          error: null
+        }));
+      } else {
+        setAuthState(prev => ({
+          ...prev,
+          loading: false,
+          error: result.error || 'Не удалось привязать профиль к команде'
+        }));
+      }
+
+      return result;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Неизвестная ошибка';
+      setAuthState(prev => ({
+        ...prev,
+        loading: false,
+        error: errorMessage
+      }));
+      return { success: false, error: errorMessage };
+    }
+  }, []);
+
+  const switchProfile = useCallback(async (profileKey: string): Promise<AuthResult> => {
+    setAuthState(prev => ({ ...prev, loading: true, error: null }));
+
+    try {
+      const result = await authService.switchProfile(profileKey);
+
+      if (result.success && result.user) {
+        setAuthState({
+          data: result.user,
+          loading: false,
+          error: null
+        });
+        toast.success(result.message || 'Профиль переключен');
+      } else {
+        setAuthState(prev => ({
+          ...prev,
+          loading: false,
+          error: result.error || 'Не удалось переключить профиль'
+        }));
+        toast.error(result.error || 'Не удалось переключить профиль');
+      }
+
+      return result;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Неизвестная ошибка';
+      setAuthState(prev => ({
+        ...prev,
+        loading: false,
+        error: errorMessage
+      }));
+      toast.error(errorMessage);
+      return { success: false, error: errorMessage };
+    }
+  }, []);
+
   /**
    * Выход из системы
    */
   const logout = useCallback(() => {
     sessionStorage.removeItem(BASELINE_REGISTER_MODAL_FLAG);
+    sessionStorage.removeItem(POST_REGISTER_WELCOME_FLAG);
     authService.logout();
     setAuthState({
       data: null,
@@ -418,11 +540,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     resendVerificationEmail,
     verifyEmail,
     changePassword,
+    createPlayerProfile,
+    linkTeamProfile,
+    switchProfile,
     logout,
     deleteAccount,
     updateAvatar,
     refreshUser
-  }), [authState, login, register, requestPasswordReset, resetPassword, resendVerificationEmail, verifyEmail, changePassword, logout, deleteAccount, updateAvatar, refreshUser]);
+  }), [authState, login, register, requestPasswordReset, resetPassword, resendVerificationEmail, verifyEmail, changePassword, createPlayerProfile, linkTeamProfile, switchProfile, logout, deleteAccount, updateAvatar, refreshUser]);
 
   return (
     <AuthContext.Provider value={contextValue}>

@@ -2,12 +2,21 @@
 import Team from '../models/Team';
 import PlayerCard from '../models/PlayerCard';
 import FaceitAccount from '../models/FaceitAccount';
-import { sendPasswordResetEmail, sendVerificationEmail } from '../services/mailService';
+import { sendVerificationEmail } from '../services/mailService';
+import { issuePasswordResetForUser } from '../services/passwordResetService';
 import faceitService, { FaceitProfileInfo } from '../services/faceitService';
 import { createOpaqueToken, hashOpaqueToken } from '../utils/securityTokens';
 import { signJwt } from '../utils/jwt';
 import { buildSubscriptionSummary, hasPerformanceCoachCrmAccess, resolveEffectiveSubscriptionAccess } from '../utils/subscriptionAccess';
+import {
+  applyActiveProfileProjection,
+  getActiveProfile,
+  getUserProfiles,
+  serializeProfilesForResponse,
+  upsertUserProfile,
+} from '../utils/userProfiles';
 import mongoose from 'mongoose';
+import { maskBaselineAssessmentSummary } from '../utils/baselineAssessment';
 
 // Генерация JWT токена
 const generateToken = (id: string): string => {
@@ -42,9 +51,16 @@ const isDatabaseUnavailableError = (error: unknown): boolean => {
   );
 };
 
+const isFaceitOwnershipConflictError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return error.message === 'Этот Faceit-аккаунт уже привязан к другому игроку';
+};
+
 const normalizeText = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
 const isFaceitLink = (value: string): boolean => /^https?:\/\/(www\.)?faceit\.com\//i.test(value);
-const PASSWORD_RESET_TTL_MS = 15 * 60 * 1000;
 const EMAIL_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
 const EMAIL_VERIFICATION_SUCCESS_MESSAGE = 'Если аккаунт существует и email ещё не подтвержден, письмо уже отправлено';
 
@@ -58,6 +74,7 @@ const buildUserResponse = (
 ) => {
   const baselineAssessmentCompleted = Boolean(user?.baselineAssessment?.completedAt);
   const subscription = buildSubscriptionSummary(user?.subscription);
+  const activeProfile = getActiveProfile(user);
 
   return {
     _id: user._id,
@@ -65,13 +82,24 @@ const buildUserResponse = (
     email: user.email,
     emailVerified: Boolean(user.emailVerified),
     emailVerifiedAt: user.emailVerifiedAt || null,
-    role: user.role,
-    playerType: user.playerType,
-    teamId: user.teamId || null,
-    teamName: user.teamName || '',
+    isSuperAdmin: Boolean(user.isSuperAdmin),
+    isActive: user.isActive !== false,
+    deactivatedAt: user.deactivatedAt || null,
+    deactivatedReason: user.deactivatedReason || null,
+    role: activeProfile.role,
+    playerType: activeProfile.playerType,
+    teamId: activeProfile.teamId || null,
+    teamName: activeProfile.teamName || '',
+    teamLogo: activeProfile.teamLogo || '',
     avatar: user.avatar,
-    privilegeKey: user.privilegeKey,
-    staffHasPrivilegeKey: Boolean(user.role === 'staff' && typeof user.privilegeKey === 'string' && user.privilegeKey.trim()),
+    privilegeKey: activeProfile.privilegeKey,
+    staffHasPrivilegeKey: Boolean(
+      activeProfile.role === 'staff' &&
+        typeof activeProfile.privilegeKey === 'string' &&
+        activeProfile.privilegeKey.trim()
+    ),
+    availableProfiles: serializeProfilesForResponse(user),
+    activeProfileKey: activeProfile.key,
     subscription,
     hasPerformanceCoachCrmAccess: accessFlags.hasPerformanceCoachCrmAccess || hasPerformanceCoachCrmAccess(subscription),
     hasCorrelationAnalysisAccess: accessFlags.hasCorrelationAnalysisAccess,
@@ -80,7 +108,10 @@ const buildUserResponse = (
     completedBalanceWheel: user.completedBalanceWheel,
     createdAt: user.createdAt,
     baselineAssessmentCompleted,
-    baselineAssessment: user.baselineAssessment || null
+    baselineAssessment: maskBaselineAssessmentSummary(
+      user.baselineAssessment || null,
+      accessFlags.hasPerformanceCoachCrmAccess || hasPerformanceCoachCrmAccess(subscription)
+    )
   };
 };
 
@@ -94,6 +125,10 @@ const loadUserWithAccessData = async (userId: mongoose.Types.ObjectId | string) 
         model: 'Plan',
       },
     });
+
+  if (user) {
+    applyActiveProfileProjection(user);
+  }
 
   const accessFlags = user
     ? await resolveEffectiveSubscriptionAccess(user)
@@ -184,7 +219,7 @@ const findTeamByInviteCode = async (
 
   const hashedCode = hashOpaqueToken(normalizedCode);
   const teams = await Team.find({ isActive: true }).select(
-    '+playerInviteCodeHash +staffInviteCodeHash name playerLimit isActive'
+    '+playerInviteCodeHash +staffInviteCodeHash name logo playerLimit isActive'
   );
 
   for (const team of teams) {
@@ -219,14 +254,34 @@ const ensureTeamPlayerCapacity = async (teamId: mongoose.Types.ObjectId): Promis
   }
 };
 
-const getResetPasswordUrl = (token: string): string => {
-  const clientUrl = normalizeText(process.env.CLIENT_URL);
-  if (!clientUrl) {
-    throw new Error('CLIENT_URL не настроен');
+const toObjectIdString = (value: unknown): string => {
+  if (!value) {
+    return '';
   }
 
-  return `${clientUrl.replace(/\/+$/g, '')}/reset-password?token=${encodeURIComponent(token)}`;
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (value instanceof mongoose.Types.ObjectId) {
+    return value.toString();
+  }
+
+  if (typeof value === 'object' && value && 'toString' in value) {
+    return String(value.toString());
+  }
+
+  return '';
 };
+
+const sameObjectId = (left: unknown, right: unknown): boolean =>
+  Boolean(left && right && toObjectIdString(left) === toObjectIdString(right));
+
+const buildTeamLinkSummary = (team: any) => ({
+  id: toObjectIdString(team?._id),
+  name: team?.name || '',
+  logo: team?.logo || ''
+});
 
 const getVerifyEmailUrl = (token: string): string => {
   const clientUrl = normalizeText(process.env.CLIENT_URL);
@@ -297,7 +352,11 @@ export const registerUser = async (req: any, res: any) => {
     const validPlayerTypes = ['solo', 'team'];
     let finalPlayerType = validPlayerTypes.includes(rawPlayerType) ? rawPlayerType : 'solo';
     let finalRole: 'player' | 'staff' = 'player';
-    let teamAssignment: { teamId: mongoose.Types.ObjectId; teamName: string } | null = null;
+    let teamAssignment: {
+      teamId: mongoose.Types.ObjectId;
+      teamName: string;
+      teamLogo: string;
+    } | null = null;
 
     if (teamName) {
       return res.status(403).json({
@@ -322,6 +381,7 @@ export const registerUser = async (req: any, res: any) => {
       teamAssignment = {
         teamId: resolvedTeamAccess.team._id,
         teamName: resolvedTeamAccess.team.name,
+        teamLogo: resolvedTeamAccess.team.logo || '',
       };
     } else {
       if (requestedRole === 'staff') {
@@ -436,8 +496,27 @@ export const registerUser = async (req: any, res: any) => {
           ? {
               teamId: teamAssignment.teamId,
               teamName: teamAssignment.teamName,
+              teamLogo: teamAssignment.teamLogo,
             }
           : {}),
+        profiles: [
+          {
+            key: `${finalRole}_${finalPlayerType}`,
+            label:
+              finalRole === 'staff'
+                ? 'Стафф / Team'
+                : finalPlayerType === 'solo'
+                  ? 'Игрок / Solo'
+                  : 'Игрок / Team',
+            role: finalRole,
+            playerType: finalPlayerType,
+            teamId: teamAssignment?.teamId || null,
+            teamName: teamAssignment?.teamName || '',
+            teamLogo: teamAssignment?.teamLogo || '',
+            privilegeKey: finalRole === 'staff' ? '' : '',
+          },
+        ],
+        activeProfileKey: `${finalRole}_${finalPlayerType}`,
       };
       
       console.log(`[AuthController] Попытка создания пользователя с данными:`, {
@@ -581,37 +660,13 @@ export const forgotPassword = async (req: any, res: any) => {
       return res.json({ message: successMessage });
     }
 
-    const resetToken = createOpaqueToken(24);
-    const resetTokenHash = hashOpaqueToken(resetToken);
-    const resetExpiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
-
-    await User.updateOne(
-      { _id: user._id },
-      {
-        $set: {
-          passwordResetTokenHash: resetTokenHash,
-          passwordResetExpiresAt: resetExpiresAt,
-        },
-      }
-    );
-
     try {
-      await sendPasswordResetEmail({
+      await issuePasswordResetForUser({
+        _id: user._id,
         email: user.email,
         name: user.name,
-        resetUrl: getResetPasswordUrl(resetToken),
       });
     } catch (mailError) {
-      await User.updateOne(
-        { _id: user._id },
-        {
-          $set: {
-            passwordResetTokenHash: null,
-            passwordResetExpiresAt: null,
-          },
-        }
-      );
-
       console.error('[AuthController] Ошибка отправки письма для сброса пароля:', mailError);
       return res.status(503).json({
         message: 'Почтовая система временно недоступна. Попробуйте позже.'
@@ -880,13 +935,24 @@ export const updateCurrentUserProfile = async (req: any, res: any) => {
         return res.status(404).json({ success: false, message: 'FACEIT профиль не найден' });
       }
 
-      await linkFaceitAccountToUser(user._id, resolvedFaceitProfile);
-      await createPlayerCardForUser(
-        user._id,
-        user.name,
-        normalizedFaceitUrl,
-        resolvedFaceitProfile.nickname || ''
-      );
+      try {
+        await linkFaceitAccountToUser(user._id, resolvedFaceitProfile);
+        await createPlayerCardForUser(
+          user._id,
+          user.name,
+          normalizedFaceitUrl,
+          resolvedFaceitProfile.nickname || ''
+        );
+      } catch (error) {
+        if (isFaceitOwnershipConflictError(error)) {
+          return res.status(409).json({
+            success: false,
+            message: error.message
+          });
+        }
+
+        throw error;
+      }
 
       faceitUrlResponse = normalizedFaceitUrl;
     }
@@ -923,6 +989,324 @@ export const updateCurrentUserProfile = async (req: any, res: any) => {
     return res.status(500).json({
       success: false,
       message: 'Ошибка при обновлении профиля',
+      error: error instanceof Error ? error.message : 'Неизвестная ошибка'
+    });
+  }
+};
+
+export const createPlayerProfile = async (req: any, res: any) => {
+  try {
+    if (!req.user?._id) {
+      return res.status(401).json({ success: false, message: 'Пользователь не авторизован' });
+    }
+
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        success: false,
+        message: 'База данных инициализируется, повторите запрос через несколько секунд'
+      });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'Пользователь не найден' });
+    }
+
+    applyActiveProfileProjection(user);
+    const currentProfiles = getUserProfiles(user);
+    const existingPlayerProfile = currentProfiles.find((profile) => profile.role === 'player');
+
+    if (existingPlayerProfile) {
+      return res.status(409).json({
+        success: false,
+        message: 'Профиль игрока уже существует для этого аккаунта'
+      });
+    }
+
+    const requestedPlayerType = normalizeText(req.body?.playerType) === 'solo' ? 'solo' : 'team';
+    const faceitUrl = normalizeText(req.body?.faceitUrl || req.body?.faceit);
+    const nickname = normalizeText(req.body?.nickname);
+
+    if (!faceitUrl) {
+      return res.status(400).json({
+        success: false,
+        message: 'Для профиля игрока необходимо указать ссылку на Faceit'
+      });
+    }
+
+    if (!isFaceitLink(faceitUrl)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Укажите корректную ссылку на профиль Faceit'
+      });
+    }
+
+    let teamAssignment: { teamId: mongoose.Types.ObjectId | string; teamName: string; teamLogo: string } | null = null;
+    if (requestedPlayerType === 'team') {
+      const linkedTeamProfile = currentProfiles.find(
+        (profile) => profile.role === 'staff' && profile.playerType === 'team' && profile.teamId
+      );
+
+      if (!linkedTeamProfile) {
+        return res.status(400).json({
+          success: false,
+          message: 'Командный профиль игрока можно добавить только к staff/team, который уже привязан к команде'
+        });
+      }
+
+      teamAssignment = {
+        teamId: linkedTeamProfile.teamId!,
+        teamName: linkedTeamProfile.teamName,
+        teamLogo: linkedTeamProfile.teamLogo || ''
+      };
+    }
+
+    let resolvedFaceitProfile: FaceitProfileInfo | null = null;
+    let faceitValidationWarning: string | null = null;
+    try {
+      resolvedFaceitProfile = await faceitService.resolveFaceitProfile(faceitUrl);
+    } catch (faceitError) {
+      faceitValidationWarning = faceitError instanceof Error
+        ? faceitError.message
+        : 'Не удалось проверить Faceit';
+      console.warn('[AuthController] Предупреждение проверки Faceit при добавлении player-профиля:', faceitValidationWarning);
+    }
+
+    if (resolvedFaceitProfile) {
+      const existingFaceitOwner = await FaceitAccount.findOne({ faceitId: resolvedFaceitProfile.faceitId });
+      if (existingFaceitOwner && existingFaceitOwner.userId.toString() !== user._id.toString()) {
+        return res.status(409).json({
+          success: false,
+          message: 'Этот Faceit-аккаунт уже привязан к другому игроку'
+        });
+      }
+    }
+
+    user.profiles = upsertUserProfile(user, {
+      role: 'player',
+      playerType: requestedPlayerType,
+      teamId: teamAssignment?.teamId || null,
+      teamName: teamAssignment?.teamName || '',
+      teamLogo: teamAssignment?.teamLogo || '',
+      privilegeKey: ''
+    }) as any;
+
+    applyActiveProfileProjection(user);
+    await user.save();
+
+    await createPlayerCardForUser(user._id, user.name, faceitUrl, nickname);
+    if (resolvedFaceitProfile) {
+      await linkFaceitAccountToUser(user._id, resolvedFaceitProfile);
+    }
+
+    const { user: updatedUser, accessFlags } = await loadUserWithAccessData(user._id);
+    if (!updatedUser) {
+      return res.status(404).json({ success: false, message: 'Пользователь не найден' });
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: 'Профиль игрока успешно добавлен',
+      user: buildUserResponse(updatedUser, accessFlags),
+      warnings: faceitValidationWarning ? [faceitValidationWarning] : []
+    });
+  } catch (error) {
+    console.error('[AuthController] Ошибка при добавлении player-профиля:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Ошибка при создании профиля игрока',
+      error: error instanceof Error ? error.message : 'Неизвестная ошибка'
+    });
+  }
+};
+
+export const linkTeamProfile = async (req: any, res: any) => {
+  try {
+    if (!req.user?._id) {
+      return res.status(401).json({ message: 'Пользователь не авторизован' });
+    }
+
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        message: 'База данных инициализируется, повторите запрос через несколько секунд'
+      });
+    }
+
+    const teamCode = normalizeText(req.body?.teamCode);
+    const confirmRelink = req.body?.confirmRelink === true;
+
+    if (!teamCode) {
+      return res.status(400).json({ message: 'Укажите team-код' });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ message: 'Пользователь не найден' });
+    }
+
+    applyActiveProfileProjection(user);
+    const activeProfile = getActiveProfile(user);
+    const currentProfiles = getUserProfiles(user);
+    const resolvedTeamAccess = await findTeamByInviteCode(teamCode);
+
+    if (!resolvedTeamAccess) {
+      return res.status(400).json({ message: 'Код команды недействителен или уже устарел' });
+    }
+
+    if (activeProfile.role === 'player' && resolvedTeamAccess.invitedRole !== 'player') {
+      return res.status(403).json({
+        message: 'Игрок может привязаться к команде только по player-коду'
+      });
+    }
+
+    if (activeProfile.role === 'staff' && resolvedTeamAccess.invitedRole !== 'staff') {
+      return res.status(403).json({
+        message: 'Стафф может привязаться к команде только по staff-коду'
+      });
+    }
+
+    const targetRole = activeProfile.role === 'staff' ? 'staff' : 'player';
+    const targetProfileKey = `${targetRole}_team`;
+    const existingTeamProfile = currentProfiles.find((profile) => profile.key === targetProfileKey);
+    const nextTeam = buildTeamLinkSummary(resolvedTeamAccess.team);
+    const currentTeam =
+      existingTeamProfile?.teamId || existingTeamProfile?.teamName
+        ? {
+            id: toObjectIdString(existingTeamProfile?.teamId),
+            name: existingTeamProfile?.teamName || '',
+            logo: existingTeamProfile?.teamLogo || ''
+          }
+        : null;
+
+    if (existingTeamProfile?.teamId && sameObjectId(existingTeamProfile.teamId, resolvedTeamAccess.team._id)) {
+      user.profiles = upsertUserProfile(user, {
+        role: targetRole,
+        playerType: 'team',
+        teamId: resolvedTeamAccess.team._id,
+        teamName: resolvedTeamAccess.team.name,
+        teamLogo: resolvedTeamAccess.team.logo || '',
+        privilegeKey:
+          targetRole === 'staff'
+            ? existingTeamProfile.privilegeKey || activeProfile.privilegeKey || ''
+            : ''
+      }) as any;
+
+      applyActiveProfileProjection(user);
+      await user.save();
+
+      const { user: updatedUser, accessFlags } = await loadUserWithAccessData(user._id);
+      if (!updatedUser) {
+        return res.status(404).json({ message: 'Пользователь не найден' });
+      }
+
+      return res.json({
+        status: 'linked',
+        message: 'Team-профиль уже привязан к этой команде',
+        targetProfileKey,
+        team: nextTeam,
+        user: buildUserResponse(updatedUser, accessFlags)
+      });
+    }
+
+    if (currentTeam?.id && !sameObjectId(currentTeam.id, resolvedTeamAccess.team._id) && !confirmRelink) {
+      return res.json({
+        status: 'confirmation_required',
+        message: `Team-профиль уже привязан к команде «${currentTeam.name || 'Без названия'}». Подтвердите перепривязку к «${nextTeam.name}».`,
+        targetProfileKey,
+        currentTeam,
+        nextTeam
+      });
+    }
+
+    if (targetRole === 'player') {
+      await ensureTeamPlayerCapacity(resolvedTeamAccess.team._id);
+    }
+
+    user.profiles = upsertUserProfile(user, {
+      role: targetRole,
+      playerType: 'team',
+      teamId: resolvedTeamAccess.team._id,
+      teamName: resolvedTeamAccess.team.name,
+      teamLogo: resolvedTeamAccess.team.logo || '',
+      privilegeKey:
+        targetRole === 'staff'
+          ? existingTeamProfile?.privilegeKey || activeProfile.privilegeKey || ''
+          : ''
+    }) as any;
+
+    applyActiveProfileProjection(user);
+    await user.save();
+
+    const { user: updatedUser, accessFlags } = await loadUserWithAccessData(user._id);
+    if (!updatedUser) {
+      return res.status(404).json({ message: 'Пользователь не найден' });
+    }
+
+    return res.json({
+      status: 'linked',
+      message:
+        currentTeam?.id && !sameObjectId(currentTeam.id, resolvedTeamAccess.team._id)
+          ? 'Team-профиль успешно перепривязан к новой команде'
+          : 'Team-профиль успешно привязан к команде',
+      targetProfileKey,
+      team: nextTeam,
+      user: buildUserResponse(updatedUser, accessFlags)
+    });
+  } catch (error) {
+    console.error('[AuthController] Ошибка привязки team-профиля:', error);
+    if (error instanceof Error && error.message === 'Лимит игроков в этой команде уже достигнут') {
+      return res.status(400).json({ message: error.message });
+    }
+
+    return res.status(500).json({
+      message: 'Ошибка при привязке профиля к команде',
+      error: error instanceof Error ? error.message : 'Неизвестная ошибка'
+    });
+  }
+};
+
+export const switchActiveProfile = async (req: any, res: any) => {
+  try {
+    if (!req.user?._id) {
+      return res.status(401).json({ success: false, message: 'Пользователь не авторизован' });
+    }
+
+    const profileKey = normalizeText(req.body?.profileKey);
+    if (!profileKey) {
+      return res.status(400).json({ success: false, message: 'Не указан profileKey' });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'Пользователь не найден' });
+    }
+
+    const profiles = getUserProfiles(user);
+    const nextProfile = profiles.find((profile) => profile.key === profileKey);
+    if (!nextProfile) {
+      return res.status(404).json({ success: false, message: 'Профиль не найден' });
+    }
+
+    user.profiles = profiles as any;
+    user.activeProfileKey = nextProfile.key;
+    applyActiveProfileProjection(user);
+    await user.save();
+
+    const { user: updatedUser, accessFlags } = await loadUserWithAccessData(user._id);
+    if (!updatedUser) {
+      return res.status(404).json({ success: false, message: 'Пользователь не найден' });
+    }
+
+    return res.json({
+      success: true,
+      message: `Активный профиль переключен на «${nextProfile.label}»`,
+      user: buildUserResponse(updatedUser, accessFlags)
+    });
+  } catch (error) {
+    console.error('[AuthController] Ошибка при переключении профиля:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Ошибка при переключении профиля',
       error: error instanceof Error ? error.message : 'Неизвестная ошибка'
     });
   }
@@ -973,6 +1357,12 @@ export const loginUser = async (req: any, res: any) => {
     if (!isMatch) {
       console.log(`[AuthController] Ошибка: неверный пароль для пользователя ${email}`);
       return res.status(401).json({ message: 'Неверный email или пароль' });
+    }
+
+    if (user.isActive === false) {
+      return res.status(403).json({
+        message: 'Аккаунт заблокирован. Обратитесь к администратору.',
+      });
     }
 
     if (!user.emailVerified) {

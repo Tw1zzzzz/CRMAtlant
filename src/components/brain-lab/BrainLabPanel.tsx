@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import LockedResultsGate from "@/components/LockedResultsGate";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -33,6 +34,7 @@ import {
   X
 } from "lucide-react";
 import { getReadableInvalidReason } from "@/utils/testTypeMetadata";
+import { PRODUCT_NAME } from "@/lib/productCopy";
 
 const PANEL_BG = "linear-gradient(160deg, rgba(8, 13, 27, 0.98), rgba(11, 28, 49, 0.94) 48%, rgba(4, 18, 23, 0.96))";
 
@@ -120,6 +122,10 @@ type RunnerProps = {
   title: string;
   instruction: string;
   onFinish: (payload: Record<string, unknown>) => void;
+};
+
+type BrainLabPanelProps = {
+  hasResultsAccess?: boolean;
 };
 
 function clamp(value: number, min = 0, max = 100) {
@@ -1104,7 +1110,7 @@ function BrainOverlayWindow({
   );
 }
 
-const BrainLabPanel = () => {
+const BrainLabPanel = ({ hasResultsAccess = true }: BrainLabPanelProps) => {
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const [catalog, setCatalog] = useState<BrainCatalogResponse | null>(null);
@@ -1124,20 +1130,28 @@ const BrainLabPanel = () => {
   const loadBrainData = async () => {
     try {
       setLoading(true);
-      const [catalogResponse, summaryResponse, historyResponse] = await Promise.all([
-        getBrainTestsCatalog(),
-        getBrainPerformanceSummary(),
-        getBrainTestsHistory()
-      ]);
-
+      const catalogResponse = await getBrainTestsCatalog();
       setCatalog(catalogResponse.data);
-      setSummary(summaryResponse.data.data);
-      setHistory(historyResponse.data.data);
+
+      if (hasResultsAccess) {
+        const [summaryResponse, historyResponse] = await Promise.all([
+          getBrainPerformanceSummary(),
+          getBrainTestsHistory()
+        ]);
+
+        setSummary(summaryResponse.data.data);
+        setHistory(historyResponse.data.data);
+      } else {
+        setSummary(null);
+        setHistory([]);
+      }
     } catch (error) {
       console.error("Error loading Brain Lab:", error);
       toast({
         title: "Brain Lab недоступен",
-        description: "Не удалось загрузить каталог тестов и сводку.",
+        description: hasResultsAccess
+          ? "Не удалось загрузить каталог тестов и сводку."
+          : "Не удалось загрузить каталог тестов.",
         variant: "destructive"
       });
     } finally {
@@ -1147,7 +1161,7 @@ const BrainLabPanel = () => {
 
   useEffect(() => {
     loadBrainData();
-  }, []);
+  }, [hasResultsAccess]);
 
   useEffect(() => {
     if (!countdown) return;
@@ -1319,8 +1333,10 @@ const BrainLabPanel = () => {
       setTransitionHint(null);
       await loadBrainData();
       toast({
-        title: "Батарея завершена",
-        description: "Сводка Brain Lab обновлена."
+        title: hasResultsAccess ? "Батарея завершена" : "Результат сохранён",
+        description: hasResultsAccess
+          ? "Сводка Brain Lab обновлена. Результат уже можно посмотреть во вкладке «Карточка игрока»."
+          : "Попытка сохранена. Полная история и индексы Brain Lab откроются после покупки тарифа."
       });
     } catch (error: any) {
       console.error("Error completing brain attempt:", error);
@@ -1373,6 +1389,15 @@ const BrainLabPanel = () => {
             </p>
           </div>
         </div>
+        <LockedResultsGate
+          hasAccess={hasResultsAccess}
+          hasData={history.length > 0 || batteryResults.length > 0}
+          title="Результаты Brain Lab заблокированы"
+          description="Проходить батарею можно бесплатно. Индекс, confidence и зрелость baseline откроются после покупки тарифа."
+          ctaText="Открыть результаты Brain Lab"
+          minHeightClassName="min-h-[380px]"
+          compact
+        >
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-2">
           <div className="min-h-[172px] rounded-[28px] border border-white/8 bg-white/[0.04] p-5">
             <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Индекс</div>
@@ -1405,6 +1430,7 @@ const BrainLabPanel = () => {
             </div>
           </div>
         </div>
+        </LockedResultsGate>
       </div>
 
       {loading ? (
@@ -1481,6 +1507,14 @@ const BrainLabPanel = () => {
               </div>
             </div>
 
+            <LockedResultsGate
+              hasAccess={hasResultsAccess}
+              hasData={history.length > 0 || batteryResults.length > 0}
+              title="Сводка батареи заблокирована"
+              description="Сама батарея уже доступна, а метрики по завершённым попыткам раскроются после покупки."
+              ctaText="Открыть сводку батареи"
+              minHeightClassName="min-h-[360px]"
+            >
             <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-2">
               <div className="rounded-[24px] border border-white/8 bg-white/[0.04] p-5">
                 <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Индекс</div>
@@ -1503,8 +1537,17 @@ const BrainLabPanel = () => {
                 <div className="mt-2 text-sm leading-6 text-slate-400">Последние попытки уже учтены в истории и карточках ниже.</div>
               </div>
             </div>
+            </LockedResultsGate>
           </div>
 
+          <LockedResultsGate
+            hasAccess={hasResultsAccess}
+            hasData={history.length > 0 || batteryResults.length > 0}
+            title="Атлас результатов заблокирован"
+            description={`Формулы, прошлые попытки и доменные карточки будут доступны после покупки тарифа ${PRODUCT_NAME}.`}
+            ctaText="Открыть атлас результатов"
+            minHeightClassName="min-h-[420px]"
+          >
           <div className="mt-8 rounded-[30px] border border-white/8 bg-white/[0.03] p-6 md:p-7">
             <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
               <div className="space-y-2">
@@ -1594,7 +1637,16 @@ const BrainLabPanel = () => {
               })}
             </div>
           </div>
+          </LockedResultsGate>
 
+          <LockedResultsGate
+            hasAccess={hasResultsAccess}
+            hasData={history.length > 0 || batteryResults.length > 0}
+            title="Тренды и домены заблокированы"
+            description="График формы, доменные значения и readiness overlay раскроются после покупки."
+            ctaText="Открыть тренды Brain Lab"
+            minHeightClassName="min-h-[460px]"
+          >
           <div className="mt-8 grid gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
             <Card className="rounded-[30px] border border-white/8 bg-white/[0.03]">
               <CardHeader>
@@ -1689,7 +1741,16 @@ const BrainLabPanel = () => {
               </CardContent>
             </Card>
           </div>
+          </LockedResultsGate>
 
+          <LockedResultsGate
+            hasAccess={hasResultsAccess}
+            hasData={history.length > 0 || batteryResults.length > 0}
+            title="История попыток заблокирована"
+            description="Каждая попытка уже сохранена. История, invalid reasons и предыдущие score откроются после покупки."
+            ctaText="Открыть историю попыток"
+            minHeightClassName="min-h-[420px]"
+          >
           <Card className="mt-8 rounded-[30px] border border-white/8 bg-white/[0.03]">
             <CardHeader>
               <CardTitle className="text-slate-50">История попыток</CardTitle>
@@ -1762,6 +1823,7 @@ const BrainLabPanel = () => {
               </div>
             </CardContent>
           </Card>
+          </LockedResultsGate>
         </>
       )}
 

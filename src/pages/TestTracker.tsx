@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Link as LinkIcon, Calendar as CalendarIcon, Image, ExternalLink, Edit, Trash2, Sparkles, ClipboardList, Clock3, Monitor, Brain, Gauge, CheckCheck } from "lucide-react";
+import { Plus, Link as LinkIcon, Calendar as CalendarIcon, Image, ExternalLink, Edit, Trash2, Sparkles, ClipboardList, Clock3, Brain, Gauge, CheckCheck, AlertCircle, FilterX, Loader2, ListFilter } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { TestEntry } from "@/types";
 import { testRepository } from "@/lib/dataRepository";
@@ -17,9 +19,9 @@ import { COLORS } from "@/styles/theme";
 import { getReadableTestTypeLabel } from "@/utils/testTypeMetadata";
 import axios from "axios";
 import BrainLabPanel from "@/components/brain-lab/BrainLabPanel";
-import DailyQuestionnairePanel from "@/components/questionnaires/DailyQuestionnairePanel";
+import LockedResultsGate from "@/components/LockedResultsGate";
 import { useSearchParams } from "react-router-dom";
-import SubscriptionFeatureGate from "@/components/SubscriptionFeatureGate";
+import { PRODUCT_NAME } from "@/lib/productCopy";
 
 const predefinedTests = [
   {
@@ -96,8 +98,13 @@ const TestTracker = () => {
   const [screenshotUrl, setScreenshotUrl] = useState<string>("");
   const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
   const [editingTest, setEditingTest] = useState<TestEntry | null>(null);
-  const [activeTab, setActiveTab] = useState<"weekly" | "questionnaire">("questionnaire");
+  const [activeTab, setActiveTab] = useState<"weekly">("weekly");
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [entriesLoadError, setEntriesLoadError] = useState<string | null>(null);
+  const [stateImpactError, setStateImpactError] = useState<string | null>(null);
+  const [teamSummaryError, setTeamSummaryError] = useState<string | null>(null);
+  const [isStateImpactLoading, setIsStateImpactLoading] = useState<boolean>(false);
+  const [isTeamSummaryLoading, setIsTeamSummaryLoading] = useState<boolean>(false);
 
   // РћРїСЂРѕСЃРЅРёРє (РЅРѕРІР°СЏ Р»РѕРіРёРєР° С‚Рµстов)
   const [qDate, setQDate] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -134,7 +141,8 @@ const TestTracker = () => {
   
   const isStaff = user?.role === "staff";
   const isTeamStaff = isStaff && user?.playerType === "team";
-  const hasPerformanceCoachCrmAccess = isStaff || Boolean(user?.hasPerformanceCoachCrmAccess);
+  const hasPerformanceCoachCrmAccess = Boolean(user?.hasPerformanceCoachCrmAccess);
+  const isEntriesInitialLoading = isLoading && entries.length === 0;
 
   const parseOptionalNumber = (value: string) => {
     if (!value.trim()) return undefined;
@@ -220,8 +228,16 @@ const TestTracker = () => {
         { headers: token ? { Authorization: `Bearer ${token}` } : undefined }
       );
       toast({ title: "Сохранено", description: "Данные опросника сохранены" });
-    } catch (e: any) {
-      const msg = e?.response?.data?.message || e?.message || "Ошибка сохранения";
+    } catch (e: unknown) {
+      const messageFromResponse =
+        typeof e === "object" &&
+        e !== null &&
+        "response" in e &&
+        typeof (e as { response?: { data?: { message?: unknown } } }).response?.data?.message === "string"
+          ? (e as { response?: { data?: { message?: string } } }).response?.data?.message
+          : null;
+      const messageFromError = e instanceof Error ? e.message : null;
+      const msg = messageFromResponse || messageFromError || "Ошибка сохранения";
       toast({ title: "Ошибка", description: msg, variant: "destructive" });
     } finally {
       setQSubmitting(false);
@@ -234,7 +250,7 @@ const TestTracker = () => {
 
   useEffect(() => {
     const requestedTab = searchParams.get("tab");
-    if (requestedTab === "weekly" || requestedTab === "questionnaire") {
+    if (requestedTab === "weekly") {
       setActiveTab(requestedTab);
       return;
     }
@@ -246,6 +262,9 @@ const TestTracker = () => {
 
   useEffect(() => {
     const loadStateImpact = async () => {
+      setIsStateImpactLoading(true);
+      setStateImpactError(null);
+
       try {
         const now = new Date();
         const days = Number(periodFilter);
@@ -264,6 +283,9 @@ const TestTracker = () => {
       } catch (error) {
         console.error("Error loading tests state impact:", error);
         setStateImpact(null);
+        setStateImpactError("Не удалось обновить аналитическую сводку по выбранным фильтрам.");
+      } finally {
+        setIsStateImpactLoading(false);
       }
     };
 
@@ -273,14 +295,21 @@ const TestTracker = () => {
     }
 
     setStateImpact(null);
+    setStateImpactError(null);
+    setIsStateImpactLoading(false);
   }, [user, hasPerformanceCoachCrmAccess, periodFilter, testTypeFilter, contextRoleFilter, sourceFilter]);
 
   useEffect(() => {
     const loadTeamSummary = async () => {
       if (!user || !hasPerformanceCoachCrmAccess || !isTeamStaff) {
         setTeamSummary(null);
+        setTeamSummaryError(null);
+        setIsTeamSummaryLoading(false);
         return;
       }
+
+      setIsTeamSummaryLoading(true);
+      setTeamSummaryError(null);
 
       try {
         const now = new Date();
@@ -295,6 +324,9 @@ const TestTracker = () => {
       } catch (error) {
         console.error("Error loading team test summary:", error);
         setTeamSummary(null);
+        setTeamSummaryError("Не удалось загрузить командную сводку для выбранного периода.");
+      } finally {
+        setIsTeamSummaryLoading(false);
       }
     };
 
@@ -304,11 +336,7 @@ const TestTracker = () => {
   const loadEntries = async () => {
     try {
       setIsLoading(true);
-
-      if (!hasPerformanceCoachCrmAccess) {
-        setEntries([]);
-        return;
-      }
+      setEntriesLoadError(null);
 
       if (isTeamStaff) {
         setEntries([]);
@@ -319,11 +347,14 @@ const TestTracker = () => {
         // Р—Р°РіСЂСѓР¶Р°РµРј РґР°РЅРЅС‹Рµ СЃ СЃРµСЂРІРµСЂР°
         try {
           const response = await getMyTestEntries();
-          const serverEntries = response.data.map((entry: any) => ({
-            ...entry,
-            id: entry.id || entry._id,
-            date: new Date(entry.date)
-          }));
+          const serverEntries = (Array.isArray(response.data) ? response.data : []).map((entry) => {
+            const serverEntry = entry as TestEntry & { _id?: string; id?: string };
+            return {
+              ...serverEntry,
+              id: serverEntry.id || serverEntry._id || crypto.randomUUID(),
+              date: new Date(serverEntry.date)
+            };
+          });
           setEntries(serverEntries);
           
           // РћР±РЅРѕРІР»СЏРµРј Р»РѕРєР°Р»СЊРЅРѕРµ С…СЂР°РЅРёР»РёС‰Рµ СЃ РґР°РЅРЅС‹РјРё СЃ СЃРµСЂРІРµСЂР°
@@ -336,6 +367,7 @@ const TestTracker = () => {
           // Р•СЃР»Рё РЅРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ СЃ СЃРµСЂРІРµСЂР°, РёСЃРїРѕР»СЊР·СѓРµРј Р»РѕРєР°Р»СЊРЅС‹Рµ РґР°РЅРЅС‹Рµ
           const localEntries = testRepository.getAll();
           setEntries(localEntries);
+          setEntriesLoadError("Сервер недоступен, поэтому сейчас показаны локально сохранённые записи.");
           
           toast({
             title: "Ошибка загрузки",
@@ -350,6 +382,7 @@ const TestTracker = () => {
       }
     } catch (error) {
       console.error('Error loading test entries:', error);
+      setEntriesLoadError("Не удалось загрузить записи о тестах.");
       
       toast({
         title: "Ошибка загрузки",
@@ -589,10 +622,42 @@ const TestTracker = () => {
     color: COLORS.textColor,
     borderColor: "rgba(255,255,255,0.08)"
   };
+  const hasActiveFilters = periodFilter !== "30" || testTypeFilter !== "all" || contextRoleFilter !== "all" || sourceFilter !== "all";
+  const activeFilterBadges = [
+    `Период: ${periodFilter} дней`,
+    testTypeFilter !== "all" ? `Тип: ${getReadableTestTypeLabel(testTypeFilter)}` : null,
+    contextRoleFilter !== "all" ? `Роль: ${contextRoleFilter.toUpperCase()}` : null,
+    sourceFilter !== "all" ? `Источник: ${sourceFilter === "manual" ? "Ручной ввод" : "Brain Lab"}` : null
+  ].filter(Boolean) as string[];
+  const filtersScopeSummary = isTeamStaff
+    ? `${heroEntriesCount} записей по команде, ${heroWeeklyEntries} weekly и средний score ${heroAverageScore ?? "-"}`
+    : `${filteredEntries.length} записей, ${scoredEntries.length} из них со score и ${weeklyTests.length} weekly в текущем периоде`;
+  const resetAnalyticsFilters = () => {
+    setPeriodFilter("30");
+    setTestTypeFilter("all");
+    setContextRoleFilter("all");
+    setSourceFilter("all");
+  };
 
   const getTestTypeLabel = (value?: string) => {
     return getReadableTestTypeLabel(value);
   };
+
+  const renderInsightSkeletons = () => (
+    <div className="mt-5 grid gap-3 md:grid-cols-4">
+      {Array.from({ length: 4 }).map((_, index) => (
+        <div
+          key={`insight-skeleton-${index}`}
+          className="rounded-[22px] border p-4"
+          style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}
+        >
+          <Skeleton className="h-3 w-24 bg-white/10" />
+          <Skeleton className="mt-4 h-8 w-16 bg-white/10" />
+          <Skeleton className="mt-3 h-3 w-28 bg-white/10" />
+        </div>
+      ))}
+    </div>
+  );
 
   return (
     <div className="container mx-auto py-4">
@@ -616,51 +681,72 @@ const TestTracker = () => {
                 }}
               >
                 <Sparkles className="h-3.5 w-3.5" />
-                Performance Lab
+                Тесты и форма
               </div>
               <div className="space-y-2">
                 <h1 className="text-3xl font-semibold md:text-4xl" style={{ color: COLORS.textColor }}>
-                  Тесты и ежедневный self-check в одном рабочем контуре
+                  Тесты, недельный ритм и ежедневная проверка восстановления
                 </h1>
                 <p className="max-w-2xl text-sm leading-7 md:text-base" style={{ color: "rgba(226, 232, 240, 0.82)" }}>
-                  Здесь удобно вести результаты тестов, быстро возвращаться к еженедельным заданиям и фиксировать повседневный контекст, который потом влияет на аналитику.
+                  Раздел помогает связать тесты и фон дня с вашей формой: сначала вы сохраняете результат без лишних шагов, затем CRM показывает, что уже собрано и какой контекст влияет на качество игры.
                 </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  "1. Настройте выборку",
+                  "2. Откройте недельный ритм или проверку восстановления",
+                  "3. Сохраняйте результат без лишних шагов"
+                ].map((item) => (
+                  <Badge
+                    key={item}
+                    variant="outline"
+                    className="rounded-full border-white/10 bg-white/5 px-3 py-1 text-[11px] font-medium tracking-[0.12em]"
+                    style={{ color: "#D9F6FF" }}
+                  >
+                    {item}
+                  </Badge>
+                ))}
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 xl:min-w-[420px]">
-              <div className="rounded-[22px] border p-4" style={{ backgroundColor: "rgba(9, 14, 26, 0.34)", borderColor: "rgba(148, 163, 184, 0.18)" }}>
-                <div className="text-[11px] uppercase tracking-[0.22em]" style={{ color: "rgba(191, 219, 254, 0.78)" }}>Записей</div>
-                <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{heroEntriesCount}</div>
-                <div className="mt-1 text-sm" style={{ color: "rgba(226, 232, 240, 0.68)" }}>за выбранный период</div>
-              </div>
-              <div className="rounded-[22px] border p-4" style={{ backgroundColor: "rgba(9, 14, 26, 0.34)", borderColor: "rgba(148, 163, 184, 0.18)" }}>
-                <div className="text-[11px] uppercase tracking-[0.22em]" style={{ color: "rgba(191, 219, 254, 0.78)" }}>Средний score</div>
-                <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{heroAverageScore ?? "-"}</div>
-                <div className="mt-1 text-sm" style={{ color: "rgba(226, 232, 240, 0.68)" }}>по сохранённым результатам</div>
-              </div>
-              <div className="rounded-[22px] border p-4" style={{ backgroundColor: "rgba(9, 14, 26, 0.34)", borderColor: "rgba(148, 163, 184, 0.18)" }}>
-                <div className="text-[11px] uppercase tracking-[0.22em]" style={{ color: "rgba(191, 219, 254, 0.78)" }}>Эта неделя</div>
-                <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{heroWeeklyEntries}</div>
-                <div className="mt-1 text-sm" style={{ color: "rgba(226, 232, 240, 0.68)" }}>тестов в текущем окне</div>
-              </div>
-              <div className="rounded-[22px] border p-4" style={{ backgroundColor: "rgba(9, 14, 26, 0.34)", borderColor: "rgba(148, 163, 184, 0.18)" }}>
-                <div className="text-[11px] uppercase tracking-[0.22em]" style={{ color: "rgba(191, 219, 254, 0.78)" }}>State index</div>
-                <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{heroStateIndex}</div>
-                <div className="mt-1 text-sm" style={{ color: "rgba(226, 232, 240, 0.68)" }}>связь состояния и результата</div>
-              </div>
+            <div className="xl:min-w-[420px]">
+              <LockedResultsGate
+                hasAccess={hasPerformanceCoachCrmAccess}
+                hasData={heroEntriesCount > 0}
+                title="Результаты тестов уже собраны"
+                description={`Проходите Brain Lab и заносите тесты бесплатно. Полные score, недельные итоги и индекс текущей формы откроются после покупки тарифа ${PRODUCT_NAME}.`}
+                ctaText="Открыть результаты тестов"
+                minHeightClassName="min-h-[280px]"
+                compact
+              >
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-[22px] border p-4" style={{ backgroundColor: "rgba(9, 14, 26, 0.34)", borderColor: "rgba(148, 163, 184, 0.18)" }}>
+                    <div className="text-[11px] uppercase tracking-[0.22em]" style={{ color: "rgba(191, 219, 254, 0.78)" }}>Записей</div>
+                    <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{heroEntriesCount}</div>
+                    <div className="mt-1 text-sm" style={{ color: "rgba(226, 232, 240, 0.68)" }}>за выбранный период</div>
+                  </div>
+                  <div className="rounded-[22px] border p-4" style={{ backgroundColor: "rgba(9, 14, 26, 0.34)", borderColor: "rgba(148, 163, 184, 0.18)" }}>
+                    <div className="text-[11px] uppercase tracking-[0.22em]" style={{ color: "rgba(191, 219, 254, 0.78)" }}>Средний score</div>
+                    <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{heroAverageScore ?? "-"}</div>
+                    <div className="mt-1 text-sm" style={{ color: "rgba(226, 232, 240, 0.68)" }}>по сохранённым результатам</div>
+                  </div>
+                  <div className="rounded-[22px] border p-4" style={{ backgroundColor: "rgba(9, 14, 26, 0.34)", borderColor: "rgba(148, 163, 184, 0.18)" }}>
+                    <div className="text-[11px] uppercase tracking-[0.22em]" style={{ color: "rgba(191, 219, 254, 0.78)" }}>Эта неделя</div>
+                    <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{heroWeeklyEntries}</div>
+                    <div className="mt-1 text-sm" style={{ color: "rgba(226, 232, 240, 0.68)" }}>тестов в текущем окне</div>
+                  </div>
+                  <div className="rounded-[22px] border p-4" style={{ backgroundColor: "rgba(9, 14, 26, 0.34)", borderColor: "rgba(148, 163, 184, 0.18)" }}>
+                    <div className="text-[11px] uppercase tracking-[0.22em]" style={{ color: "rgba(191, 219, 254, 0.78)" }}>State index</div>
+                    <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{heroStateIndex}</div>
+                    <div className="mt-1 text-sm" style={{ color: "rgba(226, 232, 240, 0.68)" }}>связь состояния и результата</div>
+                  </div>
+                </div>
+              </LockedResultsGate>
             </div>
           </div>
         </section>
 
-        <SubscriptionFeatureGate
-          hasAccess={hasPerformanceCoachCrmAccess}
-          title="Этот рабочий контур доступен после покупки"
-          description="Brain Lab, weekly-тесты и ежедневный self-check уже показаны в интерфейсе, но становятся интерактивными только после покупки PerformanceCoach CRM."
-          minHeightClassName="min-h-[980px]"
-          className="mt-2"
-        >
-          {!isStaff && <BrainLabPanel />}
+        {!isStaff && <BrainLabPanel hasResultsAccess={hasPerformanceCoachCrmAccess} />}
 
           <section
             className="rounded-[28px] border p-5 md:p-6"
@@ -669,31 +755,60 @@ const TestTracker = () => {
               borderColor: "rgba(96, 165, 250, 0.16)"
             }}
           >
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="space-y-2">
                 <div className="text-[11px] uppercase tracking-[0.24em]" style={{ color: COLORS.textColorSecondary }}>
                   Аналитический фильтр
                 </div>
-                <p className="text-sm leading-6" style={{ color: COLORS.textColorSecondary }}>
-                  Отсекайте период, типы тестов и игровой контекст, чтобы быстрее находить полезные паттерны.
+                <p className="max-w-2xl text-sm leading-6" style={{ color: COLORS.textColorSecondary }}>
+                  Отсекайте период, типы тестов и игровой контекст, чтобы быстрее находить полезные паттерны и не перегружать экран лишними данными.
                 </p>
               </div>
-              {!isStaff && (
+
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <Button
-                  onClick={() => {
-                    resetForm();
-                    setDate(new Date().toISOString().split("T")[0]);
-                    setIsDialogOpen(true);
+                  type="button"
+                  variant="outline"
+                  onClick={resetAnalyticsFilters}
+                  disabled={!hasActiveFilters}
+                  className="h-11 rounded-2xl px-4"
+                  style={{
+                    borderColor: "rgba(255,255,255,0.1)",
+                    color: hasActiveFilters ? COLORS.textColor : COLORS.textColorSecondary,
+                    backgroundColor: "rgba(255,255,255,0.02)"
                   }}
-                  className="h-12 rounded-2xl px-5"
-                  style={{ backgroundColor: COLORS.primary, color: "white" }}
                 >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Добавить тест
+                  <FilterX className="mr-2 h-4 w-4" />
+                  Сбросить фильтры
                 </Button>
-              )}
+
+                {!isStaff && (
+                  <Button
+                    onClick={() => {
+                      resetForm();
+                      setDate(new Date().toISOString().split("T")[0]);
+                      setIsDialogOpen(true);
+                    }}
+                    className="h-12 rounded-2xl px-5"
+                    style={{ backgroundColor: COLORS.primary, color: "white" }}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Добавить тест
+                  </Button>
+                )}
+              </div>
             </div>
 
+            <LockedResultsGate
+              hasAccess={hasPerformanceCoachCrmAccess}
+              hasData={heroEntriesCount > 0}
+              isLoading={isStateImpactLoading}
+              error={stateImpactError}
+              title="Аналитика результатов заблокирована"
+              description={`Фильтры, индекс текущей формы и агрегаты по тестам откроются после покупки. Само прохождение и сохранение тестов уже доступны в ${PRODUCT_NAME}.`}
+              ctaText="Открыть аналитику тестов"
+              minHeightClassName="min-h-[420px]"
+            >
             <div className="mt-5 grid gap-3 md:grid-cols-4">
               <div className="space-y-2">
                 <Label style={{ color: COLORS.textColor }}>Период</Label>
@@ -758,7 +873,60 @@ const TestTracker = () => {
               </div>
             </div>
 
-            {stateImpact && (
+            <div
+              className="mt-5 rounded-[24px] border p-4 md:p-5"
+              style={{ borderColor: "rgba(255,255,255,0.08)", backgroundColor: "rgba(255,255,255,0.03)" }}
+            >
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2 text-sm font-medium" style={{ color: COLORS.textColor }}>
+                    <ListFilter className="h-4 w-4" />
+                    Что вы видите сейчас
+                  </div>
+                  <p className="text-sm leading-6" style={{ color: COLORS.textColorSecondary }}>
+                    {filtersScopeSummary}
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {activeFilterBadges.map((item) => (
+                    <Badge
+                      key={item}
+                      variant="outline"
+                      className="rounded-full border-white/10 bg-white/5 px-3 py-1 text-xs"
+                      style={{ color: COLORS.textColor }}
+                    >
+                      {item}
+                    </Badge>
+                  ))}
+                  {!hasActiveFilters && (
+                    <Badge
+                      variant="outline"
+                      className="rounded-full border-white/10 bg-white/5 px-3 py-1 text-xs"
+                      style={{ color: COLORS.textColorSecondary }}
+                    >
+                      Базовый набор фильтров
+                    </Badge>
+                  )}
+                </div>
+              </div>
+
+              {entriesLoadError && (
+                <div
+                  className="mt-4 flex items-start gap-3 rounded-[18px] border px-4 py-3"
+                  style={{ borderColor: "rgba(251, 191, 36, 0.24)", backgroundColor: "rgba(251, 191, 36, 0.08)" }}
+                >
+                  <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" style={{ color: "#FBBF24" }} />
+                  <p className="text-sm leading-6" style={{ color: COLORS.textColor }}>
+                    {entriesLoadError}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {isStateImpactLoading ? (
+              renderInsightSkeletons()
+            ) : stateImpact ? (
               <div className="mt-5 grid gap-3 md:grid-cols-4">
                 <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
                   <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em]" style={{ color: COLORS.textColorSecondary }}>
@@ -789,10 +957,38 @@ const TestTracker = () => {
                   <div className="mt-3 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{stateImpact.stateToResult.fatigue.high}</div>
                 </div>
               </div>
+            ) : (
+              <div
+                className="mt-5 rounded-[22px] border border-dashed p-4"
+                style={{ borderColor: "rgba(255,255,255,0.12)", backgroundColor: "rgba(255,255,255,0.02)" }}
+              >
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" style={{ color: stateImpactError ? "#FBBF24" : COLORS.textColorSecondary }} />
+                  <div>
+                    <p className="text-sm font-medium" style={{ color: COLORS.textColor }}>
+                      {stateImpactError ? "Сводка по фильтрам временно недоступна" : "Сводка появится после первых записей"}
+                    </p>
+                    <p className="mt-1 text-sm leading-6" style={{ color: COLORS.textColorSecondary }}>
+                      {stateImpactError || "Когда в выборке будет достаточно тестов, здесь появятся быстрые ориентиры по score, фокусу и состоянию."}
+                    </p>
+                  </div>
+                </div>
+              </div>
             )}
+            </LockedResultsGate>
           </section>
 
           {isTeamStaff ? (
+            <LockedResultsGate
+              hasAccess={hasPerformanceCoachCrmAccess}
+              hasData={Boolean(teamSummary?.summary.totalEntries)}
+              isLoading={isTeamSummaryLoading}
+              error={teamSummaryError}
+              title="Командная сводка откроется после покупки"
+              description="Read-only блок по игрокам команды, агрегаты и последние результаты доступны после активации тарифа."
+              ctaText="Открыть командную сводку"
+              minHeightClassName="min-h-[680px]"
+            >
             <div className="space-y-5">
               <section
                 className="rounded-[28px] border p-5 md:p-6"
@@ -804,10 +1000,10 @@ const TestTracker = () => {
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                   <div>
                     <div className="text-[11px] uppercase tracking-[0.24em]" style={{ color: COLORS.textColorSecondary }}>
-                      Team mode
+                      Командный режим
                     </div>
                     <h3 className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>
-                      Командная статистика тестов и daily-сигналов
+                      Командная статистика тестов и ежедневных сигналов
                     </h3>
                     <p className="mt-2 max-w-2xl text-sm leading-7" style={{ color: COLORS.textColorSecondary }}>
                       Для staff профиля `team` вкладка переведена в read-only режим: здесь собраны только данные вашей команды без форм заполнения.
@@ -821,27 +1017,43 @@ const TestTracker = () => {
                   </div>
                 </div>
 
-                <div className="mt-5 grid gap-3 md:grid-cols-4">
-                  <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
-                    <div className="text-[11px] uppercase tracking-[0.18em]" style={{ color: COLORS.textColorSecondary }}>Игроков</div>
-                    <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{teamSummary?.summary.playersCount ?? 0}</div>
+                {isTeamSummaryLoading ? (
+                  renderInsightSkeletons()
+                ) : (
+                  <div className="mt-5 grid gap-3 md:grid-cols-4">
+                    <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                      <div className="text-[11px] uppercase tracking-[0.18em]" style={{ color: COLORS.textColorSecondary }}>Игроков</div>
+                      <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{teamSummary?.summary.playersCount ?? 0}</div>
+                    </div>
+                    <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                      <div className="text-[11px] uppercase tracking-[0.18em]" style={{ color: COLORS.textColorSecondary }}>Сон</div>
+                      <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{teamSummary?.summary.avgSleepHours ?? "-"}</div>
+                      <div className="mt-1 text-sm" style={{ color: COLORS.textColorSecondary }}>среднее по команде</div>
+                    </div>
+                    <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                      <div className="text-[11px] uppercase tracking-[0.18em]" style={{ color: COLORS.textColorSecondary }}>Экранное время</div>
+                      <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{teamSummary?.summary.avgScreenTimeHours ?? "-"}</div>
+                      <div className="mt-1 text-sm" style={{ color: COLORS.textColorSecondary }}>часов в среднем</div>
+                    </div>
+                    <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                      <div className="text-[11px] uppercase tracking-[0.18em]" style={{ color: COLORS.textColorSecondary }}>State index</div>
+                      <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{teamSummary?.summary.avgStateIndex ?? "-"}</div>
+                      <div className="mt-1 text-sm" style={{ color: COLORS.textColorSecondary }}>связь состояния и результата</div>
+                    </div>
                   </div>
-                  <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
-                    <div className="text-[11px] uppercase tracking-[0.18em]" style={{ color: COLORS.textColorSecondary }}>Сон</div>
-                    <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{teamSummary?.summary.avgSleepHours ?? "-"}</div>
-                    <div className="mt-1 text-sm" style={{ color: COLORS.textColorSecondary }}>среднее по команде</div>
+                )}
+
+                {teamSummaryError && (
+                  <div
+                    className="mt-4 flex items-start gap-3 rounded-[18px] border px-4 py-3"
+                    style={{ borderColor: "rgba(251, 191, 36, 0.24)", backgroundColor: "rgba(251, 191, 36, 0.08)" }}
+                  >
+                    <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" style={{ color: "#FBBF24" }} />
+                    <p className="text-sm leading-6" style={{ color: COLORS.textColor }}>
+                      {teamSummaryError}
+                    </p>
                   </div>
-                  <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
-                    <div className="text-[11px] uppercase tracking-[0.18em]" style={{ color: COLORS.textColorSecondary }}>Экранное время</div>
-                    <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{teamSummary?.summary.avgScreenTimeHours ?? "-"}</div>
-                    <div className="mt-1 text-sm" style={{ color: COLORS.textColorSecondary }}>часов в среднем</div>
-                  </div>
-                  <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
-                    <div className="text-[11px] uppercase tracking-[0.18em]" style={{ color: COLORS.textColorSecondary }}>State index</div>
-                    <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{teamSummary?.summary.avgStateIndex ?? "-"}</div>
-                    <div className="mt-1 text-sm" style={{ color: COLORS.textColorSecondary }}>связь состояния и результата</div>
-                  </div>
-                </div>
+                )}
               </section>
 
               <section className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
@@ -853,7 +1065,15 @@ const TestTracker = () => {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    {(teamSummary?.byPlayer || []).length === 0 ? (
+                    {isTeamSummaryLoading ? (
+                      Array.from({ length: 3 }).map((_, index) => (
+                        <div key={`team-player-skeleton-${index}`} className="rounded-[18px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                          <Skeleton className="h-5 w-40 bg-white/10" />
+                          <Skeleton className="mt-3 h-4 w-28 bg-white/10" />
+                          <Skeleton className="mt-4 h-4 w-36 bg-white/10" />
+                        </div>
+                      ))
+                    ) : (teamSummary?.byPlayer || []).length === 0 ? (
                       <p style={{ color: COLORS.textColorSecondary }}>Пока нет данных по игрокам команды.</p>
                     ) : (
                       teamSummary!.byPlayer.map((player) => (
@@ -883,13 +1103,19 @@ const TestTracker = () => {
                       <CardTitle style={{ color: COLORS.textColor }}>По типам тестов</CardTitle>
                       <CardDescription style={{ color: COLORS.textColorSecondary }}>
                         Какие типы тестов чаще встречаются и каков средний score.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      {(teamSummary?.byTestType || []).length === 0 ? (
-                        <p style={{ color: COLORS.textColorSecondary }}>Пока нет сохранённых результатов.</p>
-                      ) : (
-                        teamSummary!.byTestType.map((item) => (
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {isTeamSummaryLoading ? (
+                      Array.from({ length: 3 }).map((_, index) => (
+                        <div key={`team-type-skeleton-${index}`} className="rounded-[16px] border px-4 py-3" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                          <Skeleton className="h-4 w-full bg-white/10" />
+                        </div>
+                      ))
+                    ) : (teamSummary?.byTestType || []).length === 0 ? (
+                      <p style={{ color: COLORS.textColorSecondary }}>Пока нет сохранённых результатов.</p>
+                    ) : (
+                      teamSummary!.byTestType.map((item) => (
                           <div key={item.type} className="flex items-center justify-between rounded-[16px] border px-4 py-3" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
                             <span style={{ color: COLORS.textColor }}>{getTestTypeLabel(item.type)}</span>
                             <span style={{ color: COLORS.textColorSecondary }}>
@@ -906,13 +1132,20 @@ const TestTracker = () => {
                       <CardTitle style={{ color: COLORS.textColor }}>Последние записи</CardTitle>
                       <CardDescription style={{ color: COLORS.textColorSecondary }}>
                         Последние результаты игроков вашей команды.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      {(teamSummary?.recentEntries || []).length === 0 ? (
-                        <p style={{ color: COLORS.textColorSecondary }}>Последних записей пока нет.</p>
-                      ) : (
-                        teamSummary!.recentEntries.map((entry) => (
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {isTeamSummaryLoading ? (
+                      Array.from({ length: 3 }).map((_, index) => (
+                        <div key={`team-recent-skeleton-${index}`} className="rounded-[16px] border px-4 py-3" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                          <Skeleton className="h-4 w-28 bg-white/10" />
+                          <Skeleton className="mt-3 h-4 w-full bg-white/10" />
+                        </div>
+                      ))
+                    ) : (teamSummary?.recentEntries || []).length === 0 ? (
+                      <p style={{ color: COLORS.textColorSecondary }}>Последних записей пока нет.</p>
+                    ) : (
+                      teamSummary!.recentEntries.map((entry) => (
                           <div key={entry.id} className="rounded-[16px] border px-4 py-3" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
                             <div className="flex items-start justify-between gap-3">
                               <div>
@@ -934,15 +1167,24 @@ const TestTracker = () => {
                 </div>
               </section>
             </div>
+            </LockedResultsGate>
           ) : (
           <Tabs
-            defaultValue="questionnaire"
+            defaultValue="weekly"
             value={activeTab}
-            onValueChange={(value) => setActiveTab(value as "weekly" | "questionnaire")}
+            onValueChange={(value) => setActiveTab(value as "weekly")}
             className="space-y-5"
           >
+          <div className="space-y-2">
+            <div className="text-[11px] uppercase tracking-[0.24em]" style={{ color: COLORS.textColorSecondary }}>
+              Рабочие режимы вкладки
+            </div>
+            <p className="text-sm leading-6" style={{ color: COLORS.textColorSecondary }}>
+              Недельный блок помогает не потерять обязательные тесты, а ежедневная проверка восстановления быстро фиксирует фон дня без смены сценария.
+            </p>
+          </div>
           <TabsList
-            className="grid h-auto w-full grid-cols-2 rounded-[22px] border p-1.5 md:w-[420px]"
+            className="grid h-auto w-full grid-cols-1 rounded-[22px] border p-1.5 md:w-[320px]"
             style={{ backgroundColor: "rgba(255,255,255,0.03)", borderColor: "rgba(255,255,255,0.08)" }}
           >
             <TabsTrigger
@@ -953,17 +1195,8 @@ const TestTracker = () => {
                 backgroundColor: activeTab === "weekly" ? "rgba(53, 144, 255, 0.18)" : "transparent"
               }}
             >
-              Еженедельные тесты
-            </TabsTrigger>
-            <TabsTrigger
-              value="questionnaire"
-              className="rounded-[16px] px-4 py-3 text-sm"
-              style={{
-                color: activeTab === "questionnaire" ? COLORS.textColor : COLORS.textColorSecondary,
-                backgroundColor: activeTab === "questionnaire" ? "rgba(0, 227, 150, 0.14)" : "transparent"
-              }}
-            >
-              Ежедневный опросник
+              Weekly-тесты
+              <span className="ml-2 text-xs opacity-80">{weeklyTests.length}</span>
             </TabsTrigger>
           </TabsList>
 
@@ -1001,24 +1234,35 @@ const TestTracker = () => {
                   </div>
                 </div>
 
-                <div className="mt-5 grid gap-3 md:grid-cols-3">
-                  <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
-                    <div className="text-[11px] uppercase tracking-[0.22em]" style={{ color: COLORS.textColorSecondary }}>В этой неделе</div>
-                    <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{currentWeekTestsCount}</div>
-                    <div className="mt-1 text-sm" style={{ color: COLORS.textColorSecondary }}>всего тестовых записей</div>
-                  </div>
-                  <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
-                    <div className="text-[11px] uppercase tracking-[0.22em]" style={{ color: COLORS.textColorSecondary }}>Weekly</div>
-                    <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{weeklyTests.length}</div>
-                    <div className="mt-1 text-sm" style={{ color: COLORS.textColorSecondary }}>результатов за неделю</div>
-                  </div>
-                  <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
-                    <div className="text-[11px] uppercase tracking-[0.22em]" style={{ color: COLORS.textColorSecondary }}>Последний ввод</div>
-                    <div className="mt-2 text-base font-semibold" style={{ color: COLORS.textColor }}>
-                      {recentTests[0] ? formatDate(recentTests[0].date, "d MMMM") : "-"}
+                <div className="mt-5">
+                  <LockedResultsGate
+                    hasAccess={hasPerformanceCoachCrmAccess}
+                    hasData={weeklyTests.length > 0}
+                    title="Weekly-результаты заблокированы"
+                    description="Прохождение weekly-тестов уже доступно, а сводка недели и последние результаты откроются после покупки."
+                    ctaText="Открыть итоги недели"
+                    minHeightClassName="min-h-[220px]"
+                  >
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                        <div className="text-[11px] uppercase tracking-[0.22em]" style={{ color: COLORS.textColorSecondary }}>В этой неделе</div>
+                        <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{currentWeekTestsCount}</div>
+                        <div className="mt-1 text-sm" style={{ color: COLORS.textColorSecondary }}>всего тестовых записей</div>
+                      </div>
+                      <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                        <div className="text-[11px] uppercase tracking-[0.22em]" style={{ color: COLORS.textColorSecondary }}>Weekly</div>
+                        <div className="mt-2 text-2xl font-semibold" style={{ color: COLORS.textColor }}>{weeklyTests.length}</div>
+                        <div className="mt-1 text-sm" style={{ color: COLORS.textColorSecondary }}>результатов за неделю</div>
+                      </div>
+                      <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                        <div className="text-[11px] uppercase tracking-[0.22em]" style={{ color: COLORS.textColorSecondary }}>Последний ввод</div>
+                        <div className="mt-2 text-base font-semibold" style={{ color: COLORS.textColor }}>
+                          {recentTests[0] ? formatDate(recentTests[0].date, "d MMMM") : "-"}
+                        </div>
+                        <div className="mt-1 text-sm" style={{ color: COLORS.textColorSecondary }}>самая свежая запись</div>
+                      </div>
                     </div>
-                    <div className="mt-1 text-sm" style={{ color: COLORS.textColorSecondary }}>самая свежая запись</div>
-                  </div>
+                  </LockedResultsGate>
                 </div>
               </section>
 
@@ -1047,7 +1291,7 @@ const TestTracker = () => {
                           <div>
                             <div className="text-lg font-semibold" style={{ color: COLORS.textColor }}>{test.name}</div>
                             <div className="mt-1 text-sm leading-6" style={{ color: COLORS.textColorSecondary }}>
-                              Откройте тест и сразу занесите результат в систему, чтобы weekly-ритм не терялся.
+                              Откройте тест и сразу занесите результат в систему, чтобы недельный ритм не терялся.
                             </div>
                           </div>
                           <div className="flex gap-2">
@@ -1089,7 +1333,38 @@ const TestTracker = () => {
               </section>
             </div>
 
-            {weeklyTests.length === 0 ? (
+            <LockedResultsGate
+              hasAccess={hasPerformanceCoachCrmAccess}
+              hasData={weeklyTests.length > 0 || filteredEntries.length > 0}
+              isLoading={isEntriesInitialLoading}
+              error={entriesLoadError}
+              title="Weekly-итоги уже сохранены"
+              description="Записывать weekly-тесты можно бесплатно. Полный список результатов, score и история недели откроются после покупки."
+              ctaText="Открыть weekly-результаты"
+              minHeightClassName="min-h-[520px]"
+            >
+            {isEntriesInitialLoading ? (
+              <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {Array.from({ length: 3 }).map((_, index) => (
+                  <div
+                    key={`weekly-skeleton-${index}`}
+                    className="rounded-[26px] border p-5"
+                    style={{
+                      background: "linear-gradient(155deg, rgba(53, 144, 255, 0.08), rgba(17, 24, 39, 0.96) 70%)",
+                      borderColor: "rgba(96, 165, 250, 0.18)"
+                    }}
+                  >
+                    <Skeleton className="h-5 w-24 bg-white/10" />
+                    <Skeleton className="mt-4 h-7 w-3/4 bg-white/10" />
+                    <div className="mt-5 grid grid-cols-2 gap-3">
+                      <Skeleton className="h-20 rounded-[18px] bg-white/10" />
+                      <Skeleton className="h-20 rounded-[18px] bg-white/10" />
+                    </div>
+                    <Skeleton className="mt-5 h-10 w-full bg-white/10" />
+                  </div>
+                ))}
+              </section>
+            ) : weeklyTests.length === 0 ? (
               <section
                 className="rounded-[28px] border p-8 text-center"
                 style={{ backgroundColor: "rgba(255,255,255,0.03)", borderColor: COLORS.borderColor }}
@@ -1097,7 +1372,7 @@ const TestTracker = () => {
                 <ClipboardList className="mx-auto h-12 w-12" style={{ color: COLORS.primary }} />
                 <h3 className="mt-4 text-xl font-semibold" style={{ color: COLORS.textColor }}>На эту неделю пока нет записанных weekly-тестов</h3>
                 <p className="mx-auto mt-2 max-w-xl text-sm leading-7" style={{ color: COLORS.textColorSecondary }}>
-                  Когда появятся первые результаты, они будут собраны здесь в более удобном карточном виде, а не в тяжёлой таблице.
+                  Смените период или добавьте новый weekly-тест, чтобы эта зона стала вашим быстрым ориентиром по текущей неделе.
                 </p>
                 {!isStaff && (
                   <Button
@@ -1132,6 +1407,11 @@ const TestTracker = () => {
                           {formatDate(test.date, "d MMMM")}
                         </div>
                         <h3 className="mt-3 text-lg font-semibold" style={{ color: COLORS.textColor }}>{test.name || "Без названия"}</h3>
+                        <p className="mt-2 text-sm leading-6" style={{ color: COLORS.textColorSecondary }}>
+                          {typeof test.scoreNormalized === "number"
+                            ? "Результат уже зафиксирован и участвует в аналитике."
+                            : "Карточка сохранена без score: результат можно дополнить позже."}
+                        </p>
                       </div>
                       <div className="rounded-full px-3 py-1 text-xs font-medium" style={{ backgroundColor: "rgba(0, 227, 150, 0.14)", color: "#7EF3D1" }}>
                         {getTestTypeLabel(test.testType)}
@@ -1173,7 +1453,14 @@ const TestTracker = () => {
                       <div className="flex items-center gap-2">
                         {test.link && (
                           <a href={test.link} target="_blank" rel="noopener noreferrer">
-                            <Button variant="ghost" size="icon" className="rounded-2xl" style={{ color: COLORS.primary, border: `1px solid ${COLORS.borderColor}`, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="rounded-2xl"
+                              title="Открыть тест"
+                              aria-label={`Открыть тест ${test.name || "без названия"}`}
+                              style={{ color: COLORS.primary, border: `1px solid ${COLORS.borderColor}`, backgroundColor: "rgba(255,255,255,0.03)" }}
+                            >
                               <ExternalLink className="h-4 w-4" />
                             </Button>
                           </a>
@@ -1181,7 +1468,14 @@ const TestTracker = () => {
                         {test.screenshotUrl && (
                           <Dialog>
                             <DialogTrigger asChild>
-                              <Button variant="ghost" size="icon" className="rounded-2xl" style={{ color: COLORS.primary, border: `1px solid ${COLORS.borderColor}`, backgroundColor: "rgba(255,255,255,0.03)" }}>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="rounded-2xl"
+                                title="Открыть скриншот"
+                                aria-label={`Открыть скриншот теста ${test.name || "без названия"}`}
+                                style={{ color: COLORS.primary, border: `1px solid ${COLORS.borderColor}`, backgroundColor: "rgba(255,255,255,0.03)" }}
+                              >
                                 <Image className="h-4 w-4" />
                               </Button>
                             </DialogTrigger>
@@ -1197,10 +1491,26 @@ const TestTracker = () => {
 
                       {!isStaff && (
                         <div className="flex items-center gap-2">
-                          <Button variant="ghost" size="icon" className="rounded-2xl" style={{ color: COLORS.primary, border: `1px solid ${COLORS.borderColor}`, backgroundColor: "rgba(255,255,255,0.03)" }} onClick={() => handleEdit(test)}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="rounded-2xl"
+                            title="Редактировать запись"
+                            aria-label={`Редактировать тест ${test.name || "без названия"}`}
+                            style={{ color: COLORS.primary, border: `1px solid ${COLORS.borderColor}`, backgroundColor: "rgba(255,255,255,0.03)" }}
+                            onClick={() => handleEdit(test)}
+                          >
                             <Edit className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="rounded-2xl" style={{ color: COLORS.danger, border: `1px solid ${COLORS.borderColor}`, backgroundColor: "rgba(255,255,255,0.03)" }} onClick={() => handleDelete(test.id)}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="rounded-2xl"
+                            title="Удалить запись"
+                            aria-label={`Удалить тест ${test.name || "без названия"}`}
+                            style={{ color: COLORS.danger, border: `1px solid ${COLORS.borderColor}`, backgroundColor: "rgba(255,255,255,0.03)" }}
+                            onClick={() => handleDelete(test.id)}
+                          >
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
@@ -1210,14 +1520,11 @@ const TestTracker = () => {
                 ))}
               </section>
             )}
+            </LockedResultsGate>
           </TabsContent>
 
-          <TabsContent value="questionnaire" className="space-y-5">
-            <DailyQuestionnairePanel onSaved={loadEntries} />
-          </TabsContent>
           </Tabs>
           )}
-        </SubscriptionFeatureGate>
       </div>
       
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -1256,7 +1563,7 @@ const TestTracker = () => {
                       <div>
                         <div className="text-lg font-semibold" style={{ color: COLORS.textColor }}>Базовая информация</div>
                         <p className="mt-1 text-sm leading-6" style={{ color: COLORS.textColorSecondary }}>
-                          Что за тест, когда проходили и относится ли он к weekly-ритму.
+                          Что это за тест, когда его проходили и относится ли он к недельному ритму.
                         </p>
                       </div>
                     </div>
@@ -1264,6 +1571,9 @@ const TestTracker = () => {
                       <div className="space-y-2">
                         <Label htmlFor="name" style={{ color: COLORS.textColor }}>Название теста</Label>
                         <Input id="name" value={name} onChange={(e) => setName(e.target.value)} className="rounded-2xl" style={fieldStyle} />
+                        <p className="text-xs leading-5" style={{ color: COLORS.textColorSecondary }}>
+                          Можно оставить пустым, если вы фиксируете запись только по типу теста.
+                        </p>
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="link" style={{ color: COLORS.textColor }}>Ссылка</Label>
@@ -1277,6 +1587,9 @@ const TestTracker = () => {
                         <div className="space-y-2">
                           <Label htmlFor="testType" style={{ color: COLORS.textColor }}>Тип теста</Label>
                           <Input id="testType" value={testType} onChange={(e) => setTestType(e.target.value)} className="rounded-2xl" style={fieldStyle} />
+                          <p className="text-xs leading-5" style={{ color: COLORS.textColorSecondary }}>
+                            Например: reaction, aim, cognitive, visual_search.
+                          </p>
                         </div>
                       </div>
                       <div className="rounded-[20px] border px-4 py-3" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
@@ -1306,11 +1619,26 @@ const TestTracker = () => {
                       </div>
                     </div>
                     <div className="mt-5 grid gap-4 md:grid-cols-2">
-                      <Input placeholder="Raw score" value={rawScore} onChange={(e) => setRawScore(e.target.value)} inputMode="decimal" className="rounded-2xl" style={fieldStyle} />
-                      <Input placeholder="Score normalized (0-100)" value={scoreNormalized} onChange={(e) => setScoreNormalized(e.target.value)} inputMode="decimal" className="rounded-2xl" style={fieldStyle} />
-                      <Input placeholder="Unit (%)" value={unit} onChange={(e) => setUnit(e.target.value)} className="rounded-2xl" style={fieldStyle} />
-                      <Input placeholder="Duration sec" value={durationSec} onChange={(e) => setDurationSec(e.target.value)} inputMode="numeric" className="rounded-2xl" style={fieldStyle} />
-                      <Input placeholder="Attempts" value={attempts} onChange={(e) => setAttempts(e.target.value)} inputMode="numeric" className="rounded-2xl md:col-span-2" style={fieldStyle} />
+                      <div className="space-y-2">
+                        <Label htmlFor="rawScore" style={{ color: COLORS.textColor }}>Raw score</Label>
+                        <Input id="rawScore" placeholder="Например, 42" value={rawScore} onChange={(e) => setRawScore(e.target.value)} inputMode="decimal" className="rounded-2xl" style={fieldStyle} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="scoreNormalized" style={{ color: COLORS.textColor }}>Нормализованный score</Label>
+                        <Input id="scoreNormalized" placeholder="0-100" value={scoreNormalized} onChange={(e) => setScoreNormalized(e.target.value)} inputMode="decimal" className="rounded-2xl" style={fieldStyle} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="unit" style={{ color: COLORS.textColor }}>Единица измерения</Label>
+                        <Input id="unit" placeholder="%" value={unit} onChange={(e) => setUnit(e.target.value)} className="rounded-2xl" style={fieldStyle} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="durationSec" style={{ color: COLORS.textColor }}>Длительность, сек.</Label>
+                        <Input id="durationSec" placeholder="Например, 180" value={durationSec} onChange={(e) => setDurationSec(e.target.value)} inputMode="numeric" className="rounded-2xl" style={fieldStyle} />
+                      </div>
+                      <div className="space-y-2 md:col-span-2">
+                        <Label htmlFor="attempts" style={{ color: COLORS.textColor }}>Количество попыток</Label>
+                        <Input id="attempts" placeholder="1" value={attempts} onChange={(e) => setAttempts(e.target.value)} inputMode="numeric" className="rounded-2xl" style={fieldStyle} />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1329,12 +1657,30 @@ const TestTracker = () => {
                       </div>
                     </div>
                     <div className="mt-5 grid gap-4 md:grid-cols-3">
-                      <Input placeholder="Fatigue (0-10)" value={fatigue} onChange={(e) => setFatigue(e.target.value)} inputMode="decimal" className="rounded-2xl" style={fieldStyle} />
-                      <Input placeholder="Focus (0-10)" value={focus} onChange={(e) => setFocus(e.target.value)} inputMode="decimal" className="rounded-2xl" style={fieldStyle} />
-                      <Input placeholder="Stress (0-10)" value={stress} onChange={(e) => setStress(e.target.value)} inputMode="decimal" className="rounded-2xl" style={fieldStyle} />
-                      <Input placeholder="Sleep hours" value={sleepHours} onChange={(e) => setSleepHours(e.target.value)} inputMode="decimal" className="rounded-2xl" style={fieldStyle} />
-                      <Input placeholder="Mood (0-10)" value={snapshotMood} onChange={(e) => setSnapshotMood(e.target.value)} inputMode="decimal" className="rounded-2xl" style={fieldStyle} />
-                      <Input placeholder="Energy (0-10)" value={snapshotEnergy} onChange={(e) => setSnapshotEnergy(e.target.value)} inputMode="decimal" className="rounded-2xl" style={fieldStyle} />
+                      <div className="space-y-2">
+                        <Label htmlFor="fatigue" style={{ color: COLORS.textColor }}>Усталость</Label>
+                        <Input id="fatigue" placeholder="0-10" value={fatigue} onChange={(e) => setFatigue(e.target.value)} inputMode="decimal" className="rounded-2xl" style={fieldStyle} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="focus" style={{ color: COLORS.textColor }}>Фокус</Label>
+                        <Input id="focus" placeholder="0-10" value={focus} onChange={(e) => setFocus(e.target.value)} inputMode="decimal" className="rounded-2xl" style={fieldStyle} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="stress" style={{ color: COLORS.textColor }}>Стресс</Label>
+                        <Input id="stress" placeholder="0-10" value={stress} onChange={(e) => setStress(e.target.value)} inputMode="decimal" className="rounded-2xl" style={fieldStyle} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="sleepHours" style={{ color: COLORS.textColor }}>Сон, часы</Label>
+                        <Input id="sleepHours" placeholder="Например, 7.5" value={sleepHours} onChange={(e) => setSleepHours(e.target.value)} inputMode="decimal" className="rounded-2xl" style={fieldStyle} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="snapshotMood" style={{ color: COLORS.textColor }}>Настроение</Label>
+                        <Input id="snapshotMood" placeholder="0-10" value={snapshotMood} onChange={(e) => setSnapshotMood(e.target.value)} inputMode="decimal" className="rounded-2xl" style={fieldStyle} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="snapshotEnergy" style={{ color: COLORS.textColor }}>Энергия</Label>
+                        <Input id="snapshotEnergy" placeholder="0-10" value={snapshotEnergy} onChange={(e) => setSnapshotEnergy(e.target.value)} inputMode="decimal" className="rounded-2xl" style={fieldStyle} />
+                      </div>
                     </div>
                   </div>
 
@@ -1351,9 +1697,18 @@ const TestTracker = () => {
                       </div>
                     </div>
                     <div className="mt-5 grid gap-4">
-                      <Input placeholder="Match type" value={matchType} onChange={(e) => setMatchType(e.target.value)} className="rounded-2xl" style={fieldStyle} />
-                      <Input placeholder="Map" value={contextMap} onChange={(e) => setContextMap(e.target.value)} className="rounded-2xl" style={fieldStyle} />
-                      <Input placeholder="Role" value={contextRole} onChange={(e) => setContextRole(e.target.value)} className="rounded-2xl" style={fieldStyle} />
+                      <div className="space-y-2">
+                        <Label htmlFor="matchType" style={{ color: COLORS.textColor }}>Тип матча</Label>
+                        <Input id="matchType" placeholder="Например, scrim или officials" value={matchType} onChange={(e) => setMatchType(e.target.value)} className="rounded-2xl" style={fieldStyle} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="contextMap" style={{ color: COLORS.textColor }}>Карта</Label>
+                        <Input id="contextMap" placeholder="Например, Mirage" value={contextMap} onChange={(e) => setContextMap(e.target.value)} className="rounded-2xl" style={fieldStyle} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="contextRole" style={{ color: COLORS.textColor }}>Роль</Label>
+                        <Input id="contextRole" placeholder="Например, IGL" value={contextRole} onChange={(e) => setContextRole(e.target.value)} className="rounded-2xl" style={fieldStyle} />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1373,6 +1728,7 @@ const TestTracker = () => {
               type="button" 
               variant="outline" 
               onClick={() => setIsDialogOpen(false)}
+              disabled={isLoading}
               style={{ borderColor: COLORS.borderColor, color: COLORS.textColor }}
             >
               Отмена
@@ -1380,10 +1736,16 @@ const TestTracker = () => {
             <Button 
               type="submit" 
               onClick={handleSubmit}
+              disabled={isLoading}
               className="rounded-2xl"
               style={{ backgroundColor: COLORS.primary, color: "white" }}
             >
-              {editingTest ? "Сохранить" : "Добавить"}
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Сохраняем...
+                </>
+              ) : editingTest ? "Сохранить" : "Добавить"}
             </Button>
           </DialogFooter>
         </DialogContent>

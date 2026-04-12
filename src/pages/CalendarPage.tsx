@@ -28,6 +28,7 @@ import {
   createCalendarEvent,
   deleteCalendarEvent,
   getCalendarEvents,
+  notifyCalendarEventsUpdated,
   updateCalendarEvent,
 } from "@/lib/calendarApi";
 import ROUTES from "@/lib/routes";
@@ -277,6 +278,7 @@ const CalendarPage: React.FC = () => {
         toast.success(scope === "team" ? "Командное событие создано" : "Личное событие создано");
       }
 
+      notifyCalendarEventsUpdated();
       setDialogOpen(false);
       setSelectedEvent(null);
       await loadEvents();
@@ -296,6 +298,7 @@ const CalendarPage: React.FC = () => {
     try {
       await deleteCalendarEvent(selectedEvent.id);
       toast.success("Событие удалено");
+      notifyCalendarEventsUpdated();
       setDialogOpen(false);
       setSelectedEvent(null);
       await loadEvents();

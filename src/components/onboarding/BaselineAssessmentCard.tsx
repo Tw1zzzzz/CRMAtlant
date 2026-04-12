@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { ArrowRight, BrainCircuit, CheckCheck, ShieldCheck, Swords } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,11 +13,14 @@ import {
   BASELINE_ROUND_STRENGTH_OPTIONS,
   BASELINE_SIDE_OPTIONS
 } from "@/lib/baselineAssessment";
+import ROUTES from "@/lib/routes";
 import { COLORS } from "@/styles/theme";
+import { PRODUCT_NAME } from "@/lib/productCopy";
 import type { BaselineAssessment, BaselineRole } from "@/types";
 
 type BaselineAssessmentCardProps = {
   initialAssessment?: BaselineAssessment | null;
+  hasFullAccess?: boolean;
   onCompleted?: (assessment?: BaselineAssessment | null) => void | Promise<void>;
 };
 
@@ -28,6 +32,7 @@ const selectStyle = {
 
 export default function BaselineAssessmentCard({
   initialAssessment,
+  hasFullAccess = true,
   onCompleted
 }: BaselineAssessmentCardProps) {
   const { toast } = useToast();
@@ -56,6 +61,10 @@ export default function BaselineAssessmentCard({
     [personalityAnswers]
   );
   const resolvedAssessment = localAssessment || initialAssessment || null;
+  const isResultLocked = Boolean(
+    resolvedAssessment?.completedAt &&
+    !hasFullAccess
+  );
 
   useEffect(() => {
     if (initialAssessment?.completedAt) {
@@ -117,6 +126,87 @@ export default function BaselineAssessmentCard({
       setSubmitting(false);
     }
   };
+
+  if (!editing && isResultLocked && resolvedAssessment?.cs2Role) {
+    return (
+      <Card
+        className="rounded-[28px] border"
+        style={{
+          background: "linear-gradient(145deg, rgba(25, 35, 56, 0.96), rgba(12, 19, 31, 0.98))",
+          borderColor: "rgba(96, 165, 250, 0.16)"
+        }}
+      >
+        <CardHeader>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-[11px] uppercase tracking-[0.24em] text-cyan-100">
+                <CheckCheck className="h-3.5 w-3.5" />
+                Анкетирование завершено
+              </div>
+              <CardTitle className="mt-4 text-2xl" style={{ color: COLORS.textColor }}>
+                Результат уже сохранён
+              </CardTitle>
+              <CardDescription className="mt-2 max-w-2xl text-sm leading-7" style={{ color: COLORS.textColorSecondary }}>
+                Базовая анкета пройдена, а итоговый архетип, расшифровка и стиль игрока откроются после покупки тарифа {PRODUCT_NAME}.
+              </CardDescription>
+            </div>
+            <Button
+              variant="outline"
+              className="rounded-2xl"
+              style={{ borderColor: COLORS.borderColor, color: COLORS.textColor }}
+              onClick={() => {
+                setEditing(true);
+                setStep(1);
+              }}
+            >
+              Обновить ответы
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+              <div className="flex items-center gap-2 text-sm font-medium" style={{ color: COLORS.textColor }}>
+                <BrainCircuit className="h-4 w-4" />
+                Что откроется после оплаты
+              </div>
+              <p className="mt-3 text-sm leading-7" style={{ color: COLORS.textColorSecondary }}>
+                Архетип игрока, headline, поведенческая расшифровка и персональные теги стиля.
+              </p>
+            </div>
+            <div className="rounded-[22px] border p-4" style={{ borderColor: COLORS.borderColor, backgroundColor: "rgba(255,255,255,0.03)" }}>
+              <div className="flex items-center gap-2 text-sm font-medium" style={{ color: COLORS.textColor }}>
+                <Swords className="h-4 w-4" />
+                Игровая роль уже зафиксирована
+              </div>
+              <div className="mt-3 space-y-2 text-sm" style={{ color: COLORS.textColorSecondary }}>
+                <p>Основная роль: <span style={{ color: COLORS.textColor }}>{resolvedAssessment.cs2Role.primaryRole}</span></p>
+                <p>Вторичная роль: <span style={{ color: COLORS.textColor }}>{resolvedAssessment.cs2Role.secondaryRole || "Не указана"}</span></p>
+                <p>Предпочтение: <span style={{ color: COLORS.textColor }}>{resolvedAssessment.cs2Role.sidePreference}</span></p>
+                <p>Сильная фаза: <span style={{ color: COLORS.textColor }}>{resolvedAssessment.cs2Role.roundStrength}</span></p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-[22px] border px-4 py-4" style={{ borderColor: "rgba(96, 165, 250, 0.18)", backgroundColor: "rgba(53, 144, 255, 0.08)" }}>
+            <div>
+              <div className="text-sm font-medium" style={{ color: COLORS.textColor }}>
+                Полная расшифровка уже готова
+              </div>
+              <div className="mt-1 text-sm leading-6" style={{ color: COLORS.textColorSecondary }}>
+                Откройте тариф, и результат появится без повторного прохождения анкеты.
+              </div>
+            </div>
+            <Link to={ROUTES.PRICING}>
+              <Button className="rounded-2xl" style={{ backgroundColor: COLORS.primary, color: "white" }}>
+                Открыть результат
+              </Button>
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (!editing && resolvedAssessment?.personality?.summary && resolvedAssessment?.cs2Role) {
     const summary = resolvedAssessment.personality.summary;

@@ -156,6 +156,32 @@ const main = async () => {
     assert.match(res.payload.message, /пользователь не найден/i);
   });
 
+  await runTest('protect denies access for blocked account even with valid token', async () => {
+    jwtModule.verifyJwt = () => ({ id: 'blocked-user' });
+    User.findById = () => ({
+      select: async () => ({
+        _id: 'blocked-user',
+        name: 'Blocked',
+        email: 'blocked@example.com',
+        role: 'staff',
+        isActive: false,
+      })
+    });
+
+    const { protect } = loadAuthModule();
+    const req = createRequest({ headers: { authorization: 'Bearer good' } });
+    const res = createResponse();
+    let nextCalled = false;
+
+    await protect(req, res, () => {
+      nextCalled = true;
+    });
+
+    assert.strictEqual(nextCalled, false);
+    assert.strictEqual(res.statusCode, 401);
+    assert.strictEqual(res.payload.code, 'ACCOUNT_BLOCKED');
+  });
+
   await runTest('protect supports legacy JWT secret fallback', async () => {
     process.env.JWT_SECRET = 'brand-new-secret';
     jwtModule.verifyJwt = originalVerifyJwt;
@@ -250,6 +276,24 @@ const main = async () => {
     assert.strictEqual(badNext, false);
     assert.strictEqual(badRes.statusCode, 403);
     assert.strictEqual(badRes.payload.requiresPrivilegeKey, true);
+  });
+
+  await runTest('hasPrivilegeKey rejects team staff without assigned team', async () => {
+    const { hasPrivilegeKey } = loadAuthModule();
+
+    const req = createRequest({
+      user: { role: 'staff', playerType: 'team', name: 'Team Lead', teamId: null, privilegeKey: '' }
+    });
+    const res = createResponse();
+    let nextCalled = false;
+
+    hasPrivilegeKey(req, res, () => {
+      nextCalled = true;
+    });
+
+    assert.strictEqual(nextCalled, false);
+    assert.strictEqual(res.statusCode, 403);
+    assert.strictEqual(res.payload.requiresTeamSetup, true);
   });
 
   jwtModule.verifyJwt = originalVerifyJwt;

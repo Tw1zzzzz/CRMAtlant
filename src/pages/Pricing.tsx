@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { toast } from 'sonner';
+import { getPlanPresentation, PRODUCT_DESCRIPTOR, PRODUCT_NAME } from '@/lib/productCopy';
 
 const PENDING_PAYMENT_STORAGE_KEY = 'payment:last-plan';
 
@@ -88,11 +89,11 @@ const Pricing = () => {
 
   return (
     <div className="container mx-auto py-6 space-y-6">
-      <div className="space-y-2">
-        <span className="text-sm uppercase tracking-[0.24em] text-primary/80">Billing</span>
-        <h1 className="text-3xl font-bold">Тарифы</h1>
+      <div className="space-y-3">
+        <span className="text-sm uppercase tracking-[0.24em] text-primary/80">{PRODUCT_NAME}</span>
+        <h1 className="text-3xl font-bold">Тарифы и расширение инсайта</h1>
         <p className="text-muted-foreground max-w-2xl">
-          Выберите план и перейдите на защищённую страницу оплаты Робокассы. После подтверждения оплаты доступ к платным функциям обновится автоматически.
+          {PRODUCT_DESCRIPTOR}. Базовый обзор и ранние сигналы остаются видимыми без оплаты, а тарифы открывают более глубокий разбор, расширенную историю и рабочие витрины для решений.
         </p>
       </div>
 
@@ -101,8 +102,8 @@ const Pricing = () => {
         <AlertTitle>Текущий доступ</AlertTitle>
         <AlertDescription>
           {user?.hasPerformanceCoachCrmAccess || user?.hasCorrelationAnalysisAccess || user?.hasGameStatsAccess
-            ? 'У вас уже есть активные платные продукты. При необходимости можно докупить или продлить доступ к нужному разделу.'
-            : 'У вас пока нет активных платных тарифов.'}
+            ? 'У вас уже есть активные платные продукты. При необходимости можно продлить доступ или открыть ещё один углублённый сценарий.'
+            : 'У вас пока нет активных платных тарифов. Это не мешает видеть базовый обзор и ранние сигналы по форме.'}
         </AlertDescription>
       </Alert>
 
@@ -126,6 +127,7 @@ const Pricing = () => {
           {plans.map((plan) => {
             const isCurrentPlan = isPlanActiveForUser(user, plan.name);
             const isProcessing = purchaseMutation.isPending && activePlanId === plan.id;
+            const presentation = getPlanPresentation(plan.name);
 
             return (
               <Card
@@ -136,13 +138,24 @@ const Pricing = () => {
                   <div className="flex items-start justify-between gap-3">
                     <div className="space-y-1">
                       <CardTitle className="text-xl">{plan.name}</CardTitle>
-                      <CardDescription>{plan.periodDays} дней доступа</CardDescription>
+                      <CardDescription>{presentation.audience}</CardDescription>
                     </div>
                     {isCurrentPlan ? <Badge>Активный тариф</Badge> : null}
                   </div>
                   <div className="text-3xl font-bold tracking-tight">{formatPrice(plan.price)}</div>
+                  <div className="rounded-2xl border border-primary/10 bg-primary/5 px-4 py-3 text-sm text-muted-foreground">
+                    <p className="font-medium text-foreground">Что изменится после покупки</p>
+                    <p className="mt-2 leading-6">{presentation.outcome}</p>
+                  </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-4">
+                  <div className="rounded-2xl border border-border/60 bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+                    <p className="font-medium text-foreground">{presentation.unlockLabel}</p>
+                    <p className="mt-2 leading-6">{presentation.preview}</p>
+                    <p className="mt-3 text-xs uppercase tracking-[0.18em] text-primary/80">
+                      {plan.periodDays} дней доступа
+                    </p>
+                  </div>
                   <ul className="space-y-3 text-sm text-muted-foreground">
                     {plan.features.map((feature) => (
                       <li key={feature} className="flex items-start gap-2">

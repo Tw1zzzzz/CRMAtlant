@@ -3,14 +3,20 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNavigate } from "react-router-dom";
-import { Camera, Upload, Pencil, X, Check } from "lucide-react";
+import { Camera, Upload, Pencil, X, Check, ArrowRightLeft, Link2, ShieldCheck, UserPlus2 } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
 import StaffPrivilegeUpgrade from "@/components/StaffPrivilegeUpgrade";
 import TeamManagement from "@/pages/TeamManagement";
 import { toast } from "sonner";
+import { getImageUrl } from "@/utils/imageUtils";
+import { TeamLinkSummary } from "@/types";
+import { cn } from "@/lib/utils";
 
 
 
@@ -24,12 +30,29 @@ interface ProfileState {
   lastAvatarUpdate: number;
 }
 
+interface PendingTeamRelink {
+  teamCode: string;
+  targetProfileKey: string;
+  currentTeam: TeamLinkSummary;
+  nextTeam: TeamLinkSummary;
+}
+
 /**
  * Компонент страницы профиля пользователя
  * Отображает данные профиля и предоставляет возможность удаления аккаунта
  */
 const Profile: React.FC = () => {
-  const { user, deleteAccount, updateAvatar, refreshUser, changePassword, resendVerificationEmail } = useAuth();
+  const {
+    user,
+    deleteAccount,
+    updateAvatar,
+    refreshUser,
+    changePassword,
+    resendVerificationEmail,
+    createPlayerProfile,
+    linkTeamProfile,
+    switchProfile
+  } = useAuth();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -54,6 +77,20 @@ const Profile: React.FC = () => {
     newPassword: "",
     confirmPassword: "",
   });
+  const [playerProfileForm, setPlayerProfileForm] = useState({
+    playerType: "team" as "team" | "solo",
+    faceitUrl: "",
+    nickname: "",
+  });
+  const [isCreatingPlayerProfile, setIsCreatingPlayerProfile] = useState(false);
+  const [teamCode, setTeamCode] = useState("");
+  const [isLinkingTeamProfile, setIsLinkingTeamProfile] = useState(false);
+  const [pendingTeamRelink, setPendingTeamRelink] = useState<PendingTeamRelink | null>(null);
+  const [teamSwitchSuggestion, setTeamSwitchSuggestion] = useState<{
+    profileKey: string;
+    label: string;
+  } | null>(null);
+  const [staffProfileTab, setStaffProfileTab] = useState<"profile" | "team">("profile");
 
   // Загружаем текущую FACEIT ссылку при монтировании
   useEffect(() => {
@@ -163,6 +200,98 @@ const Profile: React.FC = () => {
     }
   };
 
+  const handleCreatePlayerProfile = async (): Promise<void> => {
+    if (!playerProfileForm.faceitUrl.trim()) {
+      toast.error("Укажите Faceit-ссылку для профиля игрока");
+      return;
+    }
+
+    setIsCreatingPlayerProfile(true);
+    try {
+      const result = await createPlayerProfile({
+        playerType: playerProfileForm.playerType,
+        faceitUrl: playerProfileForm.faceitUrl.trim(),
+        nickname: playerProfileForm.nickname.trim() || undefined,
+      });
+
+      if (result.success) {
+        setPlayerProfileForm({
+          playerType: "team",
+          faceitUrl: "",
+          nickname: "",
+        });
+      }
+    } finally {
+      setIsCreatingPlayerProfile(false);
+    }
+  };
+
+  const handleTeamLinkSubmit = async (
+    confirmRelink = false,
+    overrideCode?: string
+  ): Promise<void> => {
+    const normalizedTeamCode = (overrideCode || teamCode).trim();
+
+    if (!normalizedTeamCode) {
+      toast.error("Введите team-код");
+      return;
+    }
+
+    setIsLinkingTeamProfile(true);
+    try {
+      const result = await linkTeamProfile({
+        teamCode: normalizedTeamCode,
+        confirmRelink,
+      });
+
+      if (!result.success) {
+        toast.error(result.error || "Не удалось привязать профиль к команде");
+        return;
+      }
+
+      if (
+        result.status === "confirmation_required" &&
+        result.currentTeam &&
+        result.nextTeam &&
+        result.targetProfileKey
+      ) {
+        setPendingTeamRelink({
+          teamCode: normalizedTeamCode,
+          targetProfileKey: result.targetProfileKey,
+          currentTeam: result.currentTeam,
+          nextTeam: result.nextTeam,
+        });
+        return;
+      }
+
+      setPendingTeamRelink(null);
+      setTeamCode("");
+
+      const targetProfileKey = result.targetProfileKey || null;
+      const activeProfileKey = result.user?.activeProfileKey || user?.activeProfileKey || null;
+      if (targetProfileKey && activeProfileKey && targetProfileKey !== activeProfileKey) {
+        setTeamSwitchSuggestion({
+          profileKey: targetProfileKey,
+          label: targetProfileKey === "staff_team" ? "Переключиться в Staff / Team" : "Переключиться в Игрок / Team",
+        });
+      } else {
+        setTeamSwitchSuggestion(null);
+      }
+
+      toast.success(result.message || "Team-профиль успешно привязан");
+    } finally {
+      setIsLinkingTeamProfile(false);
+    }
+  };
+
+  const handleConfirmTeamRelink = async (): Promise<void> => {
+    if (!pendingTeamRelink) {
+      return;
+    }
+
+    await handleTeamLinkSubmit(true, pendingTeamRelink.teamCode);
+  };
+
 
 
   /**
@@ -267,6 +396,30 @@ const Profile: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    const canCreateTeamPlayerProfileNext = (user.availableProfiles || []).some(
+      (profile) => profile.role === "staff" && profile.playerType === "team" && profile.teamId
+    );
+
+    if (!canCreateTeamPlayerProfileNext && playerProfileForm.playerType === "team") {
+      setPlayerProfileForm((prev) => ({ ...prev, playerType: "solo" }));
+    }
+  }, [playerProfileForm.playerType, user]);
+
+  useEffect(() => {
+    if (!user || !teamSwitchSuggestion?.profileKey) {
+      return;
+    }
+
+    if (user.activeProfileKey === teamSwitchSuggestion.profileKey) {
+      setTeamSwitchSuggestion(null);
+    }
+  }, [teamSwitchSuggestion, user]);
+
 
 
   /**
@@ -298,6 +451,28 @@ const Profile: React.FC = () => {
   const { isDeleting, isDialogOpen, isUploadingAvatar, lastAvatarUpdate } = state;
   const isTeamStaff = user.role === "staff" && user.playerType === "team";
   const teamName = user.teamName?.trim() || "";
+  const teamLogo = user.teamLogo?.trim() || "";
+  const teamLogoUrl = getImageUrl(teamLogo) || teamLogo;
+  const availableProfiles = user.availableProfiles || [];
+  const hasPlayerProfile = availableProfiles.some((profile) => profile.role === "player");
+  const canCreateTeamPlayerProfile = availableProfiles.some(
+    (profile) => profile.role === "staff" && profile.playerType === "team" && profile.teamId
+  );
+  const hasLinkedTeamProfileForActiveRole = availableProfiles.some(
+    (profile) => profile.role === user.role && profile.playerType === "team" && Boolean(profile.teamId)
+  );
+  const teamLinkTargetLabel = user.role === "staff" ? "staff-код" : "player-код";
+  const teamLinkTitle = user.role === "staff" ? "Привязка Staff / Team" : "Привязка Игрок / Team";
+  const teamLinkDescription =
+    user.playerType === "team" && teamName
+      ? `Сейчас активный team-профиль привязан к команде «${teamName}». Здесь можно перепривязать его по новому ${teamLinkTargetLabel}.`
+      : hasLinkedTeamProfileForActiveRole
+        ? `У вас уже есть Team-профиль для роли «${user.role === "staff" ? "staff" : "player"}». Введите новый ${teamLinkTargetLabel}, чтобы обновить привязку команды.`
+        : user.role === "staff"
+          ? "Введите staff-код, чтобы добавить отдельный профиль Staff / Team и затем переключаться между контекстами."
+          : "Введите player-код, чтобы добавить отдельный профиль Игрок / Team и затем переключаться между Solo и Team.";
+  const currentActiveProfile = availableProfiles.find((profile) => profile.key === user.activeProfileKey) || null;
+  const hasMultipleProfiles = availableProfiles.length > 1;
 
   return (
     <div className="container mx-auto py-6 performance-page">
@@ -307,7 +482,12 @@ const Profile: React.FC = () => {
         Управление персональными данными, правами и настройками аккаунта.
       </p>
       
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div
+        className={cn(
+          "grid grid-cols-1 gap-8",
+          isTeamStaff ? "xl:grid-cols-[minmax(320px,400px)_minmax(0,1fr)]" : "lg:grid-cols-2"
+        )}
+      >
         {/* Карточка с информацией о профиле */}
         <Card className="performance-hero">
           <CardHeader>
@@ -381,7 +561,16 @@ const Profile: React.FC = () => {
             {user.playerType === "team" && (
               <div className="rounded-2xl border border-sky-400/25 bg-[linear-gradient(135deg,rgba(56,189,248,0.14),rgba(15,23,42,0.92))] p-5 shadow-[0_18px_40px_rgba(14,165,233,0.12)]">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
+                  <div className="flex items-start gap-4">
+                    {teamLogo ? (
+                      <img
+                        src={teamLogoUrl}
+                        alt={teamName}
+                        className="h-16 w-16 rounded-2xl border object-cover"
+                        style={{ borderColor: "rgba(125,211,252,0.18)" }}
+                      />
+                    ) : null}
+                    <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-200/80">
                       Текущая команда
                     </p>
@@ -395,8 +584,9 @@ const Profile: React.FC = () => {
                           : "Ваш профиль привязан к этой команде."
                         : user.role === "staff"
                           ? "Создайте команду или присоединитесь по staff-коду, чтобы начать работу."
-                          : "Команда появится здесь после привязки по team-коду."}
+                        : "Команда появится здесь после привязки по team-коду."}
                     </p>
+                    </div>
                   </div>
                   <div className="inline-flex items-center rounded-full border border-sky-300/25 bg-sky-400/10 px-3 py-1 text-xs font-medium text-sky-100">
                     {user.role === "staff" ? "Staff / Team" : "Player / Team"}
@@ -606,8 +796,309 @@ const Profile: React.FC = () => {
 
         <div className="space-y-8">
           {isTeamStaff && (
-            <TeamManagement />
+            <Tabs
+              value={staffProfileTab}
+              onValueChange={(value) => setStaffProfileTab(value as "profile" | "team")}
+              className="space-y-4"
+            >
+              <TabsList className="grid w-full grid-cols-2 bg-muted/40">
+                <TabsTrigger value="profile">Профиль и доступ</TabsTrigger>
+                <TabsTrigger value="team">Моя команда и коды приглашения</TabsTrigger>
+              </TabsList>
+            </Tabs>
           )}
+
+          {(!isTeamStaff || staffProfileTab === "profile") && (
+            <>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Активный профиль</CardTitle>
+                  <CardDescription>
+                    {hasMultipleProfiles
+                      ? "Один аккаунт может работать в нескольких контекстах. Переключение сразу меняет доступные разделы и права."
+                      : "Сейчас у аккаунта один доступный контекст. Когда появятся дополнительные профили, переключение будет доступно здесь."}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {hasMultipleProfiles && (
+                    <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary/80">
+                            Сейчас активен
+                          </p>
+                          <p className="mt-2 text-lg font-semibold">
+                            {currentActiveProfile?.label || "Текущий профиль"}
+                          </p>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            {currentActiveProfile?.teamName
+                              ? `${currentActiveProfile.teamName} • ${currentActiveProfile.role === "staff" ? "staff" : "player"} / ${currentActiveProfile.playerType}`
+                              : "Переключение ниже сразу меняет видимые разделы, доступы и контекст работы."}
+                          </p>
+                        </div>
+                        <Badge className="w-fit">{availableProfiles.length} профиля</Badge>
+                      </div>
+                    </div>
+                  )}
+                  {availableProfiles.map((profile) => {
+                    const isActive = profile.key === user.activeProfileKey;
+                    return (
+                      <div
+                        key={profile.key}
+                        className={cn(
+                          "flex flex-col gap-3 rounded-2xl border p-4 transition-colors sm:flex-row sm:items-center sm:justify-between",
+                          isActive
+                            ? "border-primary/35 bg-primary/5 shadow-[0_12px_30px_rgba(53,144,255,0.08)]"
+                            : "border-border/80 bg-background/40 hover:border-primary/20"
+                        )}
+                      >
+                        <div className="space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-medium">{profile.label}</p>
+                            {isActive && <Badge>Активен</Badge>}
+                            {profile.teamId && <Badge variant="secondary">Команда подключена</Badge>}
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            {profile.teamName ? `${profile.teamName} • ` : ""}
+                            {profile.role === "staff" ? "staff" : "player"} / {profile.playerType}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {isActive
+                              ? "Именно этот контекст сейчас определяет доступные разделы и действия в системе."
+                              : "Можно безопасно переключиться без выхода из аккаунта."}
+                          </p>
+                        </div>
+                        {hasMultipleProfiles ? (
+                          <Button
+                            variant={isActive ? "secondary" : "outline"}
+                            className="sm:min-w-[140px]"
+                            onClick={() => {
+                              if (!isActive) {
+                                void switchProfile(profile.key);
+                              }
+                            }}
+                            disabled={isActive}
+                          >
+                            {isActive ? "Активен" : "Переключить"}
+                          </Button>
+                        ) : (
+                          <Badge className="w-fit">Текущий профиль</Badge>
+                        )}
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>{teamLinkTitle}</CardTitle>
+              <CardDescription>
+                {teamLinkDescription}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Alert className="border-border/80 bg-muted/20">
+                <Link2 className="h-4 w-4" />
+                <AlertTitle>
+                  {user.playerType === "team" && teamName ? "Профиль уже связан с командой" : "Нужен корректный код команды"}
+                </AlertTitle>
+                <AlertDescription>
+                  {user.playerType === "team" && teamName
+                    ? `Сейчас активна команда «${teamName}». Новый код обновит привязку только после проверки и, при необходимости, подтверждения.`
+                    : `Используйте ${teamLinkTargetLabel}, который выдал владелец команды. Сценарий работы аккаунта не изменится, добавится только новый team-контекст.`}
+                </AlertDescription>
+              </Alert>
+              <form
+                className="space-y-4"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void handleTeamLinkSubmit();
+                }}
+              >
+                <div className="space-y-2">
+                  <Label htmlFor="team-profile-code">Team-код</Label>
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <Input
+                      id="team-profile-code"
+                      placeholder={user.role === "staff" ? "Введите staff-код команды" : "Введите player-код команды"}
+                      value={teamCode}
+                      onChange={(event) => setTeamCode(event.target.value)}
+                      disabled={isLinkingTeamProfile}
+                      aria-describedby="team-profile-code-hint"
+                    />
+                    <Button type="submit" disabled={isLinkingTeamProfile} className="sm:min-w-[240px]">
+                      {isLinkingTeamProfile ? "Проверяем код..." : user.playerType === "team" ? "Обновить привязку Team-профиля" : "Добавить Team-профиль"}
+                    </Button>
+                  </div>
+                  <p id="team-profile-code-hint" className="text-sm text-muted-foreground">
+                    После успешной проверки система либо сразу добавит team-профиль, либо попросит подтвердить перепривязку.
+                  </p>
+                </div>
+              </form>
+              {teamSwitchSuggestion && teamSwitchSuggestion.profileKey !== user.activeProfileKey && (
+                <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-4" aria-live="polite">
+                  <div className="flex items-start gap-3">
+                    <ShieldCheck className="mt-0.5 h-5 w-5 text-emerald-400" />
+                    <div>
+                      <p className="font-medium text-emerald-100">Team-профиль готов</p>
+                      <p className="mt-1 text-sm text-emerald-50/80">
+                        Можно сразу перейти в новый контекст и открыть командные разделы без повторного входа.
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    className="mt-4"
+                    variant="outline"
+                    onClick={() => {
+                      void switchProfile(teamSwitchSuggestion.profileKey);
+                      setTeamSwitchSuggestion(null);
+                    }}
+                  >
+                    {teamSwitchSuggestion.label}
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {!hasPlayerProfile && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Добавить профиль игрока</CardTitle>
+                <CardDescription>
+                  Можно оставить один логин и добавить второй контекст игрока. Для Team-профиля команда возьмётся из текущего staff/team аккаунта.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    className={cn(
+                      "rounded-2xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                      playerProfileForm.playerType === "team"
+                        ? "border-primary/35 bg-primary/5"
+                        : "border-border/80 bg-background/40 hover:border-primary/20",
+                      !canCreateTeamPlayerProfile && "cursor-not-allowed opacity-60"
+                    )}
+                    onClick={() => setPlayerProfileForm((prev) => ({ ...prev, playerType: "team" }))}
+                    disabled={!canCreateTeamPlayerProfile}
+                  >
+                    <p className="font-medium">Игрок / Team</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Командный игровой контекст с привязкой к текущей staff/team команде.
+                    </p>
+                  </button>
+                  <button
+                    type="button"
+                    className={cn(
+                      "rounded-2xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                      playerProfileForm.playerType === "solo"
+                        ? "border-primary/35 bg-primary/5"
+                        : "border-border/80 bg-background/40 hover:border-primary/20"
+                    )}
+                    onClick={() => setPlayerProfileForm((prev) => ({ ...prev, playerType: "solo" }))}
+                  >
+                    <p className="font-medium">Игрок / Solo</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Отдельный личный игровой контекст без командной привязки.
+                    </p>
+                  </button>
+                </div>
+                <form
+                  className="space-y-4"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void handleCreatePlayerProfile();
+                  }}
+                >
+                  <div className="space-y-2">
+                    <Label htmlFor="player-profile-faceit">Faceit-ссылка</Label>
+                    <Input
+                      id="player-profile-faceit"
+                      placeholder="https://www.faceit.com/..."
+                      value={playerProfileForm.faceitUrl}
+                      onChange={(event) => setPlayerProfileForm((prev) => ({ ...prev, faceitUrl: event.target.value }))}
+                      disabled={isCreatingPlayerProfile}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="player-profile-nickname">Никнейм</Label>
+                    <Input
+                      id="player-profile-nickname"
+                      placeholder="Необязательно"
+                      value={playerProfileForm.nickname}
+                      onChange={(event) => setPlayerProfileForm((prev) => ({ ...prev, nickname: event.target.value }))}
+                      disabled={isCreatingPlayerProfile}
+                    />
+                  </div>
+                  <Button type="submit" disabled={isCreatingPlayerProfile} className="sm:min-w-[220px]">
+                    {isCreatingPlayerProfile ? "Добавляем..." : "Добавить профиль игрока"}
+                  </Button>
+                </form>
+                {!canCreateTeamPlayerProfile && (
+                  <Alert className="border-border/80 bg-muted/20">
+                    <UserPlus2 className="h-4 w-4" />
+                    <AlertTitle>Сначала подключите команду</AlertTitle>
+                    <AlertDescription>
+                      Team-профиль игрока станет доступен после привязки staff/team к конкретной команде.
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          <Dialog
+            open={Boolean(pendingTeamRelink)}
+            onOpenChange={(open) => {
+              if (!open) {
+                setPendingTeamRelink(null);
+              }
+            }}
+          >
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Подтвердите перепривязку Team-профиля</DialogTitle>
+                <DialogDescription>
+                  {pendingTeamRelink
+                    ? `Сейчас профиль привязан к команде «${pendingTeamRelink.currentTeam.name || "Без названия"}». После подтверждения он будет перепривязан к «${pendingTeamRelink.nextTeam.name}».`
+                    : "Подтвердите действие."}
+                </DialogDescription>
+              </DialogHeader>
+              {pendingTeamRelink && (
+                <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr]">
+                  <div className="rounded-2xl border border-border/80 bg-muted/20 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Сейчас
+                    </p>
+                    <p className="mt-2 font-medium">{pendingTeamRelink.currentTeam.name || "Без названия"}</p>
+                  </div>
+                  <div className="flex items-center justify-center text-muted-foreground">
+                    <ArrowRightLeft className="h-5 w-5" />
+                  </div>
+                  <div className="rounded-2xl border border-primary/25 bg-primary/5 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary/80">
+                      Будет подключено
+                    </p>
+                    <p className="mt-2 font-medium">{pendingTeamRelink.nextTeam.name}</p>
+                  </div>
+                </div>
+              )}
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setPendingTeamRelink(null)}
+                  disabled={isLinkingTeamProfile}
+                >
+                  Отмена
+                </Button>
+                <Button onClick={() => void handleConfirmTeamRelink()} disabled={isLinkingTeamProfile}>
+                  {isLinkingTeamProfile ? "Перепривязываем..." : "Подтвердить перепривязку"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           {user.role !== "staff" && (
             <Card>
@@ -640,6 +1131,10 @@ const Profile: React.FC = () => {
               </CardContent>
             </Card>
           )}
+            </>
+          )}
+
+          {isTeamStaff && staffProfileTab === "team" && <TeamManagement />}
         </div>
       </div>
     </div>

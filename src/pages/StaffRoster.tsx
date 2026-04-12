@@ -310,14 +310,18 @@ const StaffRoster = () => {
           <CardHeader>
             <CardTitle style={{ color: COLORS.textColor }}>Доступ ограничен</CardTitle>
             <CardDescription style={{ color: COLORS.textColorSecondary }}>
-              Для управления составом персонала требуется ключ привилегий
+              {isTeamStaff
+                ? "Сначала создайте команду или присоединитесь к ней по staff-коду"
+                : "Для управления составом персонала требуется ключ доступа для staff"}
             </CardDescription>
           </CardHeader>
           <CardContent className="py-4">
             <div className="flex flex-col items-center gap-4 py-6">
               <Key size={48} className="text-muted-foreground" />
               <p className="text-center" style={{ color: COLORS.textColor }}>
-                Для получения доступа к управлению персоналом необходимо добавить ключ привилегий в вашем профиле.
+                {isTeamStaff
+                  ? "Пока команда не привязана, список staff и игроки вашей области видимости будут пустыми."
+                  : "Для получения доступа к управлению персоналом необходимо добавить ключ доступа для staff в вашем профиле."}
               </p>
               <Button 
                 onClick={() => navigate("/profile")}

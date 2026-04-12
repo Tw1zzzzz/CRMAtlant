@@ -350,6 +350,8 @@ export const submitDailyQuestionnaire = (data: DailyQuestionnairePayload) =>
   retryRequest(() => api.post('/questionnaires/daily', data));
 export const getMyDailyQuestionnaire = (dateFrom: string, dateTo: string) =>
   retryRequest(() => api.get(`/questionnaires/daily/my?dateFrom=${dateFrom}&dateTo=${dateTo}`));
+export const getDailyQuestionnaireStatus = (date: string) =>
+  retryRequest(() => api.get<{ success: true; date: string; sleepDone: boolean; screenDone: boolean; completed: boolean }>(`/questionnaires/daily/status?date=${date}`));
 export const getMyBaselineAssessment = () =>
   retryRequest(() => api.get<{ success: true; data: BaselineAssessment | null; baselineAssessmentCompleted: boolean }>('/questionnaires/baseline/me'));
 export const submitBaselineAssessment = (data: BaselineAssessmentPayload) =>
@@ -423,6 +425,137 @@ export const getPaymentSuccessInfo = async (params: {
   const response = await retryRequest(() => api.get<PaymentSuccessInfo>(endpoint));
   return response.data;
 };
+
+export interface AdminSubscriptionSummary {
+  id: string;
+  status: 'pending' | 'active' | 'expired' | 'cancelled';
+  startedAt: string | null;
+  expiresAt: string | null;
+  planId: string | null;
+  planName: string | null;
+  periodDays: number | null;
+}
+
+export interface AdminUserRow {
+  id: string;
+  name: string;
+  email: string;
+  role: 'player' | 'staff';
+  playerType: 'solo' | 'team' | null;
+  teamId: string | null;
+  teamName: string;
+  isSuperAdmin: boolean;
+  isActive: boolean;
+  deactivatedAt: string | null;
+  deactivatedReason: string | null;
+  createdAt: string;
+  subscription: AdminSubscriptionSummary | null;
+}
+
+export interface AdminTeamRow {
+  id: string;
+  name: string;
+  logo?: string;
+  playerLimit: number;
+  isActive: boolean;
+  createdAt: string;
+  playerCount: number;
+  staffCount: number;
+  owner: {
+    id: string;
+    name: string;
+    email: string;
+    isActive: boolean;
+  } | null;
+}
+
+export interface AdminAuditLogEntry {
+  id: string;
+  action: string;
+  createdAt: string;
+  meta: Record<string, unknown>;
+  actor: {
+    id: string;
+    name: string;
+    email: string;
+  } | null;
+  targetUser: {
+    id: string;
+    name: string;
+    email: string;
+  } | null;
+  targetTeam: {
+    id: string;
+    name: string;
+  } | null;
+}
+
+export interface AdminDashboardResponse {
+  totals: {
+    users: number;
+    players: number;
+    staff: number;
+    active: number;
+    blocked: number;
+    newUsers7d: number;
+    newUsers30d: number;
+  };
+  selectedWindowDays: 7 | 30 | 90;
+  registrationSeries: Array<{
+    date: string;
+    registrations: number;
+  }>;
+  playerTypeBreakdown: {
+    solo: number;
+    team: number;
+  };
+  recentRegistrations: Array<{
+    id: string;
+    name: string;
+    email: string;
+    role: 'player' | 'staff';
+    playerType: 'solo' | 'team' | null;
+    isActive: boolean;
+    createdAt: string;
+  }>;
+}
+
+export const getAdminDashboard = (days: 7 | 30 | 90 = 30) =>
+  retryRequest(() => api.get<AdminDashboardResponse>(`/admin/dashboard?days=${days}`));
+
+export const getAdminUsers = (params?: {
+  search?: string;
+  role?: 'player' | 'staff' | '';
+  isActive?: 'true' | 'false' | '';
+  teamId?: string;
+}) => {
+  const query = new URLSearchParams();
+
+  if (params?.search) query.set('search', params.search);
+  if (params?.role) query.set('role', params.role);
+  if (params?.isActive) query.set('isActive', params.isActive);
+  if (params?.teamId) query.set('teamId', params.teamId);
+
+  return retryRequest(() => api.get<{ total: number; users: AdminUserRow[] }>(`/admin/users${query.toString() ? `?${query.toString()}` : ''}`));
+};
+
+export const getAdminTeams = () =>
+  retryRequest(() => api.get<{ teams: AdminTeamRow[] }>('/admin/teams'));
+
+export const grantAdminUserSubscription = (userId: string, planId: string) =>
+  retryRequest(() => api.post('/admin/subscriptions/grant-user', { userId, planId }));
+
+export const grantAdminTeamSubscription = (teamId: string, planId: string) =>
+  retryRequest(() => api.post('/admin/subscriptions/grant-team', { teamId, planId }));
+
+export const sendAdminPasswordReset = (userId: string) =>
+  retryRequest(() => api.post(`/admin/users/${userId}/send-password-reset`));
+
+export const updateAdminUserStatus = (userId: string, payload: { isActive: boolean; reason?: string }) =>
+  retryRequest(() => api.patch(`/admin/users/${userId}/status`, payload));
+
+export const getAdminAuditLog = (limit = 30) =>
+  retryRequest(() => api.get<{ entries: AdminAuditLogEntry[] }>(`/admin/audit-log?limit=${limit}`));
 
 // ====== TEAM REPORTS API ======
 

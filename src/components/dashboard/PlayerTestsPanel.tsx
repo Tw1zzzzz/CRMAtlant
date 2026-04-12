@@ -4,11 +4,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { COLORS } from "@/styles/theme";
 
 type PlayerTestsPanelProps = {
+  hasResultsAccess: boolean;
   onOpenBrainLab: () => void;
   onOpenWeeklyTests: () => void;
 };
 
 export default function PlayerTestsPanel({
+  hasResultsAccess,
   onOpenBrainLab,
   onOpenWeeklyTests
 }: PlayerTestsPanelProps) {
@@ -30,6 +32,7 @@ export default function PlayerTestsPanel({
           </CardTitle>
           <CardDescription className="text-sm leading-7" style={{ color: COLORS.textColorSecondary }}>
             Откройте живую батарею когнитивной формы, чтобы пройти контур внимания, реакции, памяти и переключения.
+            {!hasResultsAccess ? " Полная история и индексы откроются после покупки тарифа." : ""}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -56,6 +59,7 @@ export default function PlayerTestsPanel({
           </CardTitle>
           <CardDescription className="text-sm leading-7" style={{ color: COLORS.textColorSecondary }}>
             Быстро перейдите в weekly-контур, добавьте результат или продолжите разбор уже сохранённых попыток.
+            {!hasResultsAccess ? " Сохранять прохождение можно бесплатно, детальная аналитика откроется после покупки." : ""}
           </CardDescription>
         </CardHeader>
         <CardContent>
