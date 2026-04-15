@@ -8,6 +8,7 @@ import AdminAuditLog, { AdminAuditAction } from '../models/AdminAuditLog';
 import { protect, requireSuperAdmin } from '../middleware/auth';
 import { ensurePlansSeeded } from '../config/paymentPlans';
 import { buildSubscriptionSummary } from '../utils/subscriptionAccess';
+import { resolvePublicAppUrl } from '../utils/publicAppUrl';
 import { applyActiveProfileProjection } from '../utils/userProfiles';
 import { issuePasswordResetForUser } from '../services/passwordResetService';
 
@@ -539,7 +540,7 @@ router.post('/users/:id/send-password-reset', async (req, res) => {
       _id: user._id,
       email: user.email,
       name: user.name,
-    });
+    }, resolvePublicAppUrl({ request: req }));
 
     await recordAuditLog({
       actorUserId: req.user?._id,

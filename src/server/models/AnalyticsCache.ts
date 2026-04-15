@@ -4,6 +4,7 @@ export interface IAnalyticsCache extends Document {
   userId: mongoose.Types.ObjectId;
   periodStart: Date;
   periodEnd: Date;
+  gameType: string;
   stats: {
     totalMatches: number;
     avgElo: number;
@@ -28,6 +29,11 @@ const AnalyticsCacheSchema: Schema = new Schema({
     type: Date, 
     required: true 
   },
+  gameType: {
+    type: String,
+    default: 'all',
+    trim: true,
+  },
   stats: {
     totalMatches: { type: Number, default: 0 },
     avgElo: { type: Number, default: 0 },
@@ -45,7 +51,7 @@ const AnalyticsCacheSchema: Schema = new Schema({
 });
 
 // Индекс для быстрого поиска кэша для конкретного пользователя и периода
-AnalyticsCacheSchema.index({ userId: 1, periodStart: 1, periodEnd: 1 });
+AnalyticsCacheSchema.index({ userId: 1, periodStart: 1, periodEnd: 1, gameType: 1 });
 
 // TTL-индекс: автоматическое удаление документов, не обновлявшихся более 1 дня
 AnalyticsCacheSchema.index({ updatedAt: 1 }, { 

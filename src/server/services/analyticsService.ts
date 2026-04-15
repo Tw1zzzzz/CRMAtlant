@@ -19,13 +19,15 @@ export const getUserStats = async (
   gameType?: string
 ): Promise<any> => {
   try {
+    const normalizedGameType = gameType || 'all';
+
     // Проверяем наличие кэша для указанного периода
     if (fromDate && toDate) {
       const existingCache = await AnalyticsCache.findOne({
         userId: new mongoose.Types.ObjectId(userId),
         periodStart: fromDate,
         periodEnd: toDate,
-        'stats.gameType': gameType || 'all',
+        gameType: normalizedGameType,
         updatedAt: { $gt: new Date(Date.now() - 24 * 60 * 60 * 1000) } // Кэш не старше 1 дня
       });
       
@@ -205,7 +207,6 @@ export const getUserStats = async (
       totalEloGain: matchStats.totalEloGain,
       avgEloGain: matchStats.avgEloGain,
       avgMood: metricsStats.avgMood,
-      gameType: gameType || 'all'
     };
     
     // Создаем итоговый результат
@@ -238,12 +239,13 @@ export const getUserStats = async (
           userId: new mongoose.Types.ObjectId(userId),
           periodStart: fromDate,
           periodEnd: toDate,
-          'stats.gameType': gameType || 'all'
+          gameType: normalizedGameType
         },
         {
           userId: new mongoose.Types.ObjectId(userId),
           periodStart: fromDate,
           periodEnd: toDate,
+          gameType: normalizedGameType,
           stats,
           chartsData,
           updatedAt: new Date()

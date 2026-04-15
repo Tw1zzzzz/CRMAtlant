@@ -7,6 +7,7 @@ import { issuePasswordResetForUser } from '../services/passwordResetService';
 import faceitService, { FaceitProfileInfo } from '../services/faceitService';
 import { createOpaqueToken, hashOpaqueToken } from '../utils/securityTokens';
 import { signJwt } from '../utils/jwt';
+import { buildPublicAppUrl, resolvePublicAppUrl } from '../utils/publicAppUrl';
 import { buildSubscriptionSummary, hasPerformanceCoachCrmAccess, resolveEffectiveSubscriptionAccess } from '../utils/subscriptionAccess';
 import {
   applyActiveProfileProjection,
@@ -283,14 +284,8 @@ const buildTeamLinkSummary = (team: any) => ({
   logo: team?.logo || ''
 });
 
-const getVerifyEmailUrl = (token: string): string => {
-  const clientUrl = normalizeText(process.env.CLIENT_URL);
-  if (!clientUrl) {
-    throw new Error('CLIENT_URL не настроен');
-  }
-
-  return `${clientUrl.replace(/\/+$/g, '')}/verify-email?token=${encodeURIComponent(token)}`;
-};
+const getVerifyEmailUrl = (token: string, clientUrl?: string): string =>
+  buildPublicAppUrl(`/verify-email?token=${encodeURIComponent(token)}`, { baseUrl: clientUrl });
 
 const createEmailVerificationPayload = () => {
   const verificationToken = createOpaqueToken(24);
@@ -597,10 +592,11 @@ export const registerUser = async (req: any, res: any) => {
         
         let emailDeliveryFailed = false;
         try {
+          const clientUrl = resolvePublicAppUrl({ request: req });
           await sendVerificationEmail({
             email: user.email,
             name: user.name,
-            verificationUrl: getVerifyEmailUrl(verificationToken),
+            verificationUrl: getVerifyEmailUrl(verificationToken, clientUrl),
           });
         } catch (mailError) {
           emailDeliveryFailed = true;
@@ -665,7 +661,7 @@ export const forgotPassword = async (req: any, res: any) => {
         _id: user._id,
         email: user.email,
         name: user.name,
-      });
+      }, resolvePublicAppUrl({ request: req }));
     } catch (mailError) {
       console.error('[AuthController] Ошибка отправки письма для сброса пароля:', mailError);
       return res.status(503).json({
@@ -760,10 +756,11 @@ export const resendVerificationEmail = async (req: any, res: any) => {
     );
 
     try {
+      const clientUrl = resolvePublicAppUrl({ request: req });
       await sendVerificationEmail({
         email: user.email,
         name: user.name,
-        verificationUrl: getVerifyEmailUrl(verificationToken),
+        verificationUrl: getVerifyEmailUrl(verificationToken, clientUrl),
       });
     } catch (mailError) {
       console.error('[AuthController] Ошибка повторной отправки письма подтверждения email:', mailError);

@@ -15,6 +15,8 @@ const testsModel = read('models/TestEntry.ts');
 const calendarEventModel = read('models/CalendarEvent.ts');
 const supportRoute = read('routes/support.ts');
 const adminRoute = read('routes/admin.ts');
+const analyticsCacheModel = read('models/AnalyticsCache.ts');
+const publicAppUrlUtil = read('utils/publicAppUrl.ts');
 
 assert(
   authController.includes('signJwt('),
@@ -71,6 +73,19 @@ assert(
 assert(
   serverPackageJson.includes('"grant-superadmin"'),
   'Server package scripts should expose grant-superadmin command'
+);
+
+assert(
+  analyticsCacheModel.includes('gameType') &&
+    analyticsCacheModel.includes('periodStart: 1, periodEnd: 1, gameType: 1'),
+  'Analytics cache model should persist and index gameType as a top-level field'
+);
+
+assert(
+  publicAppUrlUtil.includes('resolvePublicAppUrl') &&
+    publicAppUrlUtil.includes('x-forwarded-host') &&
+    publicAppUrlUtil.includes('origin'),
+  'Public app URL utility should resolve base URL from env or request headers'
 );
 
 assert(

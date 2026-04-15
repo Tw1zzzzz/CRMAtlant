@@ -29,6 +29,12 @@ assert(
 );
 
 assert(
+  authController.includes('resolvePublicAppUrl({ request: req })') &&
+    authController.includes('getVerifyEmailUrl(verificationToken, clientUrl)'),
+  'Auth controller should build email links from env or request URL context'
+);
+
+assert(
   authRoutes.includes("router.post('/forgot-password'"),
   'Auth routes should register forgot-password endpoint'
 );
