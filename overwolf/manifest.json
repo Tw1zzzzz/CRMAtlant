@@ -1,0 +1,70 @@
+{
+  "manifest_version": 1,
+  "type": "WebApp",
+  "meta": {
+    "name": "CRM Atlant Desktop",
+    "author": "CRM Atlant",
+    "version": "0.1.0",
+    "minimum-overwolf-version": "0.296.0.0",
+    "description": "Desktop Overwolf client for pre-match, session and post-match player analytics.",
+    "dock_button_title": "CRM Atlant",
+    "icon": "favicon.ico",
+    "icon_gray": "favicon.ico",
+    "launcher_icon": "favicon.ico",
+    "window_icon": "favicon.ico"
+  },
+  "permissions": [
+    "GameInfo"
+  ],
+  "data": {
+    "start_window": "desktop",
+    "externally_connectable": {
+      "matches": [
+        "https://www.overwolf.com",
+        "https://*.overwolf.com"
+      ]
+    },
+    "windows": {
+      "desktop": {
+        "file": "index.html",
+        "desktop_only": true,
+        "in_game_only": false,
+        "transparent": false,
+        "resizable": true,
+        "show_in_taskbar": true,
+        "show_minimize": true,
+        "show_maximize": true,
+        "use_os_windowing": true,
+        "native_window": true,
+        "size": {
+          "width": 1280,
+          "height": 820
+        },
+        "min_size": {
+          "width": 960,
+          "height": 640
+        }
+      },
+      "post_match": {
+        "file": "index.html",
+        "desktop_only": false,
+        "in_game_only": false,
+        "transparent": false,
+        "resizable": true,
+        "show_in_taskbar": false,
+        "show_minimize": true,
+        "show_maximize": false,
+        "use_os_windowing": true,
+        "native_window": true,
+        "size": {
+          "width": 920,
+          "height": 680
+        },
+        "min_size": {
+          "width": 760,
+          "height": 560
+        }
+      }
+    }
+  }
+}
