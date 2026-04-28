@@ -37,6 +37,7 @@ import calendarRoutes from './routes/calendar';
 import paymentsRoutes from './routes/payments';
 import supportRoutes from './routes/support';
 import adminRoutes from './routes/admin';
+import desktopRuntimeRoutes from './routes/desktopRuntime';
 import { errorHandler } from './middleware/errorHandler';
 
 // Загрузка переменных окружения с явным указанием пути
@@ -80,6 +81,14 @@ const resolveAllowedOrigins = () => {
   ];
 };
 
+const isOverwolfOrigin = (origin: string) => {
+  return (
+    origin === 'https://www.overwolf.com' ||
+    origin.startsWith('overwolf-extension://') ||
+    origin.startsWith('overwolf://')
+  );
+};
+
 const resolveClientBuildPath = () => {
   const candidates = [
     path.resolve(__dirname, '..'),
@@ -94,8 +103,22 @@ const resolveClientBuildPath = () => {
 };
 
 // Middleware
+const allowedOrigins = resolveAllowedOrigins();
+
 app.use(cors({
-  origin: resolveAllowedOrigins(),
+  origin: (origin, callback) => {
+    if (process.env.NODE_ENV !== 'production') {
+      callback(null, true);
+      return;
+    }
+
+    if (!origin || allowedOrigins.includes(origin) || isOverwolfOrigin(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(null, false);
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
@@ -130,6 +153,7 @@ app.use((req, res, next) => {
 });
 
 app.use('/api/support', supportRoutes);
+app.use('/api/desktop', desktopRuntimeRoutes);
 
 // Подключение к MongoDB (с dev-фоллбеком на in-memory)
 const connectMongo = async () => {
