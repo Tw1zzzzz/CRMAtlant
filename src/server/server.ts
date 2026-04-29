@@ -38,6 +38,7 @@ import paymentsRoutes from './routes/payments';
 import supportRoutes from './routes/support';
 import adminRoutes from './routes/admin';
 import desktopRuntimeRoutes from './routes/desktopRuntime';
+import overlayNotesRoutes from './routes/overlayNotes';
 import { errorHandler } from './middleware/errorHandler';
 
 // Загрузка переменных окружения с явным указанием пути
@@ -119,7 +120,7 @@ app.use(cors({
 
     callback(null, false);
   },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 }));
@@ -227,6 +228,7 @@ app.use('/api/teams', teamsRoutes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/payments', paymentsRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/overlay-notes', overlayNotesRoutes);
 app.use('/health', healthRoutes);
 
 // Специальный middleware для обработки статических изображений с заголовками против кэширования

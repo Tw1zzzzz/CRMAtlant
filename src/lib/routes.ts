@@ -18,6 +18,7 @@ export const ROUTES = {
   PRICING: '/pricing',
   PAYMENT_SUCCESS: '/payments/robokassa/success',
   PAYMENT_FAIL: '/payments/robokassa/fail',
+  OVERLAY_NOTES: '/overlay-notes',
   PAYMENT_SUCCESS_LEGACY: '/payment/success',
   PAYMENT_FAIL_LEGACY: '/payment/fail',
   TOP_PLAYERS: '/top-players',

@@ -14,10 +14,29 @@
     "window_icon": "favicon.ico"
   },
   "permissions": [
-    "GameInfo"
+    "GameInfo",
+    "Hotkeys",
+    "profile"
   ],
   "data": {
+    "game_targeting": {
+      "type": "all"
+    },
     "start_window": "desktop",
+    "hotkeys": {
+      "toggle_notes": {
+        "title": "Show notes",
+        "action-type": "custom",
+        "default": "Ctrl+Shift+N",
+        "passthrough": true
+      },
+      "new_note": {
+        "title": "New note",
+        "action-type": "custom",
+        "default": "Ctrl+Shift+M",
+        "passthrough": true
+      }
+    },
     "externally_connectable": {
       "matches": [
         "https://www.overwolf.com",
@@ -63,6 +82,28 @@
         "min_size": {
           "width": 760,
           "height": 560
+        }
+      },
+      "notes_overlay": {
+        "file": "index.html",
+        "desktop_only": false,
+        "in_game_only": true,
+        "transparent": true,
+        "resizable": true,
+        "show_in_taskbar": false,
+        "show_minimize": false,
+        "show_maximize": false,
+        "grab_keyboard_focus": true,
+        "clickthrough": false,
+        "topmost": true,
+        "keep_window_location": true,
+        "size": {
+          "width": 900,
+          "height": 620
+        },
+        "min_size": {
+          "width": 520,
+          "height": 360
         }
       }
     }
