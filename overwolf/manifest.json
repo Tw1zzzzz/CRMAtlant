@@ -57,11 +57,11 @@
         "native_window": true,
         "size": {
           "width": 1280,
-          "height": 820
+          "height": 720
         },
         "min_size": {
-          "width": 960,
-          "height": 640
+          "width": 900,
+          "height": 560
         }
       },
       "post_match": {

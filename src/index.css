@@ -95,6 +95,16 @@
     @apply bg-background text-foreground;
   }
 
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  #root {
+    width: 100%;
+  }
+
   body.notes-overlay-body,
   body.notes-overlay-body #root {
     background: transparent !important;

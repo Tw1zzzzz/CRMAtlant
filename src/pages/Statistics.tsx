@@ -421,8 +421,8 @@ const Statistics = () => {
   
   // Для тренеров показываем другой интерфейс
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center mb-4">
+    <div className="space-y-4">
+      <div className="mb-2 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-white">Статистика</h1>
         
         <Select 

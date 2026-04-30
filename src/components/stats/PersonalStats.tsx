@@ -91,17 +91,17 @@ const PersonalStats = ({
   const hasAnyData = moodEntries.length > 0 || sleepEntries.length > 0 || testEntries.length > 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {!hasAnyData ? (
-        <Card className="bg-[#1C1F3B] border-[#293056] shadow-none">
-          <CardHeader>
-            <CardTitle className="text-white">Нет данных для отображения</CardTitle>
-            <CardDescription className="text-gray-400">Заполните данные о настроении и энергии, пройдите тесты, чтобы увидеть вашу статистику</CardDescription>
+        <Card className="min-h-[194px] bg-[#1C1F3B] border-[#293056] shadow-none">
+          <CardHeader className="p-4 pb-0">
+            <CardTitle className="text-xl text-white">Нет данных для отображения</CardTitle>
+            <CardDescription className="text-[13px] text-gray-400">Заполните данные о настроении и энергии, пройдите тесты, чтобы увидеть вашу статистику</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="p-6 text-center">
-              <p className="text-white mb-2">Для отображения статистики необходимо:</p>
-              <ul className="text-left text-gray-300 list-disc pl-6 space-y-2">
+          <CardContent className="p-4 pt-6">
+            <div className="mx-auto max-w-[560px] text-center">
+              <p className="mb-2 text-[13px] font-medium text-white">Для отображения статистики необходимо:</p>
+              <ul className="list-disc space-y-1.5 pl-6 text-left text-[13px] text-gray-300">
                 <li>Заполнить данные о настроении и энергии на вкладке "Настроение и Энергия"</li>
                 <li>Пройти тесты на вкладке "Тесты"</li>
                 <li>Заполнить колесо баланса на вкладке "Колесо баланса"</li>

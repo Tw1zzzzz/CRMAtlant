@@ -25,7 +25,7 @@ const Layout: React.FC = () => {
 
   return (
     <div 
-      className="flex min-h-screen layout-container" 
+      className="flex h-screen w-screen overflow-hidden layout-container"
       style={styles.container}
     >
       <Sidebar />
@@ -33,8 +33,8 @@ const Layout: React.FC = () => {
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
         
-        <ScrollArea className="flex-1" style={styles.container}>
-          <main className="p-4" style={styles.content}>
+        <ScrollArea className="min-h-0 flex-1" style={styles.container}>
+          <main className="min-h-full p-3 md:p-4" style={styles.content}>
             <Outlet />
           </main>
         </ScrollArea>

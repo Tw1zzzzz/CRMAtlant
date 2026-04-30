@@ -103,7 +103,7 @@ const Header = () => {
   };
 
   return (
-    <header className="flex items-center justify-between gap-6 border-b px-5 py-3.5" style={headerStyles}>
+    <header className="flex min-h-[68px] flex-wrap items-center justify-between gap-3 border-b px-4 py-2 md:flex-nowrap" style={headerStyles}>
       <div className="min-w-0 flex flex-1 items-center">
         {showTeamBanner && (
           <>
@@ -170,7 +170,7 @@ const Header = () => {
         {showSoloBanner && (
           <>
             <div
-              className="hidden items-center gap-2.5 rounded-full border px-3.5 py-2 md:inline-flex"
+              className="hidden items-center gap-2.5 rounded-full border px-3 py-1.5 md:inline-flex"
               style={{
                 borderColor: "rgba(96, 165, 250, 0.16)",
                 background: "rgba(59, 130, 246, 0.08)",
@@ -215,12 +215,12 @@ const Header = () => {
       <div className="flex flex-shrink-0 items-center space-x-3">
         {user && (
           <div
-            className="hidden xl:flex items-center gap-3.5 rounded-xl border px-4 py-2.5"
+            className="hidden xl:flex items-center gap-3 rounded-lg border px-3.5 py-2"
             style={{
               borderColor: "rgba(148, 163, 184, 0.12)",
               background: "rgba(255, 255, 255, 0.03)",
               boxShadow: "none",
-              maxWidth: "390px"
+              maxWidth: "340px"
             }}
           >
             <CalendarDays className="h-[18px] w-[18px] flex-shrink-0" style={{ color: COLORS.primary }} />

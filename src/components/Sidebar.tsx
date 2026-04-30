@@ -161,7 +161,7 @@ const Sidebar: React.FC = () => {
                 <Button
                   variant="ghost"
                   className={cn(
-                    "w-full justify-start h-12 rounded-xl px-3 text-[14px] font-medium transition-all",
+                    "w-full justify-start h-10 rounded-lg px-2.5 text-[12px] font-medium transition-all",
                     isActive 
                       ? "text-primary" 
                       : "text-secondary hover:text-white"
@@ -171,7 +171,7 @@ const Sidebar: React.FC = () => {
                   <span style={iconWrapStyle}>
                     {navIcons[item.icon]}
                   </span>
-                  <span className="ml-2.5">{item.title}</span>
+                  <span className="ml-2 truncate">{item.title}</span>
                 </Button>
               </Link>
             </TooltipTrigger>
@@ -185,9 +185,9 @@ const Sidebar: React.FC = () => {
   };
 
   return (
-    <aside className="h-screen w-64 flex flex-col" style={styles.sidebar}>
+    <aside className="h-screen w-[196px] flex-shrink-0 flex flex-col xl:w-[210px]" style={styles.sidebar}>
       {/* Бренд-блок */}
-      <div className="p-4 pt-4 mt-0.5">
+      <div className="p-3 pt-3">
         <div style={styles.brandPanel}>
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
@@ -217,12 +217,12 @@ const Sidebar: React.FC = () => {
       
       {/* Навигация */}
       <ScrollArea className="flex-1">
-        <nav className="px-4 py-2">
-          <div className="space-y-5">
+        <nav className="px-3 py-1">
+          <div className="space-y-4">
             {navSections.map((section: SidebarNavSection, index) => (
               <section key={`${section.title || "section"}-${index}`}>
                 {section.title ? (
-                  <p className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: COLORS.textColorSecondary }}>
+                  <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: COLORS.textColorSecondary }}>
                     {section.title}
                   </p>
                 ) : null}
@@ -239,14 +239,14 @@ const Sidebar: React.FC = () => {
       {user && (
         <>
           <Separator className="my-2" style={{ backgroundColor: COLORS.borderColor }} />
-          <div className="p-4">
+          <div className="p-3">
             <Button
               onClick={logout}
               variant="ghost"
-              className="w-full justify-start"
+              className="h-10 w-full justify-start px-2.5 text-[12px]"
               style={styles.logoutButton}
             >
-              <LogOut className="mr-2 h-5 w-5" />
+              <LogOut className="mr-2 h-4 w-4" />
               <span>Выход</span>
             </Button>
           </div>
@@ -254,7 +254,7 @@ const Sidebar: React.FC = () => {
       )}
       
       {/* Копирайт */}
-      <div className="p-4 text-sm" style={styles.copyright}>
+      <div className="p-3 text-[11px]" style={styles.copyright}>
         <p>© 2026 ATLANT Technology</p>
       </div>
     </aside>
