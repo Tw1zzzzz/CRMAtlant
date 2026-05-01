@@ -25,8 +25,8 @@ type DragState = {
 const defaultNewNote = () => ({
  title: 'New note',
  content: '',
- position: { x: 24, y: 24 },
- size: { width: 420, height: 320 },
+ position: { x: 224, y: 12 },
+ size: { width: 420, height: 360 },
  opacity: 0.88,
  pinned: true,
 });
@@ -37,8 +37,8 @@ const deriveTitle = (content: string) => {
 };
 
 const clampPosition = (note: OverlayNote, x: number, y: number) => {
- const maxX = Math.max(window.innerWidth - 96, 0);
- const maxY = Math.max(window.innerHeight - 80, 0);
+ const maxX = Math.max(window.innerWidth - Math.min(note.size.width, window.innerWidth), 0);
+ const maxY = Math.max(window.innerHeight - Math.min(note.size.height, window.innerHeight), 0);
 
  return {
   x: Math.min(Math.max(x, 0), maxX),
@@ -68,6 +68,18 @@ const NotesOverlay = () => {
  useEffect(() => {
   document.body.classList.add('notes-overlay-body');
   return () => document.body.classList.remove('notes-overlay-body');
+ }, []);
+
+ useEffect(() => {
+  const handleKeyDown = (event: KeyboardEvent) => {
+   if (event.key === 'Escape') {
+    event.preventDefault();
+    handleClose();
+   }
+  };
+
+  window.addEventListener('keydown', handleKeyDown);
+  return () => window.removeEventListener('keydown', handleKeyDown);
  }, []);
 
  const handleCreateNote = useCallback(() => {
@@ -235,14 +247,26 @@ const NotesOverlay = () => {
  return (
   <main className="notes-overlay-root">
    <aside className="notes-overlay-list">
-    <div className="flex items-center justify-between gap-2">
+   <div className="flex items-center justify-between gap-2">
      <div className="flex items-center gap-2 text-sm font-semibold text-slate-100">
       <StickyNote className="h-4 w-4 text-cyan-300" />
       Notes
      </div>
-     <Button size="icon" className="h-8 w-8" onClick={handleCreateNote} title="Create note">
-      <Plus className="h-4 w-4" />
-     </Button>
+     <div className="flex items-center gap-1">
+      <Button size="icon" className="h-8 w-8" onClick={handleCreateNote} title="Create note">
+       <Plus className="h-4 w-4" />
+      </Button>
+      <Button
+       type="button"
+       size="icon"
+       variant="ghost"
+       className="h-8 w-8 text-slate-200 hover:bg-white/10"
+       title="Close overlay"
+       onClick={handleClose}
+      >
+       <X className="h-4 w-4" />
+      </Button>
+     </div>
     </div>
 
     <div className="mt-3 space-y-2">

@@ -24,6 +24,15 @@ type HotkeyEvent = {
 
 const getOverwolfApi = () => (typeof window === 'undefined' ? undefined : (window as any).overwolf);
 
+export const isNotesOverlayWindow = () => {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  return params.get('owWindow') === NOTES_WINDOW_NAME || window.name === NOTES_WINDOW_NAME;
+};
+
 const isOverwolfRuntime = () => Boolean(getOverwolfApi()?.windows);
 
 const getNotesWindow = () =>
@@ -125,7 +134,7 @@ export const initializeOverwolfNotesRuntime = () => {
     return;
   }
 
-  if (window.name === NOTES_WINDOW_NAME) {
+  if (isNotesOverlayWindow()) {
     return;
   }
 

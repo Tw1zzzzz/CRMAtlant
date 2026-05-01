@@ -85,7 +85,7 @@
         }
       },
       "notes_overlay": {
-        "file": "index.html",
+        "file": "index.html?owWindow=notes_overlay",
         "desktop_only": false,
         "in_game_only": true,
         "transparent": true,
@@ -98,12 +98,12 @@
         "topmost": true,
         "keep_window_location": true,
         "size": {
-          "width": 900,
-          "height": 620
+          "width": 680,
+          "height": 420
         },
         "min_size": {
-          "width": 520,
-          "height": 360
+          "width": 420,
+          "height": 300
         }
       }
     }
