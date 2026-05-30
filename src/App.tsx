@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { ThemeProvider } from "./providers/ThemeProvider";
+import YandexMetrika from "./components/analytics/YandexMetrika";
 import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
 import CalendarPage from "./pages/CalendarPage";
@@ -298,6 +299,7 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
+          <YandexMetrika />
           <AuthProvider>
             <AppRoutes />
           </AuthProvider>

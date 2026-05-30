@@ -4,6 +4,8 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile
+      args:
+        VITE_YANDEX_METRIKA_ID: ${VITE_YANDEX_METRIKA_ID:-109531131}
     restart: unless-stopped
     env_file:
       - ./.env.production
