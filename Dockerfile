@@ -15,6 +15,8 @@ RUN cd src/server && npm install --no-fund --no-audit
 COPY . .
 
 # Build frontend
+ARG VITE_YANDEX_METRIKA_ID=109531131
+ENV VITE_YANDEX_METRIKA_ID=${VITE_YANDEX_METRIKA_ID}
 RUN npm run build
 
 # Build server
