@@ -37,7 +37,6 @@ import calendarRoutes from './routes/calendar';
 import paymentsRoutes from './routes/payments';
 import supportRoutes from './routes/support';
 import adminRoutes from './routes/admin';
-import desktopRuntimeRoutes from './routes/desktopRuntime';
 import { errorHandler } from './middleware/errorHandler';
 
 // Загрузка переменных окружения с явным указанием пути
@@ -153,7 +152,6 @@ app.use((req, res, next) => {
 });
 
 app.use('/api/support', supportRoutes);
-app.use('/api/desktop', desktopRuntimeRoutes);
 
 // Подключение к MongoDB (с dev-фоллбеком на in-memory)
 const connectMongo = async () => {
