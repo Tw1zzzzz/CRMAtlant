@@ -3,7 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { FullScreenLoader } from "@/components/ui/loading-spinner";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { ThemeProvider } from "./providers/ThemeProvider";
 import YandexMetrika from "./components/analytics/YandexMetrika";
@@ -37,6 +37,7 @@ import VerifyEmail from "./pages/VerifyEmail";
 import SuperAdminPage from "./pages/SuperAdminPage";
 import MobileApp from "./features/mobile/MobileApp";
 import ROUTES from "./lib/routes";
+import { getMobileHomePath, isMobileViewport } from "./lib/mobileNavigation";
 import StaffManagement from "./client/src/components/admin/StaffManagement";
 import { PlayerType } from "@/types";
 const queryClient = new QueryClient();
@@ -54,6 +55,7 @@ interface RouteGuardProps {
 
 const RouteGuard = ({ children, requiredRole, requireSuperAdmin, allowedPlayerTypes, blockedPlayerTypes }: RouteGuardProps) => {
   const { user, loading } = useAuth();
+  const location = useLocation();
   
   if (loading) {
     return <FullScreenLoader text="РџСЂРѕРІРµСЂРєР° Р°РІС‚РѕСЂРёР·Р°С†РёРё..." />;
@@ -61,6 +63,10 @@ const RouteGuard = ({ children, requiredRole, requireSuperAdmin, allowedPlayerTy
   
   // РџСЂРѕРІРµСЂРєР° РЅР° Р°РІС‚РѕСЂРёР·Р°С†РёСЋ
   if (!user) return <Navigate to={ROUTES.WELCOME} replace />;
+
+  if (!location.pathname.startsWith(ROUTES.MOBILE) && isMobileViewport()) {
+    return <Navigate to={getMobileHomePath(user.role)} replace />;
+  }
   
   // Р•СЃР»Рё СѓРєР°Р·Р°РЅР° РѕР±СЏР·Р°С‚РµР»СЊРЅР°СЏ СЂРѕР»СЊ Рё РѕРЅР° РЅРµ СЃРѕРІРїР°РґР°РµС‚ - РїРµСЂРµРЅР°РїСЂР°РІР»СЏРµРј
   if (requiredRole && user.role !== requiredRole) {

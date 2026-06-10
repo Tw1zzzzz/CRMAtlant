@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import ROUTES from "@/lib/routes";
+import { getMobileHomePath, isMobileViewport } from "@/lib/mobileNavigation";
 import SupportRequestDialog from "@/components/SupportRequestDialog";
 import atlantTechnologyLogo from "@/assets/atlant-technology-logo.jpg";
 import atlantTechnologyMark from "@/assets/atlant-technology-mark.png";
@@ -73,7 +74,7 @@ const Index: React.FC = () => {
 
   useEffect(() => {
     if (user) {
-      navigate(ROUTES.DASHBOARD);
+      navigate(isMobileViewport() ? getMobileHomePath(user.role) : ROUTES.DASHBOARD);
     }
   }, [user, navigate]);
 
