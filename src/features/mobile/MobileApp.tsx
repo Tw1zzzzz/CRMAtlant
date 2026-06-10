@@ -259,6 +259,7 @@ export default function MobileApp() {
     <MobileShell
       userName={user.name}
       userRole={user.role === "staff" ? "staff" : "player"}
+      hasTeamCalendar={user.role === "staff" && user.playerType === "team" && Boolean(user.teamId)}
       onLogout={logout}
     >
       <Routes>
@@ -284,17 +285,34 @@ function MobileShell({
   children,
   userName,
   userRole,
+  hasTeamCalendar,
   onLogout
 }: {
   children: ReactNode;
   userName: string;
   userRole: "player" | "staff";
+  hasTeamCalendar: boolean;
   onLogout: () => void;
 }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const today = useTodayKey();
+  const upcomingRangeEnd = shiftDateKey(today, 30);
+  const headerEventQuery = useQuery({
+    queryKey: ["mobile", "staff", "header-team-calendar", today, upcomingRangeEnd],
+    queryFn: () => getCalendarEvents({
+      scope: "team",
+      from: new Date().toISOString(),
+      to: addDaysToDate(new Date(), 30).toISOString()
+    }),
+    enabled: userRole === "staff" && hasTeamCalendar,
+    ...mobileQueryFreshness
+  });
   const fullCheckinMode = userRole === "player" && location.pathname === "/mobile/player/checkin" && location.search.includes("flow=full");
   const immersiveMode = fullCheckinMode || (userRole === "player" && location.pathname === "/mobile/player/cognitive");
+  const nextHeaderEvent = (headerEventQuery.data || [])
+    .filter((event) => new Date(event.endAt).getTime() >= Date.now())
+    .sort((left, right) => new Date(left.startAt).getTime() - new Date(right.startAt).getTime())[0] || null;
   const tabs: MobileTab[] = userRole === "staff"
     ? [
         { label: "Команда", href: "/mobile/staff/team", icon: Users },
@@ -342,6 +360,9 @@ function MobileShell({
               </div>
               <div className="mt-1 truncate text-xl font-bold tracking-[-0.02em]">{userName}</div>
             </div>
+            {userRole === "staff" ? (
+              <HeaderUpcomingEvent event={nextHeaderEvent} isLoading={hasTeamCalendar && headerEventQuery.isLoading} />
+            ) : null}
             <button
               type="button"
               onClick={onLogout}
@@ -395,6 +416,22 @@ function MobileShell({
           </div>
         </nav> : null}
       </div>
+    </div>
+  );
+}
+
+function HeaderUpcomingEvent({ event, isLoading }: { event: CalendarEvent | null; isLoading: boolean }) {
+  const title = isLoading ? "Календарь" : event?.title || "Нет событий";
+  const detail = isLoading ? "загрузка" : event ? formatUpcomingEventDate(event) : "30 дней";
+
+  return (
+    <div className="hidden w-[112px] shrink-0 rounded-2xl border border-blue-300/16 bg-blue-400/10 px-2.5 py-2 text-right shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] min-[380px]:block">
+      <div className="flex items-center justify-end gap-1 text-[8px] font-bold uppercase tracking-[0.14em] text-blue-200/80">
+        <CalendarDays className="h-3 w-3" />
+        Ближайшее
+      </div>
+      <div className="mt-0.5 truncate text-[11px] font-semibold leading-4 text-white">{title}</div>
+      <div className="truncate text-[9px] leading-3 text-slate-300">{detail}</div>
     </div>
   );
 }
@@ -1763,7 +1800,6 @@ function TeamSetupRequired({ title }: { title: string }) {
 function StaffTeam() {
   const needsTeamSetup = useNeedsTeamSetup();
   const today = useTodayKey();
-  const upcomingRangeEnd = shiftDateKey(today, 30);
   const playersQuery = useQuery({
     queryKey: ["mobile", "staff", "players"],
     queryFn: async () => (await getPlayers()).data as PlayerListItem[],
@@ -1773,16 +1809,6 @@ function StaffTeam() {
   const nutritionQuery = useQuery({
     queryKey: ["mobile", "staff", "nutrition-summary", today],
     queryFn: async () => (await getNutritionTeamSummary(today)).data,
-    enabled: !needsTeamSetup,
-    ...mobileQueryFreshness
-  });
-  const calendarQuery = useQuery({
-    queryKey: ["mobile", "staff", "team-calendar", today, upcomingRangeEnd],
-    queryFn: () => getCalendarEvents({
-      scope: "team",
-      from: new Date().toISOString(),
-      to: addDaysToDate(new Date(), 30).toISOString()
-    }),
     enabled: !needsTeamSetup,
     ...mobileQueryFreshness
   });
@@ -1820,15 +1846,9 @@ function StaffTeam() {
       return typeof readiness === "number" && readiness < 60;
     })
     .slice(0, 4);
-  const nextTeamEvent = (calendarQuery.data || [])
-    .filter((event) => new Date(event.endAt).getTime() >= Date.now())
-    .sort((left, right) => new Date(left.startAt).getTime() - new Date(right.startAt).getTime())[0] || null;
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <UpcomingTeamEvent event={nextTeamEvent} isLoading={calendarQuery.isLoading} />
-      </div>
       <ReadinessHero title="Готовность команды" value={avgReadiness} subtitle={`${players.length} игроков в зоне видимости`} />
       <div className="grid grid-cols-3 gap-3">
         <MetricTile icon={Users} label="Игроки" value={`${players.length}`} />
@@ -1850,27 +1870,6 @@ function StaffTeam() {
           <EmptyText text="Критичных просадок по readiness не найдено." />
         )}
       </MobilePanel>
-    </div>
-  );
-}
-
-function UpcomingTeamEvent({ event, isLoading }: { event: CalendarEvent | null; isLoading: boolean }) {
-  return (
-    <div className="max-w-[230px] rounded-[18px] border border-blue-300/18 bg-[#1C2749]/86 px-3 py-2 text-right shadow-[0_12px_28px_rgba(0,0,0,0.22),inset_0_1px_0_rgba(255,255,255,0.05)]">
-      <div className="flex items-center justify-end gap-1.5 text-[9px] font-bold uppercase tracking-[0.16em] text-blue-200/80">
-        <CalendarDays className="h-3.5 w-3.5" />
-        Ближайшее
-      </div>
-      {isLoading ? (
-        <div className="mt-1 text-xs text-slate-400">Загрузка...</div>
-      ) : event ? (
-        <>
-          <div className="mt-1 truncate text-sm font-semibold text-white">{event.title}</div>
-          <div className="truncate text-[11px] text-slate-300">{formatUpcomingEventDate(event)}</div>
-        </>
-      ) : (
-        <div className="mt-1 text-xs text-slate-400">Событий нет</div>
-      )}
     </div>
   );
 }
