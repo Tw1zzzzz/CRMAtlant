@@ -8,6 +8,7 @@ import {
   BarChart3,
   Brain,
   Camera,
+  CalendarDays,
   ChevronRight,
   CheckCircle2,
   Circle,
@@ -54,12 +55,13 @@ import {
   type NutritionTeamSummary,
   type TeamSleepSummary
 } from "@/lib/api";
+import { getCalendarEvents } from "@/lib/calendarApi";
 import ROUTES from "@/lib/routes";
 import { COLORS } from "@/styles/theme";
 import { getImageUrl } from "@/utils/imageUtils";
 import { getMyPlayerDashboard, getPlayerDashboard, type PlayerDashboardData } from "@/utils/api/playerDashboard";
 import atlantMiniLogoWhite from "@/assets/atlant-mini-logo-white.svg";
-import type { BrainAttemptResult, BrainAttemptStartResponse, BrainCatalogResponse, BrainPerformanceSummary } from "@/types";
+import type { BrainAttemptResult, BrainAttemptStartResponse, BrainCatalogResponse, BrainPerformanceSummary, CalendarEvent } from "@/types";
 
 type MobileTab = {
   label: string;
@@ -117,6 +119,31 @@ const shiftDateKey = (dateKey: string, offsetDays: number) => {
   const date = new Date(year, month - 1, day);
   date.setDate(date.getDate() + offsetDays);
   return dateKeyFromDate(date);
+};
+
+const addDaysToDate = (date: Date, days: number) => {
+  const nextDate = new Date(date);
+  nextDate.setDate(nextDate.getDate() + days);
+  return nextDate;
+};
+
+const formatUpcomingEventDate = (event: CalendarEvent) => {
+  const start = new Date(event.startAt);
+  const now = new Date();
+  const today = dateKeyFromDate(now);
+  const tomorrow = dateKeyFromDate(addDaysToDate(now, 1));
+  const eventDay = dateKeyFromDate(start);
+  const dayLabel = eventDay === today
+    ? "Сегодня"
+    : eventDay === tomorrow
+      ? "Завтра"
+      : new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" }).format(start);
+
+  if (event.allDay) {
+    return `${dayLabel}, весь день`;
+  }
+
+  return `${dayLabel}, ${new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit" }).format(start)}`;
 };
 
 function useTodayKey() {
@@ -1736,6 +1763,7 @@ function TeamSetupRequired({ title }: { title: string }) {
 function StaffTeam() {
   const needsTeamSetup = useNeedsTeamSetup();
   const today = useTodayKey();
+  const upcomingRangeEnd = shiftDateKey(today, 30);
   const playersQuery = useQuery({
     queryKey: ["mobile", "staff", "players"],
     queryFn: async () => (await getPlayers()).data as PlayerListItem[],
@@ -1745,6 +1773,16 @@ function StaffTeam() {
   const nutritionQuery = useQuery({
     queryKey: ["mobile", "staff", "nutrition-summary", today],
     queryFn: async () => (await getNutritionTeamSummary(today)).data,
+    enabled: !needsTeamSetup,
+    ...mobileQueryFreshness
+  });
+  const calendarQuery = useQuery({
+    queryKey: ["mobile", "staff", "team-calendar", today, upcomingRangeEnd],
+    queryFn: () => getCalendarEvents({
+      scope: "team",
+      from: new Date().toISOString(),
+      to: addDaysToDate(new Date(), 30).toISOString()
+    }),
     enabled: !needsTeamSetup,
     ...mobileQueryFreshness
   });
@@ -1782,9 +1820,15 @@ function StaffTeam() {
       return typeof readiness === "number" && readiness < 60;
     })
     .slice(0, 4);
+  const nextTeamEvent = (calendarQuery.data || [])
+    .filter((event) => new Date(event.endAt).getTime() >= Date.now())
+    .sort((left, right) => new Date(left.startAt).getTime() - new Date(right.startAt).getTime())[0] || null;
 
   return (
     <div className="space-y-4">
+      <div className="flex justify-end">
+        <UpcomingTeamEvent event={nextTeamEvent} isLoading={calendarQuery.isLoading} />
+      </div>
       <ReadinessHero title="Готовность команды" value={avgReadiness} subtitle={`${players.length} игроков в зоне видимости`} />
       <div className="grid grid-cols-3 gap-3">
         <MetricTile icon={Users} label="Игроки" value={`${players.length}`} />
@@ -1806,6 +1850,27 @@ function StaffTeam() {
           <EmptyText text="Критичных просадок по readiness не найдено." />
         )}
       </MobilePanel>
+    </div>
+  );
+}
+
+function UpcomingTeamEvent({ event, isLoading }: { event: CalendarEvent | null; isLoading: boolean }) {
+  return (
+    <div className="max-w-[230px] rounded-[18px] border border-blue-300/18 bg-[#1C2749]/86 px-3 py-2 text-right shadow-[0_12px_28px_rgba(0,0,0,0.22),inset_0_1px_0_rgba(255,255,255,0.05)]">
+      <div className="flex items-center justify-end gap-1.5 text-[9px] font-bold uppercase tracking-[0.16em] text-blue-200/80">
+        <CalendarDays className="h-3.5 w-3.5" />
+        Ближайшее
+      </div>
+      {isLoading ? (
+        <div className="mt-1 text-xs text-slate-400">Загрузка...</div>
+      ) : event ? (
+        <>
+          <div className="mt-1 truncate text-sm font-semibold text-white">{event.title}</div>
+          <div className="truncate text-[11px] text-slate-300">{formatUpcomingEventDate(event)}</div>
+        </>
+      ) : (
+        <div className="mt-1 text-xs text-slate-400">Событий нет</div>
+      )}
     </div>
   );
 }
