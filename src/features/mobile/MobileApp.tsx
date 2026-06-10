@@ -346,19 +346,19 @@ function MobileShell({
             >
               <ArrowLeft className="h-5 w-5" />
             </button>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-white/[0.06]">
+            <div className="min-w-0 flex-1 rounded-[20px] border border-white/[0.06] bg-[#1C2749]/62 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-white/[0.07]">
                   <img src={atlantMiniLogoWhite} alt="" className="h-3.5 w-3.5" />
                 </span>
-                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-blue-200/80">
+                <span className="min-w-0 truncate text-[10px] font-bold uppercase tracking-[0.18em] text-blue-200/72">
                   CRMATLANT
                 </span>
-                <span className="rounded-md border border-blue-400/20 bg-blue-400/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-blue-200">
+                <span className="shrink-0 rounded-md border border-blue-400/20 bg-blue-400/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-[0.12em] text-blue-200">
                   {userRole === "staff" ? "тренер" : "игрок"}
                 </span>
               </div>
-              <div className="mt-1 truncate text-xl font-bold tracking-[-0.02em]">{userName}</div>
+              <div className="mt-1 truncate text-lg font-bold leading-6 tracking-[-0.02em] text-white">{userName}</div>
             </div>
             <button
               type="button"
