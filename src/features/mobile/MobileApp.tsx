@@ -360,9 +360,6 @@ function MobileShell({
               </div>
               <div className="mt-1 truncate text-xl font-bold tracking-[-0.02em]">{userName}</div>
             </div>
-            {userRole === "staff" ? (
-              <HeaderUpcomingEvent event={nextHeaderEvent} isLoading={hasTeamCalendar && headerEventQuery.isLoading} />
-            ) : null}
             <button
               type="button"
               onClick={onLogout}
@@ -372,6 +369,9 @@ function MobileShell({
               <LogOut className="h-5 w-5" />
             </button>
           </div>
+          {userRole === "staff" ? (
+            <HeaderUpcomingEvent event={nextHeaderEvent} isLoading={hasTeamCalendar && headerEventQuery.isLoading} />
+          ) : null}
         </header> : null}
 
         <main className={`relative z-10 flex-1 overflow-y-auto ${immersiveMode ? "px-0 pb-0 pt-0" : "px-4 pb-28 pt-4"}`}>
@@ -425,13 +425,17 @@ function HeaderUpcomingEvent({ event, isLoading }: { event: CalendarEvent | null
   const detail = isLoading ? "загрузка" : event ? formatUpcomingEventDate(event) : "30 дней";
 
   return (
-    <div className="hidden w-[112px] shrink-0 rounded-2xl border border-blue-300/16 bg-blue-400/10 px-2.5 py-2 text-right shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] min-[380px]:block">
-      <div className="flex items-center justify-end gap-1 text-[8px] font-bold uppercase tracking-[0.14em] text-blue-200/80">
-        <CalendarDays className="h-3 w-3" />
-        Ближайшее
+    <div className="mt-3 flex items-center gap-3 rounded-[20px] border border-blue-300/14 bg-[linear-gradient(135deg,rgba(37,99,235,0.18),rgba(30,41,91,0.72))] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-blue-400/14 text-blue-200">
+        <CalendarDays className="h-4 w-4" />
       </div>
-      <div className="mt-0.5 truncate text-[11px] font-semibold leading-4 text-white">{title}</div>
-      <div className="truncate text-[9px] leading-3 text-slate-300">{detail}</div>
+      <div className="min-w-0 flex-1">
+        <div className="text-[9px] font-bold uppercase tracking-[0.18em] text-blue-200/75">Ближайшее событие</div>
+        <div className="mt-0.5 truncate text-sm font-semibold leading-5 text-white">{title}</div>
+      </div>
+      <div className="shrink-0 rounded-full border border-white/10 bg-white/[0.06] px-2.5 py-1 text-[11px] font-semibold text-slate-200">
+        {detail}
+      </div>
     </div>
   );
 }
