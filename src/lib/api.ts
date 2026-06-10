@@ -1,5 +1,6 @@
 import axios from 'axios';
 import ROUTES from './routes';
+import { redirectToWelcomeAfterSessionExpired } from './spaNavigation';
 import {
   buildTeamReportsPath,
   buildTestsStateImpactPath,
@@ -57,9 +58,11 @@ api.interceptors.response.use((response) => {
 }, (error) => {
   if (error.response) {
     // Обработка ошибок аутентификации
-    if (error.response.status === 401 && window.location.pathname !== ROUTES.WELCOME) {
+    if (error.response.status === 401) {
       localStorage.removeItem('token');
-      window.location.href = `${ROUTES.WELCOME}?session=expired`;
+      if (window.location.pathname !== ROUTES.WELCOME) {
+        redirectToWelcomeAfterSessionExpired();
+      }
     }
   }
   
@@ -144,6 +147,16 @@ export interface DailyQuestionnairePayload {
   date?: string;
   mood?: number;
   energy?: number;
+  moodByTime?: Partial<Record<'morning' | 'afternoon' | 'evening', {
+    mood: number;
+    energy: number;
+    comment?: string;
+  }>>;
+  stress?: number;
+  fatigue?: number;
+  focus?: number;
+  readinessSelfScore?: number;
+  painNote?: string;
   sleepHours?: number;
   sleepStartTime?: string;
   sleepEndTime?: string;
@@ -154,6 +167,94 @@ export interface DailyQuestionnairePayload {
     browser?: number;
     study?: number;
   };
+}
+
+export type NutritionMealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+export type NutritionQuality = 'good' | 'normal' | 'heavy' | 'skipped';
+
+export interface NutritionEntryPayload {
+  date: string;
+  time: string;
+  mealType: NutritionMealType;
+  quality: NutritionQuality;
+  satiety: number;
+  hydration: number;
+  comment?: string;
+  photo?: File | null;
+}
+
+export interface NutritionEntry extends NutritionEntryPayload {
+  _id: string;
+  userId: string;
+  photoUrl?: string;
+  photoOriginalName?: string;
+  photoMimeType?: string;
+  photoSize?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface NutritionTeamPlayerSummary {
+  userId: string;
+  name: string;
+  email: string;
+  avatar?: string;
+  entriesCount: number;
+  goodCount: number;
+  heavyCount: number;
+  skippedCount: number;
+  lastEntryAt: string | null;
+}
+
+export interface NutritionTeamSummary {
+  success: true;
+  date: string;
+  totalPlayers: number;
+  playersWithEntries: number;
+  totalEntries: number;
+  players: NutritionTeamPlayerSummary[];
+  recentEntries: Array<NutritionEntry & {
+    player: {
+      userId: string;
+      name: string;
+      email: string;
+      avatar?: string;
+    } | null;
+  }>;
+}
+
+export type TeamSleepStatus = 'missing' | 'low' | 'ok' | 'high';
+
+export interface TeamSleepPlayerSummary {
+  userId: string;
+  name: string;
+  email: string;
+  entries: number;
+  avgSleep: number | null;
+  latestHours: number | null;
+  lastEntryDate: string | null;
+  status: TeamSleepStatus;
+}
+
+export interface TeamSleepDaySummary {
+  date: string;
+  avgSleep: number | null;
+  entries: number;
+  playersWithSleep: number;
+}
+
+export interface TeamSleepSummary {
+  success: true;
+  dateFrom: string;
+  dateTo: string;
+  totalPlayers: number;
+  playersWithSleep: number;
+  averageSleep: number | null;
+  lowSleepCount: number;
+  highSleepCount: number;
+  missingSleepCount: number;
+  players: TeamSleepPlayerSummary[];
+  days: TeamSleepDaySummary[];
 }
 
 export interface BaselineAssessmentPayload {
@@ -241,6 +342,13 @@ export const getSleepStats = () => retryRequest(() => api.get('/stats/sleep'));
 export const getTestStats = () => retryRequest(() => api.get('/stats/tests'));
 export const getAllPlayersMoodStats = () => retryRequest(() => api.get('/stats/players/mood'));
 export const getAllPlayersSleepStats = () => retryRequest(() => api.get('/stats/players/sleep'));
+export const getTeamSleepSummary = (dateFrom?: string, dateTo?: string) => {
+  const params = new URLSearchParams();
+  if (dateFrom) params.set('dateFrom', dateFrom);
+  if (dateTo) params.set('dateTo', dateTo);
+  const query = params.toString();
+  return retryRequest(() => api.get<TeamSleepSummary>(`/stats/players/sleep-summary${query ? `?${query}` : ''}`));
+};
 export const getAllPlayersTestStats = () => retryRequest(() => api.get('/stats/players/tests'));
 export const getAllPlayersBalanceWheelStats = () => retryRequest(() => api.get('/stats/players/balance-wheel'));
 export const getPlayerMoodChartData = (playerId: string | any) => 
@@ -351,11 +459,42 @@ export const submitDailyQuestionnaire = (data: DailyQuestionnairePayload) =>
 export const getMyDailyQuestionnaire = (dateFrom: string, dateTo: string) =>
   retryRequest(() => api.get(`/questionnaires/daily/my?dateFrom=${dateFrom}&dateTo=${dateTo}`));
 export const getDailyQuestionnaireStatus = (date: string) =>
-  retryRequest(() => api.get<{ success: true; date: string; sleepDone: boolean; screenDone: boolean; completed: boolean }>(`/questionnaires/daily/status?date=${date}`));
+  retryRequest(() => api.get<{
+    success: true;
+    date: string;
+    sleepDone: boolean;
+    screenDone: boolean;
+    moodDone: boolean;
+    moodTimes: Record<'morning' | 'afternoon' | 'evening', boolean>;
+    completed: boolean;
+  }>(`/questionnaires/daily/status?date=${date}`));
 export const getMyBaselineAssessment = () =>
   retryRequest(() => api.get<{ success: true; data: BaselineAssessment | null; baselineAssessmentCompleted: boolean }>('/questionnaires/baseline/me'));
 export const submitBaselineAssessment = (data: BaselineAssessmentPayload) =>
   retryRequest(() => api.post<{ success: true; data: BaselineAssessment; baselineAssessmentCompleted: boolean }>('/questionnaires/baseline', data));
+export const submitNutritionEntry = (data: NutritionEntryPayload) => {
+  const formData = new FormData();
+  formData.append('date', data.date);
+  formData.append('time', data.time);
+  formData.append('mealType', data.mealType);
+  formData.append('quality', data.quality);
+  formData.append('satiety', String(data.satiety));
+  formData.append('hydration', String(data.hydration));
+  if (data.comment) formData.append('comment', data.comment);
+  if (data.photo) formData.append('photo', data.photo);
+
+  return retryRequest(() => api.post<{ success: true; data: NutritionEntry }>('/nutrition', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  }));
+};
+export const getMyNutritionEntries = (dateFrom: string, dateTo: string) =>
+  retryRequest(() => api.get<{ success: true; data: NutritionEntry[] }>(`/nutrition/my?dateFrom=${dateFrom}&dateTo=${dateTo}`));
+export const getNutritionTeamSummary = (date: string) =>
+  retryRequest(() => api.get<NutritionTeamSummary>(`/nutrition/team-summary?date=${date}`));
+export const getPlayerNutritionEntries = (playerId: string, dateFrom: string, dateTo: string) =>
+  retryRequest(() => api.get<{ success: true; data: NutritionEntry[] }>(`/nutrition/player/${playerId}?dateFrom=${dateFrom}&dateTo=${dateTo}`));
 
 export const getBrainTestsCatalog = () => retryRequest(() => api.get('/brain-tests/catalog'));
 export const startBrainTestAttempt = (data: BrainAttemptStartPayload) =>

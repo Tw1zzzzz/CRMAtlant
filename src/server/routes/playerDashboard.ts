@@ -1,10 +1,13 @@
 import express from 'express';
 import { protect, isStaff } from '../middleware/auth';
-import { getPlayerDashboardByNickname, getPlayerDashboardByUserId } from '../controllers/playerDashboardController';
+import { getPlayerDashboard, getPlayerDashboardByNickname, getPlayerDashboardByUserId } from '../controllers/playerDashboardController';
 
 const router = express.Router();
 
 router.use(protect);
+
+router.get('/me', getPlayerDashboard);
+
 router.use(isStaff);
 
 // Дашборд игрока с индексами и таймлайном

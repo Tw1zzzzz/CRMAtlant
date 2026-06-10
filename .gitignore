@@ -21,6 +21,7 @@ coverage
 archive
 crm-demo
 crm-demo-frontend
+.cate/
 
 # Editor directories and files
 .vscode/*

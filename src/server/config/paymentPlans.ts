@@ -36,7 +36,7 @@ export const buildPlanFeatures = (plan: SeedPlan): string[] => {
   if (PERFORMANCE_COACH_CRM_PLAN_SET.has(plan.name)) {
     return [
       'Dashboard: Обзор, Быстрый старт, Сон, Тесты',
-      'Test Tracker: Brain Lab, weekly-тесты, ежедневный опросник',
+      'Test Tracker: когнитивная форма, weekly-тесты, ежедневный опросник',
       'Включает Корреляционный анализ и Игровую статистику',
       `Доступ на ${plan.periodDays} дней`,
     ];

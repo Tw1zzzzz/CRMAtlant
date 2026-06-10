@@ -28,7 +28,7 @@ export default function PlayerTestsPanel({
             <Brain className="h-5 w-5" />
           </div>
           <CardTitle className="mt-4 text-2xl" style={{ color: COLORS.textColor }}>
-            Brain Lab
+            Когнитивная форма
           </CardTitle>
           <CardDescription className="text-sm leading-7" style={{ color: COLORS.textColorSecondary }}>
             Откройте живую батарею когнитивной формы, чтобы пройти контур внимания, реакции, памяти и переключения.
@@ -37,7 +37,7 @@ export default function PlayerTestsPanel({
         </CardHeader>
         <CardContent>
           <Button className="rounded-2xl" style={{ backgroundColor: COLORS.primary, color: "white" }} onClick={onOpenBrainLab}>
-            Перейти к Brain Lab
+            Перейти к форме
             <ExternalLink className="ml-2 h-4 w-4" />
           </Button>
         </CardContent>

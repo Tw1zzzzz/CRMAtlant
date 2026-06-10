@@ -35,6 +35,7 @@ import NotFound from "./pages/NotFound";
 import ResetPassword from "./pages/ResetPassword";
 import VerifyEmail from "./pages/VerifyEmail";
 import SuperAdminPage from "./pages/SuperAdminPage";
+import MobileApp from "./features/mobile/MobileApp";
 import ROUTES from "./lib/routes";
 import StaffManagement from "./client/src/components/admin/StaffManagement";
 import { PlayerType } from "@/types";
@@ -96,6 +97,14 @@ const AppRoutes = () => (
     <Route path={ROUTES.PAYMENT_FAIL} element={<PaymentFail />} />
     <Route path={ROUTES.PAYMENT_SUCCESS_LEGACY} element={<Navigate to={ROUTES.PAYMENT_SUCCESS} replace />} />
     <Route path={ROUTES.PAYMENT_FAIL_LEGACY} element={<Navigate to={ROUTES.PAYMENT_FAIL} replace />} />
+    <Route
+      path={`${ROUTES.MOBILE}/*`}
+      element={
+        <RouteGuard>
+          <MobileApp />
+        </RouteGuard>
+      }
+    />
     
     <Route element={
       <RouteGuard>

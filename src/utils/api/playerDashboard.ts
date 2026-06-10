@@ -39,6 +39,15 @@ type DashboardApiResponse =
   | { success: true; data: PlayerDashboardData }
   | { success: false; message?: string };
 
+type DashboardErrorLike = {
+  response?: {
+    data?: {
+      message?: string;
+    };
+  };
+  message?: string;
+};
+
 const toNullableNumber = (value: unknown): number | null =>
   typeof value === "number" && Number.isFinite(value) ? value : null;
 
@@ -129,6 +138,29 @@ export async function getPlayerDashboard(userId: string): Promise<{ success: boo
     return { success: false, error: (response.data as any)?.message || "Ошибка при загрузке дашборда" };
   } catch (e: any) {
     const msg = e?.response?.data?.message || e?.message || "Ошибка при загрузке дашборда";
+    return { success: false, error: msg };
+  }
+}
+
+export async function getMyPlayerDashboard(): Promise<{ success: boolean; data?: PlayerDashboardData; error?: string }> {
+  try {
+    const token = localStorage.getItem("token");
+    const response = await axios.get<DashboardApiResponse | Record<string, unknown>>(`${baseUrl}/api/player-dashboard/me`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      timeout: 10000
+    });
+
+    if (response.data?.success) {
+      const payload = response.data as DashboardApiResponse & { data?: unknown };
+      const rawData = payload.data ?? payload;
+      return { success: true, data: normalizePlayerDashboardData(rawData) };
+    }
+
+    const payload = response.data as { message?: string };
+    return { success: false, error: payload.message || "Ошибка при загрузке дашборда" };
+  } catch (e: unknown) {
+    const error = e as DashboardErrorLike;
+    const msg = error.response?.data?.message || error.message || "Ошибка при загрузке дашборда";
     return { success: false, error: msg };
   }
 }

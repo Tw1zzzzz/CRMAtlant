@@ -188,6 +188,13 @@ function formatScore(value: number | null | undefined) {
   return value.toFixed(1);
 }
 
+function formatConfidence(value: string | null | undefined) {
+  if (value === "high") return "Высокая";
+  if (value === "medium") return "Средняя";
+  if (value === "low") return "Низкая";
+  return "—";
+}
+
 function formatDateTime(value: string | null) {
   if (!value) return "—";
   const parsed = new Date(value);
@@ -294,7 +301,7 @@ function TestFrame({
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.24em]" style={{ borderColor: accent, color: accent }}>
               <Keyboard className="h-3.5 w-3.5" />
-              Brain Lab Live
+              Когнитивная форма
             </div>
             <CardTitle className="text-2xl text-slate-50">{title}</CardTitle>
             <CardDescription className="max-w-3xl text-sm leading-6 text-slate-300">{instruction}</CardDescription>
@@ -1146,9 +1153,9 @@ const BrainLabPanel = ({ hasResultsAccess = true }: BrainLabPanelProps) => {
         setHistory([]);
       }
     } catch (error) {
-      console.error("Error loading Brain Lab:", error);
+      console.error("Error loading cognitive form:", error);
       toast({
-        title: "Brain Lab недоступен",
+        title: "Когнитивная форма недоступна",
         description: hasResultsAccess
           ? "Не удалось загрузить каталог тестов и сводку."
           : "Не удалось загрузить каталог тестов.",
@@ -1294,9 +1301,9 @@ const BrainLabPanel = ({ hasResultsAccess = true }: BrainLabPanelProps) => {
     setBatteryResults([]);
     setTransitionHint(null);
 
-    toast({
-      title: "Батарея закрыта",
-      description: "Можно вернуться к Brain Lab в любой момент и начать заново."
+      toast({
+        title: "Батарея закрыта",
+      description: "Можно вернуться к когнитивной форме в любой момент и начать заново."
     });
   };
 
@@ -1335,8 +1342,8 @@ const BrainLabPanel = ({ hasResultsAccess = true }: BrainLabPanelProps) => {
       toast({
         title: hasResultsAccess ? "Батарея завершена" : "Результат сохранён",
         description: hasResultsAccess
-          ? "Сводка Brain Lab обновлена. Результат уже можно посмотреть во вкладке «Карточка игрока»."
-          : "Попытка сохранена. Полная история и индексы Brain Lab откроются после покупки тарифа."
+          ? "Сводка когнитивной формы обновлена. Результат уже можно посмотреть во вкладке «Карточка игрока»."
+          : "Попытка сохранена. Полная история и индексы откроются после покупки тарифа."
       });
     } catch (error: any) {
       console.error("Error completing brain attempt:", error);
@@ -1378,23 +1385,23 @@ const BrainLabPanel = ({ hasResultsAccess = true }: BrainLabPanelProps) => {
         <div className="max-w-4xl space-y-5 pr-0 xl:pr-6">
           <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-[11px] uppercase tracking-[0.28em] text-cyan-100">
             <Brain className="h-3.5 w-3.5" />
-            Brain Lab
+            Когнитивная форма
           </div>
           <div className="space-y-3">
             <h2 className="max-w-4xl text-3xl font-semibold leading-[1.08] text-slate-50 md:text-5xl">
               Индекс когнитивной формы в живой батарее
             </h2>
             <p className="max-w-3xl text-base leading-8 text-slate-300 md:text-[1.1rem]">
-              Серия из пяти коротких тестов на внимание, реакцию, память и переключение. Индекс считает текущую форму относительно вашего личного baseline и не смешивает её с readiness.
+              Серия из пяти коротких тестов на внимание, реакцию, память и переключение. Индекс считает текущую форму относительно вашей личной базы и не смешивает её с общей готовностью.
             </p>
           </div>
         </div>
         <LockedResultsGate
           hasAccess={hasResultsAccess}
           hasData={history.length > 0 || batteryResults.length > 0}
-          title="Результаты Brain Lab заблокированы"
-          description="Проходить батарею можно бесплатно. Индекс, confidence и зрелость baseline откроются после покупки тарифа."
-          ctaText="Открыть результаты Brain Lab"
+          title="Результаты когнитивной формы заблокированы"
+          description="Проходить батарею можно бесплатно. Индекс, достоверность и личная база откроются после покупки тарифа."
+          ctaText="Открыть результаты"
           minHeightClassName="min-h-[380px]"
           compact
         >
@@ -1403,12 +1410,12 @@ const BrainLabPanel = ({ hasResultsAccess = true }: BrainLabPanelProps) => {
             <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Индекс</div>
             <div className="mt-4 text-4xl font-semibold text-slate-50">{formatScore(summary?.brainPerformanceIndex)}</div>
             <div className="mt-3 max-w-[18rem] text-sm leading-6 text-slate-400">
-              Итоговый `brainPerformanceIndex` по вашей личной базе, а не по сравнению с другими.
+              Итоговый индекс по вашей личной базе, а не по сравнению с другими.
             </div>
           </div>
           <div className="min-h-[172px] rounded-[28px] border border-white/8 bg-white/[0.04] p-5">
-            <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Confidence</div>
-            <div className="mt-4 text-4xl font-semibold capitalize text-slate-50">{summary?.confidence || "—"}</div>
+            <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Достоверность</div>
+            <div className="mt-4 text-4xl font-semibold text-slate-50">{formatConfidence(summary?.confidence)}</div>
             <div className="mt-3 text-sm leading-6 text-slate-400">
               Валидных батарей: {summary?.validBatteryCount ?? 0}
             </div>
@@ -1416,17 +1423,17 @@ const BrainLabPanel = ({ hasResultsAccess = true }: BrainLabPanelProps) => {
           <div className="min-h-[172px] rounded-[28px] border border-white/8 bg-white/[0.04] p-5">
             <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Статус</div>
             <div className="mt-4 text-[2rem] font-semibold leading-tight text-slate-50">
-              {summary?.calibrationStatus === "ready" ? "Ready" : "Калибровка"}
+              {summary?.calibrationStatus === "ready" ? "Готово" : "Калибровка"}
             </div>
             <div className="mt-3 max-w-[18rem] text-sm leading-6 text-slate-400">
-              {summary?.matureBaseline ? "Личный baseline уже достаточно зрелый." : "Baseline ещё набирается и станет точнее после нескольких валидных батарей."}
+              {summary?.matureBaseline ? "Личная база уже достаточно точная." : "Личная база ещё набирается и станет точнее после нескольких валидных батарей."}
             </div>
           </div>
           <div className="min-h-[172px] rounded-[28px] border border-white/8 bg-white/[0.04] p-5">
             <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Формат</div>
             <div className="mt-4 text-[2rem] font-semibold leading-tight text-slate-50">5 тестов подряд</div>
             <div className="mt-3 max-w-[18rem] text-sm leading-6 text-slate-400">
-              Полная батарея занимает 6-8 минут и рассчитана на desktop/laptop.
+              Полная батарея занимает 6-8 минут и рассчитана на компьютер или ноутбук.
             </div>
           </div>
         </div>
@@ -1444,7 +1451,7 @@ const BrainLabPanel = ({ hasResultsAccess = true }: BrainLabPanelProps) => {
             Доступно только на компьютере
           </div>
           <p className="mt-4 max-w-3xl text-base leading-8 text-amber-100/90">
-            В v1 батарея Brain Lab поддерживается только на desktop/laptop: здесь важны клавиатурный ввод, стабильный viewport, нормальный размер окна и контроль валидности попытки.
+            Для точного результата тесты проходят на компьютере или ноутбуке: нужен удобный экран и стабильный ввод с клавиатуры.
           </p>
         </div>
       ) : (
@@ -1454,7 +1461,7 @@ const BrainLabPanel = ({ hasResultsAccess = true }: BrainLabPanelProps) => {
               <div className="rounded-[32px] border border-white/8 bg-[radial-gradient(circle_at_top_left,_rgba(110,231,255,0.16),_transparent_34%),linear-gradient(180deg,rgba(10,16,34,0.92),rgba(6,10,22,0.98))] p-7 md:p-8">
                 <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
                   <div className="max-w-3xl space-y-4">
-                    <div className="text-[11px] uppercase tracking-[0.24em] text-cyan-200">Daily battery</div>
+                    <div className="text-[11px] uppercase tracking-[0.24em] text-cyan-200">Ежедневная батарея</div>
                     <div className="text-3xl font-semibold leading-tight text-slate-50 md:text-[2.5rem]">
                       Один ясный контур: сначала понимание, потом запуск, потом результат
                     </div>
@@ -1494,7 +1501,7 @@ const BrainLabPanel = ({ hasResultsAccess = true }: BrainLabPanelProps) => {
                     Валидность
                   </div>
                   <div className="mt-3 text-2xl font-semibold text-slate-50">Контроль качества</div>
-                  <div className="mt-2 text-sm leading-6 text-slate-400">Hidden tab, слишком быстрые ответы и низкая точность помечают попытку как invalid.</div>
+                  <div className="mt-2 text-sm leading-6 text-slate-400">Смена вкладки, слишком быстрые ответы и низкая точность исключают попытку из индекса.</div>
                 </div>
                 <div className="rounded-[24px] border border-white/8 bg-white/[0.03] p-5">
                   <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-slate-400">
@@ -1519,17 +1526,17 @@ const BrainLabPanel = ({ hasResultsAccess = true }: BrainLabPanelProps) => {
               <div className="rounded-[24px] border border-white/8 bg-white/[0.04] p-5">
                 <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Индекс</div>
                 <div className="mt-3 text-4xl font-semibold text-slate-50">{formatScore(summary?.brainPerformanceIndex)}</div>
-                <div className="mt-2 text-sm leading-6 text-slate-400">Личная форма относительно вашего baseline, а не рейтинг против других игроков.</div>
+                <div className="mt-2 text-sm leading-6 text-slate-400">Личная форма относительно вашей базы, а не рейтинг против других игроков.</div>
               </div>
               <div className="rounded-[24px] border border-white/8 bg-white/[0.04] p-5">
-                <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Confidence</div>
-                <div className="mt-3 text-4xl font-semibold capitalize text-slate-50">{summary?.confidence || "—"}</div>
+                <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Достоверность</div>
+                <div className="mt-3 text-4xl font-semibold text-slate-50">{formatConfidence(summary?.confidence)}</div>
                 <div className="mt-2 text-sm leading-6 text-slate-400">Валидных батарей: {summary?.validBatteryCount ?? 0}</div>
               </div>
               <div className="rounded-[24px] border border-white/8 bg-white/[0.04] p-5">
                 <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Статус</div>
-                <div className="mt-3 text-3xl font-semibold text-slate-50">{summary?.calibrationStatus === "ready" ? "Ready" : "Калибровка"}</div>
-                <div className="mt-2 text-sm leading-6 text-slate-400">{summary?.matureBaseline ? "Baseline уже зрелый" : "Нужно добрать ещё несколько валидных батарей"}</div>
+                <div className="mt-3 text-3xl font-semibold text-slate-50">{summary?.calibrationStatus === "ready" ? "Готово" : "Калибровка"}</div>
+                <div className="mt-2 text-sm leading-6 text-slate-400">{summary?.matureBaseline ? "Личная база уже точная" : "Нужно добрать ещё несколько корректных батарей"}</div>
               </div>
               <div className="rounded-[24px] border border-white/8 bg-white/[0.04] p-5">
                 <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Сессия</div>
@@ -1643,8 +1650,8 @@ const BrainLabPanel = ({ hasResultsAccess = true }: BrainLabPanelProps) => {
             hasAccess={hasResultsAccess}
             hasData={history.length > 0 || batteryResults.length > 0}
             title="Тренды и домены заблокированы"
-            description="График формы, доменные значения и readiness overlay раскроются после покупки."
-            ctaText="Открыть тренды Brain Lab"
+            description="График формы, значения по навыкам и связь с готовностью раскроются после покупки."
+            ctaText="Открыть тренды"
             minHeightClassName="min-h-[460px]"
           >
           <div className="mt-8 grid gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
@@ -1652,7 +1659,7 @@ const BrainLabPanel = ({ hasResultsAccess = true }: BrainLabPanelProps) => {
               <CardHeader>
                 <CardTitle className="text-slate-50">Тренд последних 7 дней</CardTitle>
                 <CardDescription className="text-slate-400">
-                  Пока индекс в калибровке, жёлтые столбцы показывают raw average. Когда baseline сформирован, появляются form-based значения.
+                  Пока индекс в калибровке, жёлтые столбцы показывают средний результат. Когда личная база сформирована, появятся значения формы.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -1687,7 +1694,7 @@ const BrainLabPanel = ({ hasResultsAccess = true }: BrainLabPanelProps) => {
 
             <Card className="rounded-[30px] border border-white/8 bg-white/[0.03]">
               <CardHeader>
-                <CardTitle className="text-slate-50">Домены, индекс и readiness overlay</CardTitle>
+                <CardTitle className="text-slate-50">Навыки, индекс и готовность</CardTitle>
                 <CardDescription className="text-slate-400">
                   Здесь видно, какие именно домены подтягивают индекс, а readiness остаётся рядом как отдельный слой контекста.
                 </CardDescription>
@@ -1747,7 +1754,7 @@ const BrainLabPanel = ({ hasResultsAccess = true }: BrainLabPanelProps) => {
             hasAccess={hasResultsAccess}
             hasData={history.length > 0 || batteryResults.length > 0}
             title="История попыток заблокирована"
-            description="Каждая попытка уже сохранена. История, invalid reasons и предыдущие score откроются после покупки."
+            description="Каждая попытка уже сохранена. История, причины исключения и предыдущие score откроются после покупки."
             ctaText="Открыть историю попыток"
             minHeightClassName="min-h-[420px]"
           >
@@ -1755,7 +1762,7 @@ const BrainLabPanel = ({ hasResultsAccess = true }: BrainLabPanelProps) => {
             <CardHeader>
               <CardTitle className="text-slate-50">История попыток</CardTitle>
               <CardDescription className="text-slate-400">
-                Каждая попытка хранится отдельно. Валидные попытки входят в baseline, калибровка копит личную историю, а исключённые попытки не влияют на индекс.
+                Каждая попытка хранится отдельно. Корректные попытки входят в личную базу, калибровка копит историю, а исключённые попытки не влияют на индекс.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -1956,7 +1963,7 @@ const BrainLabPanel = ({ hasResultsAccess = true }: BrainLabPanelProps) => {
         >
           <div className="mb-4 flex items-center gap-3 rounded-[22px] border border-white/8 bg-white/[0.03] px-4 py-3 text-sm text-slate-300">
             <ShieldCheck className="h-4 w-4 text-cyan-200" />
-            Невалидные попытки сохраняются в истории, но не участвуют в индексе и baseline.
+            Исключённые попытки сохраняются в истории, но не участвуют в индексе и личной базе.
             {finishing ? <Loader2 className="ml-auto h-4 w-4 animate-spin text-cyan-200" /> : null}
           </div>
           <BrainTestRunner runtime={runner} index={batteryIndex} total={catalog.order.length} onFinish={handleRunnerFinish} />

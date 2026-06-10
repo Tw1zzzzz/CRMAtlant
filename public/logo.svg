@@ -1,0 +1,12 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" rx="96" fill="#0f172a"/>
+  <circle cx="256" cy="256" r="200" fill="#1e293b"/>
+  <!-- Hexagon -->
+  <polygon points="256,80 406,168 406,344 256,432 106,344 106,168" fill="none" stroke="#6366f1" stroke-width="12"/>
+  <!-- Inner hexagon -->
+  <polygon points="256,120 376,188 376,324 256,392 136,324 136,188" fill="none" stroke="#4f46e5" stroke-width="4" opacity="0.5"/>
+  <!-- Letter E / shield symbol -->
+  <text x="256" y="310" font-size="200" font-weight="900" fill="#6366f1" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" letter-spacing="-8">E</text>
+  <!-- Glow dot -->
+  <circle cx="256" cy="160" r="10" fill="#818cf8"/>
+</svg>

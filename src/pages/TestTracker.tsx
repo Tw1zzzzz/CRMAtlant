@@ -627,7 +627,7 @@ const TestTracker = () => {
     `Период: ${periodFilter} дней`,
     testTypeFilter !== "all" ? `Тип: ${getReadableTestTypeLabel(testTypeFilter)}` : null,
     contextRoleFilter !== "all" ? `Роль: ${contextRoleFilter.toUpperCase()}` : null,
-    sourceFilter !== "all" ? `Источник: ${sourceFilter === "manual" ? "Ручной ввод" : "Brain Lab"}` : null
+    sourceFilter !== "all" ? `Источник: ${sourceFilter === "manual" ? "Ручной ввод" : "Когнитивная форма"}` : null
   ].filter(Boolean) as string[];
   const filtersScopeSummary = isTeamStaff
     ? `${heroEntriesCount} записей по команде, ${heroWeeklyEntries} weekly и средний score ${heroAverageScore ?? "-"}`
@@ -714,7 +714,7 @@ const TestTracker = () => {
                 hasAccess={hasPerformanceCoachCrmAccess}
                 hasData={heroEntriesCount > 0}
                 title="Результаты тестов уже собраны"
-                description={`Проходите Brain Lab и заносите тесты бесплатно. Полные score, недельные итоги и индекс текущей формы откроются после покупки тарифа ${PRODUCT_NAME}.`}
+                description={`Проходите когнитивную форму и заносите тесты бесплатно. Полные score, недельные итоги и индекс текущей формы откроются после покупки тарифа ${PRODUCT_NAME}.`}
                 ctaText="Открыть результаты тестов"
                 minHeightClassName="min-h-[280px]"
                 compact
@@ -868,7 +868,7 @@ const TestTracker = () => {
                 >
                   <option value="all">Все источники</option>
                   <option value="manual">Ручной ввод</option>
-                  <option value="brain_lab">Brain Lab</option>
+                  <option value="brain_lab">Когнитивная форма</option>
                 </select>
               </div>
             </div>

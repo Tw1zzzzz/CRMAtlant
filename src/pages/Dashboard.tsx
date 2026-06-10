@@ -50,6 +50,13 @@ type MoodEntry = {
   energyValue?: number;
 };
 
+const formatBrainConfidence = (value?: string) => {
+  if (value === "high") return "высокая";
+  if (value === "medium") return "средняя";
+  if (value === "low") return "низкая";
+  return "нет данных";
+};
+
 // Определим тип для результатов обработки
 type RecentStats = {
   avgMood: number;
@@ -1049,7 +1056,7 @@ const Dashboard = () => {
               <Card style={{ backgroundColor: COLORS.cardBackground, borderColor: COLORS.borderColor, boxShadow: "0 1px 20px 0 rgba(0,0,0,.1)" }}>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium" style={{ color: COLORS.textColorSecondary }}>
-                    Brain Lab
+                    Когнитивная форма
                   </CardTitle>
                   <Brain className="h-4 w-4" style={{ color: COLORS.primary }} />
                 </CardHeader>
@@ -1059,8 +1066,8 @@ const Dashboard = () => {
                   </div>
                   <p className="text-xs" style={{ color: COLORS.textColorSecondary }}>
                     {brainSummary
-                      ? `${brainSummary.confidence} confidence · батарей ${brainSummary.validBatteryCount}`
-                      : "Запустите Brain Lab на вкладке тестов"}
+                      ? `достоверность ${formatBrainConfidence(brainSummary.confidence)} · батарей ${brainSummary.validBatteryCount}`
+                      : "Запустите когнитивную форму на вкладке тестов"}
                   </p>
                 </CardContent>
               </Card>
@@ -1326,7 +1333,7 @@ const Dashboard = () => {
                 }}
               >
                 <p className="text-sm leading-7" style={{ color: COLORS.textColorSecondary }}>
-                  Проходить Brain Lab и заносить тесты можно бесплатно. После покупки откроются история, score и расширенная аналитика по форме.
+                  Проходить когнитивную форму и заносить тесты можно бесплатно. После покупки откроются история, score и расширенная аналитика по форме.
                 </p>
               </section>
             )}

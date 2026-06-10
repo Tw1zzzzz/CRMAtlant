@@ -48,6 +48,23 @@ function calculateSleepHours(startTime?: string, endTime?: string) {
   return Number((diff / 60).toFixed(2));
 }
 
+function optionalScale(value: unknown, fieldName: string) {
+  if (value == null || value === '') return undefined;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 1 || parsed > 10) {
+    throw badRequest(`${fieldName} должен быть числом от 1 до 10`);
+  }
+  return parsed;
+}
+
+function requiredScale(value: unknown, fieldName: string) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 1 || parsed > 10) {
+    throw badRequest(`${fieldName} должен быть числом от 1 до 10`);
+  }
+  return parsed;
+}
+
 async function hasPerformanceCoachCrmAccessForUser(user: any): Promise<boolean> {
   const accessFlags = await resolveEffectiveSubscriptionAccess(user);
   return Boolean(accessFlags.hasPerformanceCoachCrmAccess);
@@ -86,7 +103,13 @@ router.post(
       sleepStartTime,
       sleepEndTime,
       screenTimeHours,
-      screenBreakdown
+      screenBreakdown,
+      stress,
+      fatigue,
+      focus,
+      readinessSelfScore,
+      painNote,
+      moodByTime
     }: {
       date?: string;
       userId?: string;
@@ -102,6 +125,12 @@ router.post(
         browser?: number;
         study?: number;
       };
+      stress?: number;
+      fatigue?: number;
+      focus?: number;
+      readinessSelfScore?: number;
+      painNote?: string;
+      moodByTime?: Partial<Record<'morning' | 'afternoon' | 'evening', { mood?: number; energy?: number; comment?: string }>>;
     } = req.body || {};
 
     let targetUserId = req.user.role === 'staff' && userId ? userId : req.user._id;
@@ -118,19 +147,42 @@ router.post(
 
     const ops: Array<Promise<any>> = [];
 
-    if (mood != null || energy != null) {
-      if (mood == null || energy == null) {
-        throw badRequest('Для настроения нужно передать и mood, и energy');
+    const moodSlots = moodByTime && typeof moodByTime === 'object'
+      ? moodByTime
+      : (mood != null || energy != null)
+        ? { morning: { mood, energy } }
+        : {};
+
+    for (const timeOfDay of ['morning', 'afternoon', 'evening'] as const) {
+      const slot = moodSlots[timeOfDay];
+      if (!slot) continue;
+
+      if (slot.mood == null || slot.energy == null) {
+        throw badRequest(`Для ${timeOfDay} нужно передать и mood, и energy`);
       }
+
+      const isMorning = timeOfDay === 'morning';
       ops.push(
-        MoodEntry.create({
-          userId: targetUserId,
-          date: day,
-          timeOfDay: 'morning',
-          mood,
-          energy,
-          comment: ''
-        })
+        MoodEntry.findOneAndUpdate(
+          { userId: targetUserId, date: day, timeOfDay },
+          {
+            $set: {
+              mood: requiredScale(slot.mood, `${timeOfDay}.mood`),
+              energy: requiredScale(slot.energy, `${timeOfDay}.energy`),
+              ...(isMorning
+                ? {
+                    stress: optionalScale(stress, 'stress'),
+                    fatigue: optionalScale(fatigue, 'fatigue'),
+                    focus: optionalScale(focus, 'focus'),
+                    readinessSelfScore: optionalScale(readinessSelfScore, 'readinessSelfScore'),
+                    painNote: typeof painNote === 'string' ? painNote.trim().slice(0, 500) : undefined
+                  }
+                : {}),
+              comment: typeof slot.comment === 'string' ? slot.comment.trim().slice(0, 500) : ''
+            }
+          },
+          { upsert: true, new: true }
+        )
       );
     }
 
@@ -205,17 +257,26 @@ router.get(
     const nextDay = new Date(day);
     nextDay.setUTCDate(nextDay.getUTCDate() + 1);
 
-    const [sleepEntry, screenEntry] = await Promise.all([
+    const [sleepEntry, screenEntry, moodEntries] = await Promise.all([
       SleepEntry.findOne({ userId: req.user._id, date: { $gte: day, $lt: nextDay } }).select('_id').lean(),
-      ScreenTime.findOne({ userId: req.user._id, date: { $gte: day, $lt: nextDay } }).select('_id').lean()
+      ScreenTime.findOne({ userId: req.user._id, date: { $gte: day, $lt: nextDay } }).select('_id').lean(),
+      MoodEntry.find({ userId: req.user._id, date: { $gte: day, $lt: nextDay } }).select('timeOfDay').lean()
     ]);
+    const moodTimes = {
+      morning: moodEntries.some((entry) => entry.timeOfDay === 'morning'),
+      afternoon: moodEntries.some((entry) => entry.timeOfDay === 'afternoon'),
+      evening: moodEntries.some((entry) => entry.timeOfDay === 'evening')
+    };
+    const moodDone = moodTimes.morning && moodTimes.afternoon && moodTimes.evening;
 
     return res.json({
       success: true,
       date: day.toISOString().slice(0, 10),
       sleepDone: Boolean(sleepEntry),
       screenDone: Boolean(screenEntry),
-      completed: Boolean(sleepEntry && screenEntry)
+      moodDone,
+      moodTimes,
+      completed: Boolean(sleepEntry && screenEntry && moodDone)
     });
   })
 );

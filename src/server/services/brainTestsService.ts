@@ -194,7 +194,7 @@ export function getCatalogEntry(testKey: BrainTestKey) {
 
 export function getCatalog() {
   return {
-    title: 'Brain Lab',
+    title: 'Когнитивная форма',
     batteryDurationSec: 480,
     order: TEST_ORDER,
     tests: BRAIN_TEST_CATALOG

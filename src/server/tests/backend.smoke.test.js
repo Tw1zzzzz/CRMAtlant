@@ -14,6 +14,8 @@ const serverPackageJson = read('package.json');
 const testsModel = read('models/TestEntry.ts');
 const calendarEventModel = read('models/CalendarEvent.ts');
 const supportRoute = read('routes/support.ts');
+const nutritionRoute = read('routes/nutrition.ts');
+const nutritionModel = read('models/NutritionEntry.ts');
 const adminRoute = read('routes/admin.ts');
 const analyticsCacheModel = read('models/AnalyticsCache.ts');
 const publicAppUrlUtil = read('utils/publicAppUrl.ts');
@@ -44,6 +46,11 @@ assert(
 );
 
 assert(
+  server.includes("app.use('/api/nutrition', nutritionRoutes)"),
+  'Server should register nutrition API routes'
+);
+
+assert(
   server.includes("app.use('/api/admin', adminRoutes)"),
   'Server should register admin API routes'
 );
@@ -56,6 +63,38 @@ assert(
 assert(
   supportRoute.includes("router.post('/request'"),
   'Support routes should include request submission endpoint'
+);
+
+assert(
+  nutritionRoute.includes("router.post(") &&
+    nutritionRoute.includes("'/my'") &&
+    nutritionRoute.includes("'/team-summary'") &&
+    nutritionRoute.includes("'/player/:playerId'"),
+  'Nutrition routes should expose player submit/history and staff summary/history endpoints'
+);
+
+assert(
+  nutritionModel.includes("mealType") &&
+    nutritionModel.includes("quality") &&
+    nutritionModel.includes("satiety") &&
+    nutritionModel.includes("hydration") &&
+    nutritionModel.includes("photoUrl"),
+  'Nutrition model should persist meal type, quality, satiety, hydration and food photo metadata'
+);
+
+assert(
+  nutritionRoute.includes("multer") &&
+    nutritionRoute.includes("photoUrl") &&
+    nutritionRoute.includes("recentEntries"),
+  'Nutrition routes should accept food photos and expose recent entries for staff'
+);
+
+assert(
+  read('routes/questionnaires.ts').includes('moodByTime') &&
+    read('routes/questionnaires.ts').includes('morning') &&
+    read('routes/questionnaires.ts').includes('afternoon') &&
+    read('routes/questionnaires.ts').includes('evening'),
+  'Questionnaire routes should persist mood and energy for morning, afternoon and evening'
 );
 
 assert(

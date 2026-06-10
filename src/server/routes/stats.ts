@@ -22,6 +22,17 @@ const getVisiblePlayerIds = async (user: any) => {
   return players.map((player: any) => player._id);
 };
 
+const parseDateOnly = (value?: string) => {
+  if (!value) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const dateKeyFromDate = (date: Date) => date.toISOString().slice(0, 10);
+
+const roundOne = (value: number) => Math.round(value * 10) / 10;
+
 // Получить статистику настроения для текущего пользователя
 router.get('/mood', protect, async (req: any, res) => {
   try {
@@ -198,6 +209,130 @@ router.get('/players/sleep', protect, isStaff, async (req: any, res) => {
   } catch (error) {
     console.error('Error fetching all players sleep stats:', error);
     return res.status(500).json({ message: 'Error fetching all players sleep stats' });
+  }
+});
+
+// Для мобильной аналитики staff: компактная сводка сна игроков за период
+router.get('/players/sleep-summary', protect, isStaff, async (req: any, res) => {
+  try {
+    const rawDateFrom = req.query.dateFrom as string | undefined;
+    const rawDateTo = req.query.dateTo as string | undefined;
+    if (rawDateFrom && !parseDateOnly(rawDateFrom)) {
+      return res.status(400).json({ success: false, message: 'Некорректная dateFrom' });
+    }
+    if (rawDateTo && !parseDateOnly(rawDateTo)) {
+      return res.status(400).json({ success: false, message: 'Некорректная dateTo' });
+    }
+
+    const requestedTo = parseDateOnly(req.query.dateTo as string | undefined);
+    const dateTo = requestedTo || parseDateOnly(new Date().toISOString().slice(0, 10));
+    const requestedFrom = parseDateOnly(req.query.dateFrom as string | undefined);
+
+    if (!dateTo) {
+      return res.status(400).json({ success: false, message: 'Некорректная dateTo' });
+    }
+
+    const dateFrom = requestedFrom || new Date(dateTo);
+    if (!requestedFrom) {
+      dateFrom.setUTCDate(dateFrom.getUTCDate() - 6);
+    }
+
+    if (dateFrom > dateTo) {
+      return res.status(400).json({ success: false, message: 'dateFrom не может быть позже dateTo' });
+    }
+
+    const rangeDays = Math.floor((dateTo.getTime() - dateFrom.getTime()) / 86_400_000) + 1;
+    if (rangeDays > 31) {
+      return res.status(400).json({ success: false, message: 'Диапазон сна не может превышать 31 день' });
+    }
+
+    const endExclusive = new Date(dateTo);
+    endExclusive.setUTCDate(endExclusive.getUTCDate() + 1);
+
+    const players = await getVisiblePlayers(req.user);
+    const playerIds = players.map((player: any) => player._id);
+    const sleepEntries = await SleepEntry.find({
+      userId: { $in: playerIds },
+      date: { $gte: dateFrom, $lt: endExclusive }
+    }).sort({ date: 1 }).lean();
+
+    const playerSleepMap = new Map<string, any[]>();
+    const dailySleepMap = new Map<string, number[]>();
+
+    sleepEntries.forEach((entry: any) => {
+      const userId = String(entry.userId);
+      const playerEntries = playerSleepMap.get(userId) || [];
+      playerEntries.push(entry);
+      playerSleepMap.set(userId, playerEntries);
+
+      const dayKey = dateKeyFromDate(entry.date);
+      const dayEntries = dailySleepMap.get(dayKey) || [];
+      dayEntries.push(Number(entry.hours));
+      dailySleepMap.set(dayKey, dayEntries);
+    });
+
+    const allSleepHours = sleepEntries.map((entry: any) => Number(entry.hours)).filter(Number.isFinite);
+    const averageSleep = allSleepHours.length
+      ? roundOne(allSleepHours.reduce((sum, hours) => sum + hours, 0) / allSleepHours.length)
+      : null;
+
+    const playersSummary = players.map((player: any) => {
+      const entries = playerSleepMap.get(String(player._id)) || [];
+      const hours = entries.map((entry) => Number(entry.hours)).filter(Number.isFinite);
+      const latestEntry = entries.slice().sort((left, right) => right.date.getTime() - left.date.getTime())[0] || null;
+      const avgSleep = hours.length ? roundOne(hours.reduce((sum, value) => sum + value, 0) / hours.length) : null;
+      const latestHours = latestEntry ? Number(latestEntry.hours) : null;
+      const status = latestHours == null
+        ? 'missing'
+        : latestHours < 6
+          ? 'low'
+          : latestHours > 9
+            ? 'high'
+            : 'ok';
+
+      return {
+        userId: String(player._id),
+        name: player.name,
+        email: player.email,
+        entries: entries.length,
+        avgSleep,
+        latestHours,
+        lastEntryDate: latestEntry ? dateKeyFromDate(latestEntry.date) : null,
+        status
+      };
+    });
+
+    const days = Array.from({ length: rangeDays }, (_, index) => {
+      const date = new Date(dateFrom);
+      date.setUTCDate(date.getUTCDate() + index);
+      const dateKey = dateKeyFromDate(date);
+      const values = dailySleepMap.get(dateKey) || [];
+      return {
+        date: dateKey,
+        avgSleep: values.length
+          ? roundOne(values.reduce((sum, hours) => sum + hours, 0) / values.length)
+          : null,
+        entries: values.length,
+        playersWithSleep: values.length
+      };
+    });
+
+    return res.json({
+      success: true,
+      dateFrom: dateKeyFromDate(dateFrom),
+      dateTo: dateKeyFromDate(dateTo),
+      totalPlayers: players.length,
+      playersWithSleep: playersSummary.filter((player) => player.entries > 0).length,
+      averageSleep,
+      lowSleepCount: playersSummary.filter((player) => player.status === 'low').length,
+      highSleepCount: playersSummary.filter((player) => player.status === 'high').length,
+      missingSleepCount: playersSummary.filter((player) => player.status === 'missing').length,
+      players: playersSummary,
+      days
+    });
+  } catch (error) {
+    console.error('Error fetching team sleep summary:', error);
+    return res.status(500).json({ success: false, message: 'Error fetching team sleep summary' });
   }
 });
 

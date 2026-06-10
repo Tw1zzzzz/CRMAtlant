@@ -7,7 +7,8 @@
     "dev": "concurrently \"vite\" \"npm:server:dev\"",
     "dev:react-devtools": "react-devtools",
     "postinstall": "node scripts/fix-mui-icons.cjs",
-    "build": "tsc && vite build",
+    "generate-pwa-assets": "pwa-assets-generator --config pwa-assets.config.ts",
+    "build": "npm run generate-pwa-assets && tsc && vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
@@ -113,6 +114,7 @@
     "@types/node": "^22.5.5",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
+    "@vite-pwa/assets-generator": "^1.0.2",
     "@vitejs/plugin-react-swc": "^3.5.0",
     "autoprefixer": "^10.4.20",
     "concurrently": "^9.1.2",
@@ -126,6 +128,7 @@
     "tailwindcss": "^3.4.11",
     "typescript": "^5.5.3",
     "typescript-eslint": "^8.0.1",
-    "vite": "^5.4.1"
+    "vite": "^5.4.1",
+    "vite-plugin-pwa": "^1.3.0"
   }
 }

@@ -11,6 +11,7 @@ export const ROUTES = {
   CRM_GUIDE: '/guide',
   MOOD_TRACKER: '/mood',
   DAILY_QUESTIONNAIRE: '/daily-questionnaire',
+  MOBILE: '/mobile',
   TEST_TRACKER: '/tests',
   STATISTICS: '/stats',
   GAME_STATS: '/game-stats',

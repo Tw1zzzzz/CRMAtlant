@@ -25,7 +25,7 @@ router.get('/catalog', (_req, res) => {
   return res.json(getCatalog());
 });
 
-router.post('/attempts/start', async (req: any, res) => {
+router.post('/attempts/start', hasPerformanceCoachCrmSubscription, async (req: any, res) => {
   try {
     const { testKey, batterySessionId, clientMeta } = req.body || {};
 
@@ -219,7 +219,7 @@ router.get('/me/summary', hasPerformanceCoachCrmSubscription, async (req: any, r
     return res.json({ success: true, data: summary });
   } catch (error) {
     console.error('Error loading brain performance summary:', error);
-    return res.status(500).json({ message: 'Не удалось загрузить сводку Brain Lab' });
+    return res.status(500).json({ message: 'Не удалось загрузить сводку когнитивной формы' });
   }
 });
 
@@ -233,7 +233,7 @@ router.get('/me/history', hasPerformanceCoachCrmSubscription, async (req: any, r
     return res.json({ success: true, data: history });
   } catch (error) {
     console.error('Error loading brain tests history:', error);
-    return res.status(500).json({ message: 'Не удалось загрузить историю Brain Lab' });
+    return res.status(500).json({ message: 'Не удалось загрузить историю когнитивной формы' });
   }
 });
 

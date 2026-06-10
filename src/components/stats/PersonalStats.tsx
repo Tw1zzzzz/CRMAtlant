@@ -190,7 +190,7 @@ const PersonalStats = ({
               <CardHeader>
                 <CardTitle className="text-white">Результаты тестов {timeRangeLabel(timeRange)}</CardTitle>
                 <CardDescription className="text-gray-400">
-                  Средний score по каждому типу тестов, включая Brain Lab и ручные записи.
+                  Средний score по каждому типу тестов, включая когнитивную форму и ручные записи.
                 </CardDescription>
               </CardHeader>
               <CardContent>

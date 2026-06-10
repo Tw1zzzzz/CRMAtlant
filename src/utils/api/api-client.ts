@@ -3,6 +3,7 @@
  */
 
 import axios, { AxiosInstance, AxiosError, AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios';
+import { redirectToWelcomeAfterSessionExpired } from '@/lib/spaNavigation';
 
 // Типы для API ответов
 export interface ApiResponse<T = any> {
@@ -262,7 +263,6 @@ export const apiClient = new ApiClient({
   baseURL,
   timeout: 15000,
   onTokenExpired: () => {
-    // Перенаправление на страницу входа при истечении токена
-    window.location.href = '/welcome';
+    redirectToWelcomeAfterSessionExpired();
   }
 }); 

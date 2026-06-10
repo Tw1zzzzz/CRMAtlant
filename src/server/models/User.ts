@@ -290,6 +290,16 @@ const userSchema = new mongoose.Schema(
   }
 );
 
+// Инвариант: solo-игрок не должен быть привязан к команде.
+// Team-профили (как игроки, так и staff) могут существовать без teamId
+// до момента создания/подключения команды — это валидный промежуточный статус.
+userSchema.pre("save", function (next) {
+  if (this.playerType === "solo" && this.teamId) {
+    return next(new Error('[User Model] solo-профиль не может иметь teamId'));
+  }
+  next();
+});
+
 // Хеширование пароля перед сохранением
 userSchema.pre("save", async function (next) {
   try {

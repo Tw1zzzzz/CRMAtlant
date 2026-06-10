@@ -17,6 +17,7 @@ import { User, LoginDto, CreatePlayerProfileDto, CreateUserDto, AsyncState, Link
 import { authService, AuthResult, TeamLinkResult } from "@/services/auth.service";
 import ROUTES from "@/lib/routes";
 import { BASELINE_REGISTER_MODAL_FLAG, POST_REGISTER_WELCOME_FLAG } from "@/lib/onboarding";
+import { AUTH_SESSION_EXPIRED_EVENT, welcomeSessionExpiredPath } from "@/lib/spaNavigation";
 
 /**
  * Тип контекста аутентификации
@@ -527,6 +528,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [initializeAuth]);
+
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      setAuthState({
+        data: null,
+        loading: false,
+        error: null
+      });
+      navigate(welcomeSessionExpiredPath, { replace: true });
+    };
+
+    window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired);
+    return () => window.removeEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired);
+  }, [navigate]);
 
   // Мемоизация значения контекста
   const contextValue = useMemo<AuthContextType>(() => ({
