@@ -1739,14 +1739,19 @@ function PlayerNutrition() {
             options={Object.entries(qualityLabels).map(([value, label]) => ({ value, label }))}
             onChange={(value) => setQuality(value as NutritionQuality)}
           />
-          <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3">
             <Field label="Время">
-              <Input type="time" value={time} onChange={(event) => setTime(event.target.value)} className="mobile-input" />
+              <Input
+                type="time"
+                value={time}
+                onChange={(event) => setTime(event.target.value)}
+                className="mobile-input w-full min-w-0 text-center text-base"
+              />
             </Field>
             <Field label="Прием">
-              <div className="flex min-h-11 min-w-0 items-center rounded-2xl border border-[#293056] bg-[#171A34] px-3 text-sm font-semibold text-white">
+              <div className="flex min-h-11 w-full min-w-0 items-center rounded-2xl border border-[#293056] bg-[#171A34] px-4 text-base font-semibold text-white">
                 <span className="truncate">
-                {mealLabels[mealType]}
+                  {mealLabels[mealType]}
                 </span>
               </div>
             </Field>
