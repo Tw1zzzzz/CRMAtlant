@@ -231,6 +231,10 @@ const scoreColor = (value: number | null) => {
 
 const getErrorMessage = (error: unknown, fallback: string) => {
   if (typeof error === "object" && error !== null) {
+    if ("message" in error && typeof error.message === "string") {
+      return error.message;
+    }
+
     const response = "response" in error ? error.response : undefined;
     if (typeof response === "object" && response !== null && "data" in response) {
       const data = response.data;
@@ -240,6 +244,12 @@ const getErrorMessage = (error: unknown, fallback: string) => {
     }
   }
   return fallback;
+};
+
+const optionalFiniteNumber = (value: string | number | null | undefined) => {
+  if (value == null || value === "") return undefined;
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
 };
 
 export default function MobileApp() {
@@ -1039,6 +1049,7 @@ function PlayerCheckin() {
   const [bodyTags, setBodyTags] = useState<string[]>([]);
   const [note, setNote] = useState("");
   const fullCheckinOpen = searchParams.get("flow") === "full";
+  const normalizedScreenTimeHours = optionalFiniteNumber(screenTimeHours);
 
   const updateMoodSlot = (timeOfDay: MoodTimeOfDay, field: keyof MoodEnergySlot, value: number) => {
     setMoodByTime((current) => ({
@@ -1063,7 +1074,7 @@ function PlayerCheckin() {
         note.trim()
       ].filter(Boolean).join(". ") || undefined,
       sleepHours,
-      screenTimeHours: screenTimeHours ? Number(screenTimeHours) : undefined
+      screenTimeHours: normalizedScreenTimeHours
     }),
     onSuccess: async () => {
       toast({ title: "Сохранено", description: "Чек-ин обновлен" });
@@ -1101,7 +1112,7 @@ function PlayerCheckin() {
   });
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-4">
       {fullCheckinOpen ? (
         <FullCheckinWizard
           step={wizardStep}
@@ -1728,13 +1739,15 @@ function PlayerNutrition() {
             options={Object.entries(qualityLabels).map(([value, label]) => ({ value, label }))}
             onChange={(value) => setQuality(value as NutritionQuality)}
           />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2">
             <Field label="Время">
               <Input type="time" value={time} onChange={(event) => setTime(event.target.value)} className="mobile-input" />
             </Field>
             <Field label="Прием">
-              <div className="flex min-h-11 items-center rounded-2xl border border-[#293056] bg-[#171A34] px-3 text-sm font-semibold text-white">
+              <div className="flex min-h-11 min-w-0 items-center rounded-2xl border border-[#293056] bg-[#171A34] px-3 text-sm font-semibold text-white">
+                <span className="truncate">
                 {mealLabels[mealType]}
+                </span>
               </div>
             </Field>
           </div>
@@ -1749,13 +1762,15 @@ function PlayerNutrition() {
         </div>
       </MobilePanel>
 
-      <Button
-        onClick={submitNutrition}
-        disabled={mutation.isPending}
-        className="h-12 w-full rounded-2xl bg-emerald-500 text-base font-semibold text-white hover:bg-emerald-400"
-      >
-        {mutation.isPending ? "Сохранение..." : "Добавить питание"}
-      </Button>
+      <div className="sticky bottom-24 z-20 -mx-4 bg-[linear-gradient(180deg,rgba(20,22,45,0),#14162D_34%)] px-4 pb-2 pt-5">
+        <Button
+          onClick={submitNutrition}
+          disabled={mutation.isPending}
+          className="h-14 w-full rounded-2xl bg-emerald-500 text-base font-semibold text-white shadow-[0_16px_34px_rgba(16,185,129,0.18)] hover:bg-emerald-400 disabled:bg-emerald-500/55"
+        >
+          {mutation.isPending ? "Сохранение..." : "Добавить питание"}
+        </Button>
+      </div>
     </div>
   );
 }
@@ -2966,8 +2981,8 @@ function FoodPhotoPicker({
         onChange={(event) => onPick(event.target.files?.[0])}
       />
       {photoFile && previewUrl ? (
-        <div className="relative overflow-hidden rounded-[18px]">
-          <img src={previewUrl} alt="Фото еды" className="h-44 w-full object-cover" />
+        <div className="relative overflow-hidden rounded-[18px] bg-black/20">
+          <img src={previewUrl} alt="Фото еды" className="h-52 w-full object-contain" />
           <button
             type="button"
             onClick={onClear}

@@ -16,7 +16,7 @@ const router = express.Router();
 
 router.use(protect);
 
-const nutritionUploadDir = path.join(process.cwd(), '../../uploads/nutrition');
+const nutritionUploadDir = path.join(__dirname, '../../../uploads/nutrition');
 
 if (!fs.existsSync(nutritionUploadDir)) {
   fs.mkdirSync(nutritionUploadDir, { recursive: true });

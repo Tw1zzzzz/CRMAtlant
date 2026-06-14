@@ -65,6 +65,15 @@ function requiredScale(value: unknown, fieldName: string) {
   return parsed;
 }
 
+function optionalHours(value: unknown, fieldName: string) {
+  if (value == null || value === '') return undefined;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 24) {
+    throw badRequest(`${fieldName} должен быть числом от 0 до 24`);
+  }
+  return parsed;
+}
+
 async function hasPerformanceCoachCrmAccessForUser(user: any): Promise<boolean> {
   const accessFlags = await resolveEffectiveSubscriptionAccess(user);
   return Boolean(accessFlags.hasPerformanceCoachCrmAccess);
@@ -191,7 +200,7 @@ router.post(
     }
 
     const resolvedSleepHours = sleepHours != null
-      ? sleepHours
+      ? optionalHours(sleepHours, 'sleepHours')
       : calculateSleepHours(sleepStartTime, sleepEndTime);
 
     if (resolvedSleepHours != null) {
@@ -209,14 +218,14 @@ router.post(
     }
 
     const breakdown = {
-      entertainment: screenBreakdown?.entertainment ?? 0,
-      communication: screenBreakdown?.communication ?? 0,
-      browser: screenBreakdown?.browser ?? 0,
-      study: screenBreakdown?.study ?? 0
+      entertainment: optionalHours(screenBreakdown?.entertainment ?? 0, 'screenBreakdown.entertainment') ?? 0,
+      communication: optionalHours(screenBreakdown?.communication ?? 0, 'screenBreakdown.communication') ?? 0,
+      browser: optionalHours(screenBreakdown?.browser ?? 0, 'screenBreakdown.browser') ?? 0,
+      study: optionalHours(screenBreakdown?.study ?? 0, 'screenBreakdown.study') ?? 0
     };
     const breakdownTotal = breakdown.entertainment + breakdown.communication + breakdown.browser + breakdown.study;
     const hasBreakdown = Object.values(breakdown).some((value) => value > 0);
-    const resolvedScreenTimeHours = screenTimeHours != null ? screenTimeHours : (hasBreakdown ? breakdownTotal : undefined);
+    const resolvedScreenTimeHours = screenTimeHours != null ? optionalHours(screenTimeHours, 'screenTimeHours') : (hasBreakdown ? breakdownTotal : undefined);
 
     if (resolvedScreenTimeHours != null) {
       if (hasBreakdown && breakdownTotal > resolvedScreenTimeHours) {
